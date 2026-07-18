@@ -1,0 +1,118 @@
+{
+  "project": {
+    "thai_name": "เมืองนี้อยู่ที่เรา",
+    "english_name": "Our City, Our Choice",
+    "tagline": "Different roles. Different choices. One shared city.",
+    "target_grade": "ม.1",
+    "target_players": "30-40"
+  },
+  "canonical_rules": {
+    "roles_per_player": 1,
+    "role_locked_for_entire_game": true,
+    "role_reroll": false,
+    "roles_count": 8,
+    "questions_per_role": 10,
+    "total_mvp_questions": 80,
+    "change_role_between_questions": false,
+    "student_progress_label": "คำถามข้อที่ x/10",
+    "shared_city_score": true,
+    "individual_winner": false,
+    "leaderboard_core": false
+  },
+  "roles": [
+    {
+      "id": "mayor",
+      "th": "นายกเทศมนตรี"
+    },
+    {
+      "id": "municipal",
+      "th": "เจ้าหน้าที่เทศบาล"
+    },
+    {
+      "id": "police",
+      "th": "ตำรวจ"
+    },
+    {
+      "id": "teacher",
+      "th": "ครู"
+    },
+    {
+      "id": "merchant",
+      "th": "พ่อค้าแม่ค้า"
+    },
+    {
+      "id": "contractor",
+      "th": "ผู้รับเหมา"
+    },
+    {
+      "id": "student",
+      "th": "นักเรียน"
+    },
+    {
+      "id": "journalist",
+      "th": "นักข่าว"
+    }
+  ],
+  "architecture_keep": [
+    "Vite",
+    "React",
+    "TypeScript",
+    "React Router",
+    "React Context",
+    "GameService abstraction",
+    "Firebase Firestore",
+    "onSnapshot",
+    "transactions/batches",
+    "DemoService",
+    "Session Restore",
+    "Vitest"
+  ],
+  "architecture_remove": [
+    "Next.js",
+    "vinext",
+    "Cloudflare D1",
+    "REST polling",
+    "single giant GameApp.tsx",
+    "client-authoritative scoring"
+  ],
+  "confirmed_teacher_ui_asset": "แดชบอร์ดครูในเมืองเราสร้าง.png",
+  "teacher_mockup_labels_to_replace": [
+    "รอบที่ 3/10",
+    "คะแนนเมือง 845",
+    "กลุ่มที่ตอบแล้ว 28/32"
+  ],
+  "city_states": [
+    "city-critical.webp",
+    "city-declining.webp",
+    "city-neutral.webp",
+    "city-improving.webp",
+    "city-prosperous.webp"
+  ],
+  "local_paths": {
+    "current_project": "C:\\Users\\jiras\\Documents\\Our City, Our Choice",
+    "old_prototype_reference_only": "C:\\Users\\jiras\\Documents\\Our City, Our Choice-old-next-d1",
+    "matana_source_reference": "C:\\Users\\jiras\\Documents\\Matana-must-survive"
+  },
+  "current_status": {
+    "matana_base_copied": true,
+    "npm_install": true,
+    "vite_local_runs": true,
+    "git_installed": true,
+    "git_initialized": true,
+    "git_add_completed": true,
+    "baseline_commit_confirmed": false,
+    "game_migration_implemented": false
+  },
+  "open_decisions": [
+    "self-paced vs teacher-synchronized questions",
+    "timer",
+    "automatic vs teacher-controlled game finish",
+    "late join policy",
+    "question order",
+    "answer editing policy",
+    "exact city scoring formula and thresholds",
+    "Firebase project and deployment",
+    "Google Sheets import method",
+    "room data retention"
+  ]
+}
