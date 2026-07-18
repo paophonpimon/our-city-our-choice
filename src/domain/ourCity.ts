@@ -84,7 +84,7 @@ export interface QuestionDefinition {
   roleId: RoleId
   questionNumber: QuestionNumber
   situation: string
-  choices: readonly [QuestionChoice, QuestionChoice]
+  choices: readonly QuestionChoice[]
   topic: string
 }
 
