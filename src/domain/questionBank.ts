@@ -30,6 +30,7 @@ export type QuestionBankValidationIssueCode =
   | 'invalid-question-number'
   | 'invalid-question-text'
   | 'invalid-choices'
+  | 'choices-per-question'
   | 'invalid-choice-shape'
   | 'invalid-choice-id'
   | 'duplicate-choice-id'
@@ -156,6 +157,9 @@ export const validateQuestionBank = (bank: unknown): QuestionBankValidationResul
       if (!Array.isArray(rawQuestion.choices) || rawQuestion.choices.length === 0) {
         issues.push({ code: 'invalid-choices', roleId, questionId })
         continue
+      }
+      if (rawQuestion.choices.length !== 2) {
+        issues.push({ code: 'choices-per-question', roleId, questionId, expected: 2, actual: rawQuestion.choices.length })
       }
 
       const seenChoiceIds = new Set<string>()

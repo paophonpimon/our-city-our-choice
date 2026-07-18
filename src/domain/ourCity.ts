@@ -5,7 +5,7 @@ export const QUESTION_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 export type QuestionNumber = (typeof QUESTION_NUMBERS)[number]
 
 export const ROLE_IDS = [
-  'mayor',
+  'doctor',
   'municipal',
   'police',
   'teacher',
@@ -24,7 +24,7 @@ export interface RoleDefinition {
 }
 
 export const ROLES = [
-  { id: 'mayor', label: 'นายกเทศมนตรี', order: 1 },
+  { id: 'doctor', label: 'หมอ', order: 1 },
   { id: 'municipal', label: 'เจ้าหน้าที่เทศบาล', order: 2 },
   { id: 'police', label: 'ตำรวจ', order: 3 },
   { id: 'teacher', label: 'ครู', order: 4 },
@@ -63,7 +63,11 @@ export interface PlayerState {
 export interface RoomState {
   roomId: string
   status: GameStatus
-  settings: RoomSettings
+  currentQuestionNumber: QuestionNumber
+  questionDurationSec: number
+  questionStartedAt: DomainTimestamp | null
+  questionDeadlineAt: DomainTimestamp | null
+  lockedPlayerCount: number
   totalPlayers: number
   totalAnswers: number
   completedPlayers: number
@@ -78,17 +82,17 @@ export interface QuestionChoice {
   text: string
 }
 
-/** UI-safe question data. Impact values intentionally live in a separate service-side definition. */
+/** UI-safe question data. Impact values intentionally live only in the teacher's trusted snapshot. */
 export interface QuestionDefinition {
   id: string
   roleId: RoleId
   questionNumber: QuestionNumber
   situation: string
-  choices: readonly QuestionChoice[]
+  choices: readonly [QuestionChoice, QuestionChoice]
   topic: string
 }
 
-/** Trusted evaluation data; clients submit a choiceId and never submit these impact values. */
+/** Teacher-trusted evaluation data; student clients submit a choiceId and never submit these impact values. */
 export interface QuestionImpactDefinition {
   questionId: string
   impactByChoiceId: Readonly<Record<string, number>>
@@ -111,13 +115,12 @@ export interface SessionReference {
   sessionVersion: number
 }
 
-/** A timer window can be attached to a room or a player after the pacing decision is made. */
+/** Synchronized timer window controlled by the teacher client. */
 export interface QuestionTimerWindow {
   startedAt: DomainTimestamp
   endsAt: DomainTimestamp
 }
 
-/** Phase 2 defines the contract only; no score thresholds are selected. */
 export interface CityLevelPolicy {
   resolveLevel(cityScore: number): CityLevel
 }

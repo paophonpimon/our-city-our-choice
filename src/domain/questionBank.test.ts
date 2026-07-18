@@ -21,7 +21,7 @@ const createTestQuestion = (roleId: RoleId, questionNumber: (typeof QUESTION_NUM
       text: TEST_ONLY_TEXT,
     })),
     topic: TEST_ONLY_TEXT,
-  }) satisfies QuestionDefinition
+  }) as unknown as QuestionDefinition
 
 const createCompleteTestBank = (choiceCount: number): QuestionBank =>
   Object.fromEntries(
@@ -59,9 +59,11 @@ describe('Our City question bank scaffold', () => {
 })
 
 describe('Our City question bank validation', () => {
-  it('accepts structurally complete test banks with either 2 or 4 choices without choosing a standard', () => {
+  it('accepts exactly 2 choices per question', () => {
     expect(validateQuestionBank(createCompleteTestBank(2)).valid).toBe(true)
-    expect(validateQuestionBank(createCompleteTestBank(4)).valid).toBe(true)
+    expect(validateQuestionBank(createCompleteTestBank(4)).issues.some((issue) => issue.code === 'choices-per-question')).toBe(
+      true,
+    )
   })
 
   it('rejects duplicate question IDs and role mismatches', () => {
@@ -69,7 +71,7 @@ describe('Our City question bank validation', () => {
     const firstPoliceQuestion = bank.police[0]
     if (!firstPoliceQuestion) throw new Error('test fixture is incomplete')
 
-    const invalidQuestion = { ...firstPoliceQuestion, id: 'mayor-01', roleId: 'mayor' as const }
+    const invalidQuestion = { ...firstPoliceQuestion, id: 'doctor-01', roleId: 'doctor' as const }
     const invalidBank = replaceRoleQuestions(bank, 'police', [invalidQuestion, ...bank.police.slice(1)])
     const result = validateQuestionBank(invalidBank)
 
@@ -79,29 +81,30 @@ describe('Our City question bank validation', () => {
 
   it('rejects duplicate choice IDs within one question', () => {
     const bank = createCompleteTestBank(2)
-    const firstQuestion = bank.mayor[0]
+    const firstQuestion = bank.doctor[0]
     if (!firstQuestion) throw new Error('test fixture is incomplete')
     const firstChoice = firstQuestion.choices[0]
     if (!firstChoice) throw new Error('test fixture has no choices')
 
-    const invalidQuestion = { ...firstQuestion, choices: [firstChoice, { ...firstChoice }] }
-    const invalidBank = replaceRoleQuestions(bank, 'mayor', [invalidQuestion, ...bank.mayor.slice(1)])
+    const invalidQuestion = { ...firstQuestion, choices: [firstChoice, { ...firstChoice }] as const }
+    const invalidBank = replaceRoleQuestions(bank, 'doctor', [invalidQuestion, ...bank.doctor.slice(1)])
 
     expect(validateQuestionBank(invalidBank).issues.some((issue) => issue.code === 'duplicate-choice-id')).toBe(true)
   })
 
   it('rejects numeric impact or city score fields from UI question data', () => {
     const bank = createCompleteTestBank(2)
-    const firstQuestion = bank.mayor[0]
+    const firstQuestion = bank.doctor[0]
     if (!firstQuestion) throw new Error('test fixture is incomplete')
     const firstChoice = firstQuestion.choices[0]
+    const secondChoice = firstQuestion.choices[1]
     if (!firstChoice) throw new Error('test fixture has no choices')
 
     const exposedQuestion = {
       ...firstQuestion,
-      choices: [{ ...firstChoice, cityScoreDelta: -1 }, ...firstQuestion.choices.slice(1)],
-    }
-    const exposedBank = replaceRoleQuestions(bank, 'mayor', [exposedQuestion, ...bank.mayor.slice(1)])
+      choices: [{ ...firstChoice, cityScoreDelta: -1 }, secondChoice] as const,
+    } as unknown as QuestionDefinition
+    const exposedBank = replaceRoleQuestions(bank, 'doctor', [exposedQuestion, ...bank.doctor.slice(1)])
 
     expect(validateQuestionBank(exposedBank).issues.some((issue) => issue.code === 'exposed-internal-impact')).toBe(true)
   })

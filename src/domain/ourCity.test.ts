@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import * as ourCityDomain from './ourCity'
 import {
   QUESTIONS_PER_PLAYER,
   ROLE_IDS,
@@ -21,7 +20,7 @@ describe('Our City roles', () => {
 
   it('defines every Thai role label and stable order', () => {
     expect(ROLES.map(({ id, label, order }) => ({ id, label, order }))).toEqual([
-      { id: 'mayor', label: 'นายกเทศมนตรี', order: 1 },
+      { id: 'doctor', label: 'หมอ', order: 1 },
       { id: 'municipal', label: 'เจ้าหน้าที่เทศบาล', order: 2 },
       { id: 'police', label: 'ตำรวจ', order: 3 },
       { id: 'teacher', label: 'ครู', order: 4 },
@@ -35,14 +34,14 @@ describe('Our City roles', () => {
   it('assigns only unassigned players and keeps role counts within one', () => {
     const players = Array.from({ length: 34 }, (_, index) => ({
       playerId: `player-${index + 1}`,
-      roleId: index === 0 ? ('mayor' as const) : index === 1 ? ('municipal' as const) : null,
+      roleId: index === 0 ? ('doctor' as const) : index === 1 ? ('municipal' as const) : null,
     }))
 
     const assigned = assignBalancedRoles(players)
     const counts = Object.fromEntries(ROLE_IDS.map((roleId) => [roleId, 0])) as Record<(typeof ROLE_IDS)[number], number>
     for (const player of assigned) counts[player.roleId] += 1
 
-    expect(assigned[0]?.roleId).toBe('mayor')
+    expect(assigned[0]?.roleId).toBe('doctor')
     expect(assigned[1]?.roleId).toBe('municipal')
     expect(assigned.every((player) => player.roleId !== null)).toBe(true)
     expect(Math.max(...Object.values(counts)) - Math.min(...Object.values(counts))).toBeLessThanOrEqual(1)
@@ -91,10 +90,5 @@ describe('Our City room settings', () => {
       valid: false,
       errors: ['question-duration-must-be-positive-integer', 'questions-per-player-must-be-10'],
     })
-  })
-
-  it('does not define score thresholds or a score-to-level mapper in Phase 2', () => {
-    expect(ourCityDomain).not.toHaveProperty('CITY_SCORE_THRESHOLDS')
-    expect(ourCityDomain).not.toHaveProperty('mapCityScoreToLevel')
   })
 })

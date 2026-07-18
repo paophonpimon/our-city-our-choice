@@ -6,51 +6,105 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function room(roomCode) {
-      return get(/databases/$(database)/documents/rooms/$(roomCode)).data;
+    function room(roomId) {
+      return get(/databases/$(database)/documents/rooms/$(roomId)).data;
     }
 
-    function isTeacher(roomCode) {
-      return signedIn() && room(roomCode).teacherSessionId == request.auth.uid;
+    function isTeacher(roomId) {
+      return signedIn() && room(roomId).teacherSessionId == request.auth.uid;
     }
 
-    match /rooms/{roomCode} {
-      // MVP: ผู้ใช้ที่ยืนยันตัวตนแบบ anonymous อ่านข้อมูลห้องได้เพื่อเข้าร่วมด้วยรหัส
+    function isPlayerOwner(roomId, playerId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/rooms/$(roomId)/players/$(playerId)).data.ownerUid == request.auth.uid;
+    }
+
+    match /rooms/{roomId} {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.teacherSessionId == request.auth.uid
-        && request.resource.data.roomCode == roomCode
-        && request.resource.data.status == 'waiting';
-      allow update: if isTeacher(roomCode);
+        && request.resource.data.roomId == roomId
+        && request.resource.data.keys().hasAll([
+          'status',
+          'currentQuestionNumber',
+          'questionDurationSec',
+          'questionStartedAt',
+          'questionDeadlineAt',
+          'lockedPlayerCount',
+          'cityScore',
+          'cityLevel',
+          'updatedAt'
+        ]);
+      allow update: if isTeacher(roomId)
+        && request.resource.data.teacherSessionId == resource.data.teacherSessionId;
       allow delete: if false;
 
-      match /teams/{teamId} {
-        allow read: if isTeacher(roomCode) || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      match /players/{playerId} {
+        allow read: if signedIn();
         allow create: if signedIn()
-          && room(roomCode).status == 'waiting'
+          && room(roomId).status == 'waiting'
           && request.resource.data.ownerUid == request.auth.uid
-          && request.resource.data.currentRound == room(roomCode).currentRound
-          && request.resource.data.score == 0
-          && request.resource.data.currentQuestionIndex == 0
-          && request.resource.data.submitted == false;
-        allow update: if isTeacher(roomCode) || (
-          signedIn()
-          && resource.data.ownerUid == request.auth.uid
-          && request.resource.data.ownerUid == resource.data.ownerUid
-          && room(roomCode).status == 'playing'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'score'])
-          && request.resource.data.currentQuestionIndex == resource.data.currentQuestionIndex
-          && request.resource.data.submitted == resource.data.submitted
-          && request.resource.data.status == resource.data.status
-          && (
-            request.resource.data.answers.size() == resource.data.answers.size() + 1
-            || request.resource.data.answers.size() == resource.data.answers.size()
-          )
-          && request.resource.data.score >= resource.data.score - 1
-          && request.resource.data.score <= resource.data.score + 1
-          && request.resource.data.score >= 0
-          && request.resource.data.score <= 10
+          && request.resource.data.playerId == playerId
+          && request.resource.data.roleId == null;
+        allow update: if (
+          isTeacher(roomId)
+          && (resource.data.roleId == null || request.resource.data.roleId == resource.data.roleId)
+        ) || (
+          isPlayerOwner(roomId, playerId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt'])
         );
+        allow delete: if false;
+      }
+
+      match /questions/{questionId} {
+        allow read: if signedIn();
+        allow create: if isTeacher(roomId)
+          && request.resource.data.questionId == questionId
+          && request.resource.data.keys().hasOnly([
+            'questionId',
+            'roleId',
+            'questionNumber',
+            'prompt',
+            'choices',
+            'imageUrl'
+          ]);
+        allow update, delete: if false;
+      }
+
+      match /answers/{answerId} {
+        allow read: if isTeacher(roomId)
+          || (signedIn() && resource.data.ownerUid == request.auth.uid);
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly([
+            'answerId',
+            'roomId',
+            'playerId',
+            'ownerUid',
+            'questionNumber',
+            'questionId',
+            'choiceId',
+            'submittedAt'
+          ])
+          && request.resource.data.answerId == answerId
+          && request.resource.data.roomId == roomId
+          && request.resource.data.ownerUid == request.auth.uid
+          && isPlayerOwner(roomId, request.resource.data.playerId)
+          && answerId == request.resource.data.playerId + '::' + request.resource.data.questionId
+          && request.resource.data.questionNumber == room(roomId).currentQuestionNumber
+          && request.resource.data.submittedAt == request.time
+          && request.time <= room(roomId).questionDeadlineAt
+          && (
+            request.resource.data.choiceId
+              == get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.choices[0].id
+            || request.resource.data.choiceId
+              == get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.choices[1].id
+          );
+        allow update, delete: if false;
+      }
+
+      match /rounds/{questionNumber} {
+        allow read: if signedIn();
+        allow create, update: if isTeacher(roomId);
         allow delete: if false;
       }
     }

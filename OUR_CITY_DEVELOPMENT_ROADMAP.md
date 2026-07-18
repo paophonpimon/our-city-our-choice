@@ -28,7 +28,8 @@
 17. ครูกำหนดเวลาเป็นวินาทีต่อคำถามก่อนเริ่มเกม
 18. จอครูเน้นภาพรวมเมืองเต็มจอ เพื่อให้นักเรียนเห็นผลของการตัดสินใจร่วมกัน
 19. ไม่เปิดเผยบนจอครูว่านักเรียนคนใดเลือกอะไร
-20. ไม่ตอบภายในเวลาไม่ควรถูกหักคะแนนเมืองโดยอัตโนมัติ
+20. ผู้เล่นที่ไม่ตอบภายในเวลาได้รับผลกระทบ `-20` เมื่อครูปิดคำถาม
+21. Phase 4A ใช้ Simple Classroom Architecture: Teacher Client โหลด Google Sheets CSV เก็บ trusted snapshot ใน React state/localStorage และเขียนเฉพาะ public snapshot/aggregate ไป Firestore โดยไม่ใช้ Firebase Functions, Service Account, Custom Claims, Cloud Tasks, IAM, Java, Firebase Emulator หรือ Blaze plan
 
 ---
 
@@ -240,7 +241,7 @@ git commit -m "docs: add Our City migration plan"
 
 ```ts
 type RoleId =
-  | "mayor"
+  | "doctor"
   | "municipal"
   | "police"
   | "teacher"
@@ -321,18 +322,16 @@ interface RoomState {
 ## ข้อสำคัญ
 
 - Client ส่ง `choiceId` เท่านั้น
-- Impact ของ choice ต้องอยู่ใน Service/Backend หรือ question data ที่ Client แก้ไม่ได้
-- การบวกคะแนนต้องป้องกันซ้ำด้วย transaction
-- ห้ามเก็บสถานะ authoritative ไว้ใน localStorage
-- localStorage ใช้เก็บเพียง roomId/playerId/session token ที่จำเป็นต่อ Session Restore
+- Impact ของ choice ต้องอยู่ใน trusted snapshot ของ Teacher Client และห้ามอยู่ใน public Firestore question
+- Teacher Client ต้อง deduplicate คำตอบก่อนคำนวณและเขียน aggregate ด้วย batch
+- localStorage ฝั่งนักเรียนใช้เก็บเพียง roomId/playerId/session token ที่จำเป็นต่อ Session Restore
+- localStorage ฝั่งครูเก็บ trusted room question snapshot ที่มี `integrity_choice` เพื่อ restore หลัง refresh
 - Role Assignment ต้องถูกเขียนลง Firestore แล้วล็อกไว้
 - Refresh ต้องอ่าน role เดิมจาก authoritative state
 
-## จุดตัดสินใจก่อน Implement Timer
+## Timer mode ที่ยืนยันแล้ว
 
-ต้องเลือก 1 แบบ:
-
-### แบบแนะนำสำหรับห้องเรียน
+### Teacher-synchronized
 
 `Teacher-synchronized`
 
@@ -343,14 +342,14 @@ interface RoomState {
 - เมื่อหมดเวลา ปิดรับคำตอบ
 - ครูกดไปข้อถัดไป หรือระบบเดินต่ออัตโนมัติตามค่าที่กำหนด
 
-### แบบ Self-paced
+### Self-paced — ไม่ใช้
 
 - ผู้เล่นเริ่มเวลาของแต่ละข้อไม่พร้อมกัน
 - จอครูไม่สามารถแสดงเวลารวมทั้งห้องแบบเดียวได้
 - ภาพเมืองยังเปลี่ยนตามคำตอบ แต่ความคืบหน้ากระจาย
 - ซับซ้อนกว่าในการอธิบายบนโปรเจกเตอร์
 
-**ข้อเสนอสำหรับ MVP:** ใช้ `Teacher-synchronized` เพราะสอดคล้องกับการกำหนดเวลาต่อคำถามและจอเมืองรวม
+**ยืนยันแล้ว:** ใช้ `Teacher-synchronized`; ทุกคนอยู่ question number เดียวกัน แต่เห็นข้อความตามอาชีพของตน
 
 ## พรอมต์ก๊อปวางให้ Codex
 
@@ -412,7 +411,7 @@ git commit -m "refactor: define Our City domain model"
 
 ```ts
 export const ROLES = [
-  { id: "mayor", label: "นายกเทศมนตรี" },
+  { id: "doctor", label: "หมอ" },
   { id: "municipal", label: "เจ้าหน้าที่เทศบาล" },
   { id: "police", label: "ตำรวจ" },
   { id: "teacher", label: "ครู" },
@@ -442,7 +441,7 @@ export const ROLES = [
 
 ```text
 src/data/questions/
-  mayor.ts
+  doctor.ts
   municipal.ts
   police.ts
   teacher.ts
@@ -718,8 +717,8 @@ remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
 
 ## ห้ามใช้
 
-- ห้ามให้แต่ละเครื่องเริ่ม `setInterval(duration)` ของตัวเองแล้วถือว่า authoritative
-- ห้ามเชื่อถือเวลาจาก Client ในการตัดสินว่าคำตอบทันหรือไม่
+- ห้ามให้ Student Client แต่ละเครื่องเริ่ม timer ใหม่เอง; ทุกเครื่องอ่าน `questionDeadlineAt` เดียวจาก room
+- Teacher Client เป็นผู้ตัดสินปิดรับคำตอบจาก deadline และเขียนสถานะปิดไป Firestore
 - ห้ามให้ refresh แล้ว Timer เริ่มใหม่
 - ห้ามให้การสลับแท็บหยุดเวลา
 
@@ -728,7 +727,7 @@ remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
 - UI ปิดตัวเลือกทันทีเมื่อ `remainingSec <= 0`
 - Service ตรวจเวลาอีกครั้งก่อนยอมรับคำตอบ
 - คำตอบหลัง `questionEndsAt` ต้องไม่ถูกนับ
-- ไม่ตอบไม่หักคะแนนอัตโนมัติ
+- ผู้ไม่ตอบเมื่อครูปิดข้อได้รับ timeout impact `-20`
 - จอครูเห็นจำนวนคนตอบแล้วแบบ realtime
 
 ## ตัวเลือกการเดินเกม
@@ -755,20 +754,20 @@ remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
 
 กติกา:
 - ครูกำหนด questionDurationSec ก่อนเริ่มเกม
-- ใช้ questionStartedAt และ questionEndsAt จาก authoritative state
+- ใช้ questionStartedAt และ questionDeadlineAt จาก room state เดียวกัน
 - Client คำนวณ remaining time จาก timestamp
 - refresh ต้องไม่รีเซ็ตเวลา
 - Service ปฏิเสธคำตอบที่ส่งหลัง questionEndsAt
-- คำตอบที่ไม่ส่งไม่ถูกหักคะแนน
+- คำตอบที่ไม่ส่งได้รับ timeout impact `-20` ตอน Teacher Client ปิดข้อ
 - เมื่อหมดเวลาเปลี่ยนสถานะเป็น question-closed
-- ยังไม่เดินข้อถัดไปอัตโนมัติ ให้ครูกดคำถามถัดไป
-- ห้ามเชื่อถือเวลาจาก Client เป็นตัวตัดสินสุดท้าย
+- ยังไม่ implement การเดินข้อถัดไป เพราะต้องรอการตัดสินใจว่าจะอัตโนมัติหรือครูกด Next
+- Student Client ไม่เป็นผู้ตัดสิน deadline หรือคะแนน
 
 เพิ่ม tests:
 - refresh กลาง Timer ได้เวลาเดิม
 - answer ก่อนหมดเวลาถูกยอมรับ
 - answer หลังหมดเวลาถูกปฏิเสธ
-- non-answer ไม่เปลี่ยน cityScore
+- non-answer ใช้ timeout impact `-20`
 - timer ไม่ติดลบใน UI
 
 รัน lint/typecheck/tests/build
@@ -884,50 +883,31 @@ git commit -m "feat: add city-focused teacher dashboard"
 
 คำนวณผลรวมจากการตัดสินใจของทั้งห้อง และเปลี่ยนภาพเมืองให้เห็นผลชัดเจน
 
-## สิ่งที่ต้องตัดสินก่อนล็อกสูตร
-
-1. คะแนนเริ่มต้น
-2. Impact ต่อ choice เช่น `-1 / +1` หรือ `-8 / +2`
-3. ช่วงคะแนนของ 5 ระดับ
-4. แสดงคะแนนเป็นเลขหรือซ่อนเลขไว้
-5. เปลี่ยนเมืองทันทีทุกคำตอบ หรือสรุปเมื่อหมดเวลาของข้อ
-
-## ข้อเสนอที่เหมาะกับเป้าหมายการสอน
-
-เพื่อให้ “การทุจริตแม้เพียงบางส่วนทำร้ายเมืองได้ชัด” ใช้คะแนนเชิงอสมมาตร เช่น:
+## สูตรที่ยืนยันแล้ว
 
 ```text
-ทางเลือกซื่อสัตย์      +2
-ทางเลือกหลีกเลี่ยง     0
-ทางเลือกทุจริต         -8
+integrity = +50
+corruption = -100
+timeout = -20
+initialCityScore = 500
+minCityScore = 0
+maxCityScore = 1000
+
+roundAverage = roundTotal / lockedPlayerCount
+newCityScore = clamp(previousCityScore + roundAverage, 0, 1000)
 ```
 
-แต่ควร Normalize ตามจำนวนผู้เล่น เพื่อให้ห้อง 20 คนกับ 40 คนได้ระดับเมืองเทียบกันได้
+ระดับเมือง:
 
-ตัวอย่างแนวคิด:
-
-```ts
-normalizedScore =
-  totalPossibleImpact === 0
-    ? 0
-    : actualImpact / totalPossiblePositiveImpact;
+```text
+0–199 = critical
+200–399 = declining
+400–599 = neutral
+600–799 = improving
+800–1000 = prosperous
 ```
 
-หรือคำนวณเป็นคะแนนเฉลี่ยต่อคำตอบ
-
-## Mapping ตัวอย่าง
-
-```ts
-function getCityLevel(scorePercent: number): CityLevel {
-  if (scorePercent <= 20) return "critical";
-  if (scorePercent <= 40) return "declining";
-  if (scorePercent <= 60) return "neutral";
-  if (scorePercent <= 80) return "improving";
-  return "prosperous";
-}
-```
-
-ตัวเลขนี้เป็นตัวอย่าง ต้องยืนยันก่อน Production
+คำนวณเมื่อทุกคนตอบครบหรือหมดเวลา โดยผู้ไม่ตอบได้รับ `-20`
 
 ## ไฟล์ภาพ
 
@@ -965,8 +945,7 @@ city-prosperous.png
 ทำ Phase 8: City Scoring และ City Level
 
 ก่อนแก้:
-- อ่านค่าที่เจ้าของโครงการยืนยันเรื่อง scoring
-- ห้ามเลือก threshold เองถ้ายังไม่ได้รับคำตอบ
+- ใช้ score policy และ threshold ที่ยืนยันแล้วข้างต้น
 
 งาน:
 1. แยก pure scoring functions
@@ -1098,7 +1077,7 @@ rooms/{roomId}/answers/{answerId}
 - ใช้ anonymous auth
 - answer document ต้อง idempotent
 - Client ห้ามเขียน cityScore, impact หรือ roleId โดยตรง
-- เพิ่ม firestore rules และ emulator tests ถ้าโครงเดิมรองรับ
+- เพิ่ม Firestore rules แบบเรียบง่ายสำหรับ teacher ownership, public questions และ idempotent answers
 - config จริงอยู่ใน .env.local
 - commit ได้เฉพาะ .env.example
 - ห้าม commit secrets
@@ -1134,7 +1113,9 @@ Refresh, ปิดแท็บ, เน็ตหลุด แล้วกลั�
 }
 ```
 
-## localStorage ห้ามเก็บเป็น authoritative
+เครื่องครูเก็บ trusted room question snapshot พร้อม `integrity_choice` แยก key ตาม room เพื่อ restore หลัง refresh ได้ด้วย
+
+## localStorage ฝั่งนักเรียนห้ามเก็บเป็น authoritative
 
 - roleId
 - cityScore
@@ -1180,10 +1161,10 @@ Refresh, ปิดแท็บ, เน็ตหลุด แล้วกลั�
 - progress เดิม
 - timer เดิม
 - คำตอบเดิมไม่ถูกส่งซ้ำ
-- ใช้ authoritative state จาก service
-- localStorage เก็บเฉพาะ session identifiers
+- ใช้ public room/player state จาก service
+- localStorage ฝั่งนักเรียนเก็บเฉพาะ session identifiers; ฝั่งครูเก็บ trusted room snapshot แยกตาม room
 - เพิ่ม tests สำหรับ double submit และ two-tab race
-- ห้ามแก้คะแนนจาก client state
+- Student Client ห้ามส่งหรือแก้คะแนน; Teacher Client คำนวณ aggregate จาก trusted snapshot
 
 รัน lint/typecheck/tests/build
 ```
@@ -1256,7 +1237,7 @@ npm run build
 
 - คำตอบเดียวบวกครั้งเดียว
 - Client ปลอม impact ไม่ได้
-- ไม่ตอบไม่ถูกหักคะแนน
+- ไม่ตอบได้รับผลกระทบ `-20`
 - cityLevel เปลี่ยนตาม threshold
 - จำนวนผู้เล่นต่างกันยัง normalize ถูกต้อง
 
@@ -1344,7 +1325,7 @@ git commit -m "test: complete Our City QA coverage"
 
 ## ข้อควรระวัง
 
-- ใช้ Firebase Emulator ก่อนถ้าเป็นไปได้
+- ใช้ DemoService และ unit tests ก่อน; Phase 4A ไม่กำหนด Java/Firebase Emulator เป็นเงื่อนไข
 - ห้ามยิง Production โดยไม่จำกัด
 - ห้ามสร้าง polling
 - ตรวจ unsubscribe ทุก subscription
@@ -1357,7 +1338,7 @@ git commit -m "test: complete Our City QA coverage"
 
 งาน:
 1. สร้าง LOAD_TEST_PLAN.md
-2. ใช้ Firebase Emulator หรือ DemoService ก่อน
+2. ใช้ DemoService และ test fixtures ก่อน
 3. จำลอง join 40 คน
 4. จำลอง submit พร้อมกัน
 5. จำลอง double submit, refresh และ reconnect
@@ -1504,9 +1485,9 @@ PROJECT_HANDOFF_CONFIRMED_V2.md
 - จอครูเน้นภาพเมืองเต็มจอ
 - เมืองเปลี่ยนตามผลของคำตอบร่วมกัน
 - ไม่เปิดเผยว่าใครเลือกอะไร
-- ไม่ตอบไม่ถูกหักคะแนนอัตโนมัติ
+- ไม่ตอบได้รับผลกระทบ `-20` เมื่อปิดคำถาม
 - Client ส่ง choiceId เท่านั้น
-- Backend/Service เป็นผู้ตรวจ impact
+- Teacher Client ตรวจ impact จาก trusted local snapshot
 - คำตอบเดียวต้องไม่ถูกนับซ้ำ
 - Refresh/reconnect ต้องได้อาชีพและ progress เดิม
 
@@ -1547,15 +1528,11 @@ PROJECT_HANDOFF_CONFIRMED_V2.md
 
 # จุดที่ยังต้องยืนยันก่อนเข้าสู่ Implementation บางส่วน
 
-1. ใช้ Teacher-synchronized ตามข้อเสนอหรือไม่
-2. เมื่อหมดเวลา ครูกดข้อถัดไป หรือระบบไปอัตโนมัติ
-3. Late join หลังเริ่มเกม
-4. Question order คงที่หรือสุ่ม
-5. อนุญาตแก้ตัวเลือกก่อนกดยืนยันหรือไม่
-6. สูตร City Score และ Threshold
-7. คะแนนเริ่มต้น
-8. Reset รอบใหม่จะคงอาชีพเดิมหรือแจกใหม่
-9. ระยะเวลาเก็บข้อมูลห้อง
-10. Google Sheets import ทำใน MVP หรือ Phase หลัง
+1. Late join หลังเริ่มเกม
+2. Question order คงที่หรือสุ่มเมื่อมีคำถาม active มากกว่า 10 ข้อต่ออาชีพ
+3. อนุญาตแก้ตัวเลือกก่อนกดยืนยันหรือไม่
+4. Reset รอบใหม่จะคงอาชีพเดิมหรือแจกใหม่
+5. ระยะเวลาเก็บข้อมูลห้อง
+6. รูปแบบการแสดงคะแนนบน UI
 
 ระบบควรออกแบบไม่ให้การตัดสินใจเหล่านี้บังคับ Rewrite ทั้งโปรเจกต์

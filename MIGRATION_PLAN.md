@@ -1,8 +1,16 @@
-# Our City, Our Choice — Phase 1 Migration Plan
+# Our City, Our Choice — Migration Plan through Phase 4A
 
-> สถานะเอกสาร: ผลลัพธ์ Phase 1 (Project Audit + Source-of-Truth Reconciliation) เท่านั้น ยังไม่มีการแก้ implementation
+> สถานะเอกสาร: Reconciled through Phase 4A Simple Classroom Architecture
 >
 > วันที่ audit: 2026-07-18 (Asia/Bangkok)
+
+### Phase 4A architecture override
+
+- Teacher Client โหลด Google Sheets `QUESTIONS` ผ่าน CSV URL, parse/validate และเลือก 10 ข้อต่ออาชีพ
+- Trusted snapshot พร้อม `integrity_choice` อยู่ใน React state/localStorage ของเครื่องครู; Firestore เก็บเฉพาะ public questions
+- Student Client ส่งเฉพาะ `questionId`/`choiceId`; Teacher Client ฟัง answers, ปิดข้อ, deduplicate และคำนวณ aggregate city score
+- Phase 4A ไม่ใช้ Firebase Functions, Service Account, Custom Claims, Cloud Tasks, IAM, Java, Firebase Emulator, server-only trusted collections หรือ Blaze plan
+- ประเด็นเปิด: หลังปิดข้อจะเปิดข้อถัดไปอัตโนมัติหรือรอครูกด Next
 
 ## Current Architecture
 
@@ -128,14 +136,14 @@
 2. ครูสร้างห้องและระบบต้องแสดงทั้งรหัสห้องและ QR Code
 3. ระบบแจกอาชีพเมื่อครูเริ่มเกม โดยแจกแบบสมดุลให้จำนวนผู้เล่นแต่ละอาชีพต่างกันไม่เกิน 1 คน
 4. ผู้เล่นหนึ่งคนได้รับหนึ่งอาชีพเท่านั้น อาชีพถูกล็อกตลอดเกม ไม่มี reroll และ refresh/reconnect ต้องได้อาชีพเดิม
-5. อาชีพ 8 รายการที่ยืนยันแล้วคือ `mayor` นายกเทศมนตรี, `municipal` เจ้าหน้าที่เทศบาล, `police` ตำรวจ, `teacher` ครู, `merchant` พ่อค้าแม่ค้า, `contractor` ผู้รับเหมา, `student` นักเรียน และ `journalist` นักข่าว
+5. อาชีพ 8 รายการที่ยืนยันแล้วคือ `doctor` หมอ, `municipal` เจ้าหน้าที่เทศบาล, `police` ตำรวจ, `teacher` ครู, `merchant` พ่อค้าแม่ค้า, `contractor` ผู้รับเหมา, `student` นักเรียน และ `journalist` นักข่าว
 6. แต่ละอาชีพมีคำถามเฉพาะ 10 ข้อ รวม MVP 80 ข้อ; ไม่มีการเปลี่ยนอาชีพระหว่างคำถาม
 7. ฝั่งนักเรียนใช้ข้อความ `คำถามข้อที่ x/10` และใช้แนวคิด `questionIndex/currentQuestionIndex` แทนคำว่า “รอบ” เมื่อหมายถึงความคืบหน้าของบุคคล
-8. คำถามแต่ละข้อมีสถานการณ์สั้น, ตัวเลือก 2 ทางน้ำหนักภาพเท่ากัน, impact ภายในระบบ (ตัวอย่าง `-1`, `0`, `+1`), feedback เชิงเหตุและผล และหัวข้อด้านความซื่อสัตย์/โปร่งใส/ความรับผิดชอบ
+8. คำถามแต่ละข้อมีสถานการณ์สั้นและตัวเลือก 2 ทาง; trusted snapshot ฝั่งครู map integrity `+50` และ corruption `-100` โดย public question ไม่มี impact
 9. ห้ามใช้สีเขียว/แดงชี้นำก่อนตอบและไม่แสดงถูก/ผิดแบบข้อสอบทั่วไป; หลังเลือกต้องมีขั้นยืนยันเพื่อลดการแตะผิด
-10. Client ส่งเพียง `choiceId`; Service/Backend เป็นผู้ตรวจ impact และคำนวณคะแนน คำตอบเดียวต้องไม่ถูกนับซ้ำ
+10. Student Client ส่งเพียง `questionId`/`choiceId`; Teacher Client ตรวจ trusted snapshot และคำนวณคะแนน โดยคำตอบเดียวต้องไม่ถูกนับซ้ำ
 11. เกมมี Timer ต่อคำถาม ครูกำหนดจำนวนวินาทีก่อนเริ่มเกม และค่าที่เลือกหนึ่งครั้งใช้กับคำถามทั้ง 10 ข้อในเกมนั้น
-12. ผู้ไม่ตอบภายในเวลาไม่ถูกหักคะแนนเมืองโดยอัตโนมัติ
+12. ทุกคนเล่น question number เดียวกันพร้อมกัน; เมื่อทุกคนตอบครบหรือหมดเวลา ระบบปิดคำถาม โดยผู้ไม่ตอบได้รับ `-20`
 
 ### ยืนยันแล้ว: shared city and teacher experience
 
@@ -143,7 +151,7 @@
 2. เมืองเปลี่ยนสภาพตามผลรวมการตัดสินใจ และต้องสื่อผลเสียจากการทุจริตหรือความไม่รับผิดชอบ
 3. เมืองมี 5 visual states: `critical`, `declining`, `neutral`, `improving`, `prosperous` ใช้ไฟล์ที่ยืนยันไว้และ Crossfade จากมุมกล้องเดียวกัน
 4. จอครูใช้โครง full-screen เน้นภาพเมืองขนาดใหญ่สำหรับ projector พร้อมแถบสถานะด้านบน ไม่ใช่ admin table ล้วน
-5. จอครูแสดงความคืบหน้ารวมเป็นจำนวนคำตอบทั้งหมดและจำนวนผู้เล่นที่ทำครบ ไม่สมมติว่าทุกคนอยู่ question index เดียวกัน
+5. จอครูแสดง question number กลางของห้องร่วมกับจำนวนคำตอบทั้งหมดและจำนวนผู้เล่นที่ทำครบ
 6. ห้ามเปิดเผยต่อหน้าห้องว่าผู้เล่นคนใดเลือกอะไร
 7. ครูดูรายชื่อ/จำนวนผู้เล่น, เริ่มเกม, ดู city state/realtime progress, จบหรือ reset และเริ่มใหม่โดยคงรายชื่อเดิมได้
 8. MVP ใช้ภาพเมือง 2D ห้ามทำเมือง 3D
@@ -151,19 +159,19 @@
 ### ยืนยันแล้ว: architecture constraints
 
 1. รักษา Vite, React, TypeScript, React Router, React Context, `GameService`, Firebase Firestore, `onSnapshot`, Anonymous Auth, transactions/batches, DemoService, Session Restore และ Vitest
-2. Backend/Firestore เป็น authoritative state; `localStorage` เก็บเฉพาะ session identifier
-3. ห้าม Next.js, vinext, Cloudflare D1, REST polling, giant `GameApp.tsx`, global mutable state และ client-authoritative scoring
+2. Firestore เป็น public realtime classroom state; Teacher Client เก็บ trusted snapshot และเป็นผู้คำนวณ aggregate score
+3. localStorage ฝั่งนักเรียนเก็บเฉพาะ session identifier ส่วนเครื่องครูเก็บ trusted room snapshot เพื่อ restore
+4. ห้าม Next.js, vinext, Cloudflare D1, REST polling, giant `GameApp.tsx`, global mutable state และ Student Client ส่ง score/impact
 4. ห้ามเชื่อม/deploy ทับ Firebase Production ของ Matana และไม่ rewrite ทั้งโปรเจกต์โดยไม่จำเป็น
 
 ### ยังต้องตัดสินใจ
 
-- Self-paced หรือ teacher-synchronized questions (การมี timer ยืนยันแล้ว แต่ pacing mode ยังไม่ยืนยัน)
 - เกมจบอัตโนมัติเมื่อทุกคนครบหรือครูกดจบ
 - Late join policy
-- ลำดับคำถามคงที่หรือสุ่ม
+- ลำดับ/การเลือกคำถามเมื่อมี active มากกว่า 10 ข้อต่ออาชีพ
 - Answer editing policy หลังเลือก/ก่อนยืนยัน/ก่อนหมดเวลา
-- สูตรคะแนนเมือง, คะแนนเริ่มต้น, normalization, thresholds ของ 5 states และรูปแบบตัวเลขที่แสดง
-- Firebase project/deployment details, Google Sheets import method และ room data retention
+- รูปแบบตัวเลขคะแนนที่แสดงบน UI
+- Firebase project/deployment details และ room data retention
 
 ## Current Git Status
 
@@ -194,7 +202,7 @@
 | Room code generation | รหัส 6 ตัวที่อ่านง่าย | rebrand validation messages |
 | Teacher timer setting | ครูตั้งจำนวนวินาทีก่อน start และใช้ค่าหนึ่งตลอด 10 ข้อ | pacing/start timestamp อาจเป็นระดับ player หรือ room ตาม decision ที่ยังเปิด |
 | Generic UI primitives | scene shell, loading/error, confirm dialog, buttons/forms, accessibility/reduced motion | rebrand และลบ winner-specific styles |
-| Missed-answer behavior | ปัจจุบันไม่มีการเพิ่มคำตอบหรือหักคะแนนเมื่อ timeout | ต้องมี test ยืนยัน explicit neutral effect |
+| Missed-answer behavior | ปัจจุบันไม่มีการเพิ่มคำตอบหรือหักคะแนนเมื่อ timeout | เปลี่ยน trusted scoring ให้ timeout มีผล `-20` |
 | SPA hosting rewrites/no-cache intent | refresh deep routes ได้ | เอา route legacy ออกและเพิ่ม route ใหม่ถ้ามี |
 
 ## ADAPT
@@ -205,7 +213,7 @@
 | `src/components/Layout.tsx` | เปลี่ยนแบรนด์/ข้อความ/status จาก Matana เป็น Our City; คง generic components |
 | `src/context/GameContext.tsx` | เปลี่ยนชื่อ domain, รองรับ validated restored session และ service readiness ของโปรเจกต์ Firebase ใหม่ |
 | `src/hooks/useGameData.ts` | `useTeams/useTeam` เป็น player-oriented hooks; เพิ่ม city state และ anonymous aggregate hooks |
-| `src/lib/gameFlow.ts` | คง deadline helpers แต่ใช้ server-authoritative timestamps และผลเมืองแทน score visibility รายทีม |
+| `src/lib/gameFlow.ts` | คง deadline helpers แต่ใช้ room-level synchronized timestamps และผลเมืองแทน score visibility รายทีม |
 | `src/pages/HomePage.tsx` | rebrand และอธิบาย collaborative city game |
 | `src/pages/JoinPage.tsx` | เปลี่ยน team/guardian fields เป็นรหัสห้อง + ชื่อเล่น และรองรับทางเข้า QR Code |
 | `src/pages/LobbyPage.tsx` | แสดง waiting/readiness ก่อนครูเริ่ม; หลัง start จึงเข้าสู่ role reveal ตาม flow ที่ยืนยัน |
@@ -218,10 +226,10 @@
 | `src/services/sessionStorage.ts` | ใช้ versioned Our City keys, runtime validation, UID/room/game binding และ safe invalidation |
 | `src/services/firebaseService.ts` | คง auth/snapshot/transaction primitives แต่ปรับ schema, privacy, server-time validation และ aggregate writes |
 | `firestore.rules` | ปรับ ownership, immutable occupation, answer uniqueness/deadline และห้ามอ่าน player choices ข้ามคน |
-| `firebase.json` | ปรับ route headers/rewrites เมื่อ routes สรุปแล้ว; เพิ่ม emulator config หากอนุมัติ โดยไม่ใส่ Matana project |
+| `firebase.json` | คงเฉพาะ Firestore rules และ Hosting; Phase 4A ไม่มี Functions/Emulator config |
 | `src/styles.css` | เก็บ generic responsive/accessibility rules; เปลี่ยน palette/layout/projector mode และลบ rank/winner styling |
 | Existing tests | เปลี่ยน fixtures/expectations จาก team score เป็น role lock/city score/privacy/timer |
-| `scripts/load-test-40.mjs` | เปลี่ยน schema และ target guard; ใช้เฉพาะ emulator/staging Our City หลังอนุมัติ |
+| `scripts/load-test-40.mjs` | เปลี่ยน schema และ target guard; ใช้เฉพาะ Demo/staging Our City หลังอนุมัติ |
 
 ## REPLACE
 
@@ -242,16 +250,16 @@
 
 ## ADD
 
-1. `Occupation` registry ตาม IDs ที่ยืนยันแล้ว: `mayor`, `municipal`, `police`, `teacher`, `merchant`, `contractor`, `student`, `journalist`
+1. `Occupation` registry ตาม IDs ที่ยืนยันแล้ว: `doctor`, `municipal`, `police`, `teacher`, `merchant`, `contractor`, `student`, `journalist`
 2. Data validation ที่ fail build/test หากไม่ครบ 8 อาชีพ, 10 ข้อต่ออาชีพ, 80 ข้อรวม หรือ question index ซ้ำ
 3. Decision choice effect model ที่บอกผลต่อเมืองและรองรับการอธิบาย “ทุจริต/ไม่รับผิดชอบ”
 4. Immutable occupation assignment พร้อม atomic claim/lock และ restore จาก server
-5. `CityState`/`CityScore` ระดับ room พร้อม 5 visual stages ที่ยืนยัน; สูตร/threshold/dimensions ยังเปิด
+5. `CityState`/`CityScore` ระดับ room พร้อม score policy `+50/-100/-20`, ค่าเริ่มต้น `500`, ช่วง `0–1000` และ 5 thresholds ที่ยืนยัน
 6. Idempotency record ต่อ player + question number เพื่อกันคะแนนซ้ำและรองรับการแก้คำตอบก่อน deadlineแบบ delta-safe หากอนุญาต
 7. Privacy-safe public aggregates เช่น answered count, city score และ city stage โดยไม่มี mapping choice → player
 8. Full-screen projector city component/scene, Crossfade และ mapping `critical` → `prosperous`
 9. Reconnect/session recovery states สำหรับ refresh, offline, expired auth และ stale local storage
-10. Firebase emulator tests สำหรับ rules, deadline, role immutability, duplicate answer และ privacy
+10. Unit/rules contract tests สำหรับ deadline, role immutability, duplicate answer และ public question privacy
 11. Integration/concurrency tests สำหรับ shared city aggregate และ simultaneous answers
 12. QR Code join flow และ guard ที่ป้องกัน scripts/tests ชี้ไป Matana Production โดยไม่ตั้งใจ
 
@@ -265,11 +273,11 @@
 4. **Phase 5 — Student Flow:** ปรับ `src/hooks/useGameData.ts`, `src/context/GameContext.tsx`, `src/App.tsx` และหน้า Join → Lobby → Role Reveal/Detail → Question/Confirm → Feedback/Waiting → Shared Summary
 5. **Phase 6 — Central Timer:** เพิ่ม authoritative timestamps/deadline ใน state/service และ UI countdown; พฤติกรรมเดินข้อถัดไปต้องรอปิด pacing/timeout gate
 6. **Phase 7 — Teacher Projector Dashboard:** ปรับ `src/pages/TeacherPage.tsx`, QR Code, full-screen city scene และ privacy-safe realtime aggregates
-7. **Phase 8 — City Scoring and Five Visual States:** เพิ่ม pure scoring/normalization/mapping tests, confirmed asset mapping และ Crossfade หลังยืนยันสูตร/threshold/starting score
-8. **Phase 9 — New Firebase Project and Production Service:** ปรับ `src/services/firebaseService.ts`, `firestore.rules`, environment separation และ emulator tests โดยใช้โครงการ Our City ใหม่เท่านั้น
+7. **Phase 8 — City Scoring and Five Visual States:** ใช้ score policy/threshold ที่ยืนยันแล้ว เพิ่ม mapping tests, confirmed asset mapping และ Crossfade
+8. **Phase 9 — New Firebase Project and Classroom Service:** ปรับ `src/services/firebaseService.ts`, `firestore.rules` และ environment separation โดยใช้โครงการ Our City ใหม่เท่านั้น
 9. **Phase 10 — Session Restore and Idempotency:** ปรับ `src/services/sessionStorage.ts` และ restore/duplicate/two-tab/concurrency tests
 10. **Phase 11 — QA and Automated Tests:** ปรับ unit/component/route/integration/rules tests แล้วรัน lint → typecheck → test → build ตาม scripts จริง
-11. **Phase 12 — Load Test About 40 Clients:** ปรับ `scripts/load-test-40.mjs` สำหรับ schema ใหม่และทดสอบผ่าน Emulator/Demo/staging ที่มี safety guard; ห้ามยิง Matana Production
+11. **Phase 12 — Load Test About 40 Clients:** ปรับ `scripts/load-test-40.mjs` สำหรับ schema ใหม่และทดสอบผ่าน Demo/staging ที่มี safety guard; ห้ามยิง Matana Production
 12. **Phase 13 — Deploy and Classroom Dry Run:** deploy เฉพาะหลัง QA ผ่าน, Firebase target/asset/QR ได้รับการตรวจ และได้รับอนุมัติแยกต่างหาก
 
 งาน shared UI/style/rebrand (`src/components/Layout.tsx`, `src/styles.css`, `HomePage`, `index.html`, package metadata และ public assets) ให้ทำภายใน Phase 5–8 ตามหน้าที่ของแต่ละส่วน ไม่สร้าง Phase แทรกหรือ rewrite ทั้งระบบ
@@ -278,10 +286,10 @@
 
 ### ยืนยันแล้ว: domain requirements
 
-- stable role IDs: `mayor`, `municipal`, `police`, `teacher`, `merchant`, `contractor`, `student`, `journalist`
+- stable role IDs: `doctor`, `municipal`, `police`, `teacher`, `merchant`, `contractor`, `student`, `journalist`
 - หนึ่ง player ต่อหนึ่ง role ต่อ game, แจกเมื่อ start แบบสมดุลและ immutable ตลอด game
 - 10 occupational questions ต่อ role, 2 choices ต่อ question, client ส่งเฉพาะ `choiceId`
-- shared city score, 5 city states, no individual Winner/rank และ missing answer เป็น neutral contribution
+- shared city score, 5 city states, no individual Winner/rank และ missing answer มี timeout impact `-20`
 
 ### เสนอแนะ: core types
 
@@ -291,17 +299,17 @@
 - `DecisionChoice`: id, text, city impact และ ethical marker/feedback ตาม scoring specification ที่ยืนยัน
 - `Player`: id/ownerUid, roomCode, nickname, immutable occupationId, joinedAt, currentQuestionIndex/progress/status
 - `PlayerDecision`: questionNumber, questionId, selectedChoiceId, submittedAt, revision/version; ห้ามเผยแพร่ต่อ player อื่นหรือ projector
-- `Room`: status, game version, question duration setting, assignment state, total/completed counts และ city aggregate reference; ไม่ใส่ global question index จนกว่าจะปิด pacing gate
+- `Room`: status, game version, synchronized current question number/deadline, assignment state, total/completed counts และ city aggregate reference
 - `CityState`: shared score/normalized score, dimension totals (ถ้ามี), visual stage, answered count และ updatedAt
 
 ### Invariants
 
 1. ผู้เล่นหนึ่งคนมี occupation เดียวต่อ game และ field นี้แก้ไม่ได้หลัง assignment
 2. occupation แต่ละอันมีคำถามหมายเลข 1–10 ครบและไม่ซ้ำ
-3. ผู้เล่น resolve คำถามจาก `(occupationId, player.currentQuestionIndex)`; จะมี room-level synchronized index หรือไม่ยังต้องตัดสินใจ
+3. ผู้เล่น resolve คำถามจาก `(occupationId, room.currentQuestionNumber)` ใน synchronized flow
 4. timer duration เป็น room/game field เดียว ไม่เปลี่ยนระหว่าง playing
 5. decision หนึ่งผลต่อเมืองได้สูงสุดหนึ่ง contribution ต่อ player/question revision ล่าสุด
-6. missing decision ไม่มี contribution และไม่มี automatic negative
+6. missing decision ได้ timeout contribution `-20` เมื่อ question ถูกปิด
 7. ไม่มี `Winner`, rank หรือ individual score ใน public domain
 8. public city projection ไม่มี selectedChoiceId ที่ผูกกับ player identity
 
@@ -314,14 +322,14 @@
 - `subscribeRoom`, `subscribePlayer`, `subscribeParticipantsSummary`, `subscribeCityState`
 - `startGame(...)` แจกอาชีพแบบสมดุลและ lock roster assignments แบบ atomic เท่าที่ schema รองรับ แล้วเริ่มข้อ 1
 - `submitDecision(...)` ตรวจ room/index/deadline/ownership แล้วเขียนแบบ idempotent
-- progression API จะเป็น per-player หรือ synchronized room-level ตาม pacing decision; ทั้งสองแบบต้อง idempotent
+- progression API เป็น synchronized room-level และต้อง idempotent
 - `completeGame`, `closeRoom` และ recovery action ที่ชัดเจน
 
 ### Required changes by implementation
 
 - DemoService ต้องใช้ deterministic in-memory/local event model สำหรับ automated/demo scope หรือใช้ Firebase staging สำหรับ cross-device demo; ห้าม GET/PUT polling
 - FirebaseService ต้องไม่เชื่อ `isCorrect`, city delta หรือ timestamps จาก client โดยไม่มี validation
-- Aggregate update ต้อง atomic กับ contribution/idempotency record หรือทำโดย trusted Firebase server-side authority
+- Teacher Client deduplicate stable answer IDs และเขียน round aggregate/city state ด้วย Firestore batch
 - `AnswerResult` ไม่ควรคืน Winner; คืน accepted revision และ public city projection/ack ที่เหมาะสม
 - Error mapping ต้องแยก stale question, deadline, duplicate/revision conflict, role lock, restore mismatch และ permission failure
 
@@ -330,13 +338,13 @@
 1. เข้า `/join` ผ่านรหัสหรือ QR Code แล้วกรอกรหัสห้องและชื่อเล่น
 2. ระบบสร้างหรือ restore waiting player ด้วย UID; Lobby ยังไม่ให้ reroll/เลือกอาชีพ
 3. เมื่อครู start ระบบแจกอาชีพแบบสมดุลและ lock จากนั้นแสดง Role Reveal/รายละเอียดอาชีพ
-4. ผู้เล่นเห็นคำถาม 10 ข้อของอาชีพตนตาม `player.currentQuestionIndex`; synchronization mode ยังเปิด
+4. ทุกคนอยู่ question number เดียวกันพร้อมกัน แต่เห็นคำถามตามอาชีพที่ล็อกไว้ของตน
 5. Header/progress ใช้ข้อความตรงตามที่ยืนยัน: `คำถามข้อที่ x/10`
 6. ผู้เล่นเลือกหนึ่งใน 2 ทางที่ไม่ถูกชี้นำด้วยสี แล้วผ่าน confirmation ก่อนส่ง; answer editing หลัง confirmation รอ decision gate
 7. หลัง accepted answer/deadline แสดง feedback เชิงเหตุและผลโดยไม่ใช้รูปแบบถูก/ผิดและไม่แสดงคะแนน/อันดับรายบุคคล
-8. ถ้าไม่ตอบ แสดง missed state แบบเป็นกลางและไม่สร้าง negative contribution
+8. ถ้าไม่ตอบ แสดง missed state แบบเป็นกลาง และ Teacher Client ใช้ timeout contribution `-20` ตอนปิดข้อ
 9. หลังข้อ 10 ไปผลเมืองรวม/บทสะท้อน ไม่ไป congratulations หรือผล fail/almost รายบุคคล
-10. Refresh/reconnect ต้อง restore room, player, occupation และ current question จาก server
+10. Refresh/reconnect ต้อง restore public room/player state จาก Firestore และ trusted question snapshot จาก localStorage เครื่องครู
 
 ## Teacher Dashboard Changes
 
@@ -354,30 +362,29 @@
 
 - ครูกำหนด `questionDurationSeconds` ก่อน start และค่าหนึ่งเดียวนี้ใช้กับคำถามทั้ง 10 ข้อของ game
 - การมี Timer และสิทธิ์ของครูในการตั้งเวลาไม่ใช่ decision gate อีกต่อไป
-- เมื่อหมดเวลาแล้วไม่ตอบ ระบบไม่สร้าง automatic negative contribution
-- Backend/Firestore ต้องเป็น authoritative state; client ไม่เป็นผู้ตัดสิน deadline/impact/score แต่เพียงฝ่ายเดียว
+- เมื่อหมดเวลาแล้วไม่ตอบ trusted scoring ใช้ timeout impact `-20`
+- Timer เป็น teacher-synchronized และ Teacher Client ปิดคำถามเมื่อทุกคนตอบครบหรือหมดเวลา
+- Student Client ไม่เป็นผู้ตัดสิน deadline/impact/score; Teacher Client ใช้ room deadline และ trusted local snapshot เป็น authority ของห้องเรียน
 
 ### เสนอแนะ
 
-- ใช้ server timestamp/deadline เป็นฐานและให้ client countdown เป็น projection; enforce deadline ด้วย trusted backend/rules เช่น `request.time`
+- เก็บ deadline เดียวใน room ให้ทุก client countdown จากค่านั้น; Firestore rules ใช้ `request.time` ปฏิเสธ student answer ที่ช้า และ Teacher Client finalize จาก deadline เดียวกัน
 - เก็บ idempotency key ต่อ player/question และทดสอบ clock skew, background throttling, reconnect และ delayed snapshots
 
 ### ยังต้องตัดสินใจ
 
-- Self-paced หรือ teacher-synchronized; จุดเริ่ม timer ของแต่ละข้อจึงอาจเป็น per-player หรือ room-level
-- เมื่อหมดเวลา ครูกดเปิดข้อถัดไปหรือระบบเดินต่ออัตโนมัติ; Roadmap เสนอให้ครูกดเองเพื่อมีช่วงอภิปราย แต่ยังไม่ใช่ข้อยืนยัน
 - ค่าต่ำสุด/สูงสุดและชุดตัวเลือกจำนวนวินาทีที่แสดงใน UI
 - เกมจบอัตโนมัติเมื่อทุกคนครบหรือครูกดจบ
 - Reveal/feedback duration และอนุญาตให้เปลี่ยนตัวเลือกก่อนกดยืนยันหรือไม่
-- หากเลือก synchronized mode ต้องกำหนด coordinator ที่ไม่ผูกกับ `TeacherPage` tab เดียว
 
 ## City Scoring Changes
 
 ### ยืนยันแล้ว
 
 - ย้าย score จากแต่ละ Team ไป `CityState` ระดับ room; ทุก accepted decision รวมเป็นคะแนนเมืองเดียว
-- Choices มี impact ภายในระบบ (ตัวอย่าง `-1`, `0`, `+1`) และ feedback เชิงเหตุ/ผล; ตัวเลือกทุจริตหรือไม่รับผิดชอบต้องทำให้เมืองแย่ลงอย่างเห็นได้
-- Missing answer = ไม่มี contribution ไม่ใช่คะแนนลบ และคำตอบเดียวต้องไม่ถูกนับซ้ำ
+- Choices ใช้ trusted impact: integrity `+50`, corruption `-100`; missing answer ใช้ timeout `-20` และคำตอบเดียวต้องไม่ถูกนับซ้ำ
+- `initialCityScore=500`, clamp `0–1000`, และ `newCityScore = previousCityScore + roundTotal/lockedPlayerCount`
+- Thresholds: `0–199 critical`, `200–399 declining`, `400–599 neutral`, `600–799 improving`, `800–1000 prosperous`
 - Visual states 5 ระดับใช้ `city-critical.png`, `city-declining.png`, `city-neutral.png`, `city-improving.png`, `city-prosperous.png` จาก `public/images/city/` โดยเรียงความหมายจากระดับ 1 เมืองทุจริตรุนแรงที่สุดถึงระดับ 5 เมืองเจริญสูงสุด ใช้มุมกล้องเดียวกันและ Crossfade
 - Projector ต้องไม่เปิดเผย mapping ระหว่าง player identity กับ choice
 
@@ -385,18 +392,17 @@
 
 - Projector subscribe เฉพาะ aggregate/visual stage; เก็บ contribution/idempotency แยกจาก public projection
 - หากอนุญาตแก้คำตอบหลัง submit ให้ reverse contribution เดิมและ apply contribution ใหม่แบบ atomic
-- พิจารณา normalization ตามจำนวน expected answers เพื่อให้ห้อง 30 และ 40 คนเปรียบระดับเมืองได้สม่ำเสมอ
+- ใช้ `roundAverage` ตามจำนวน locked players เพื่อ normalize ห้องขนาดต่างกัน
 
 ### ยังต้องตัดสินใจ
 
-- สูตรคะแนนละเอียด, คะแนนเริ่มต้น, min/max, dimensions/weights และ thresholds ของทั้ง 5 states
 - รูปแบบคะแนนที่จอครูแสดง (เลข, เปอร์เซ็นต์ หรือมาตรวัด) และ timing ที่เมือง Crossfade
 
 ## Firebase Changes
 
 ### Current risks to fix
 
-- ห้ามใช้/เชื่อม Matana Production; ต้องมี Our City Firebase project หรือ emulator/staging ที่ยืนยัน
+- ห้ามใช้/เชื่อม Matana Production; ต้องมี Our City Firebase project/staging ที่ยืนยัน
 - Rules ปัจจุบันเชื่อ score delta และ `isCorrect` จาก client มากเกินไป
 - Teacher read permission ปัจจุบันเปิด answer arrays รายคน ซึ่งไม่สอดคล้อง privacy requirement
 - Start/complete/close ทำ room commit และ team batch แยกกัน ทำให้เกิด transient inconsistency
@@ -413,7 +419,7 @@
 
 ### Verification requirements
 
-- Firebase Emulator Suite tests เป็น gate ก่อน deploy rules
+- Phase 4A ใช้ unit tests และ rules review; ไม่กำหนด Java/Firebase Emulator เป็น gate
 - Test signed-out, wrong room, wrong UID, teacher, player, late write, duplicate write, occupation mutation และ cross-player read
 - Staging smoke test ต้องใช้ project ID allowlist/guard และไม่ใช้ credentials ของ Matana
 
@@ -422,7 +428,7 @@
 ### ยืนยันแล้ว
 
 - Refresh/reload/reconnect ต้องกลับหน้าที่ถูกต้อง ได้อาชีพเดิมและความคืบหน้าเดิม
-- `localStorage` เก็บเฉพาะ session identifier; Backend/Firestore เป็น authoritative state
+- localStorage ฝั่งนักเรียนเก็บเฉพาะ session identifier; เครื่องครูเก็บ trusted room question snapshot เพื่อ restore หลัง refresh
 
 ### เสนอแนะ
 
@@ -444,22 +450,22 @@
 - `src/services/gameService.test.ts`: 1 suite / 2 tests; error mapping ปรับเพิ่มได้
 - รวม static inventory ปัจจุบัน 24 tests ใน 4 files
 - `QA_REPORT.md` ระบุผลเก่า 22 tests ใน 3 files จึง stale เมื่อเทียบ source ปัจจุบัน และใช้เป็นหลักฐาน pass ปัจจุบันไม่ได้
-- ไม่พบ automated tests ของ `FirebaseGameService`, Firestore rules emulator, React components/routes หรือ end-to-end flow
+- ยังไม่พบ automated integration tests ของ `FirebaseGameService`, React components/routes หรือ end-to-end flow
 - Phase 1 ไม่รัน scripts เพื่อหลีกเลี่ยงการสร้าง `dist`/build info ตามข้อกำหนดที่อนุญาตให้สร้างได้เฉพาะ `MIGRATION_PLAN.md`
 
 ### Required tests for Phase 2+
 
 1. Data contract: confirmed role IDs, 8 occupations × 10 questions = 80, exactly 2 choices, IDs/index unique และ effects valid
 2. Assignment: แจกเมื่อ start, balance count ต่างกันไม่เกิน 1, immutable role, reconnect keeps role และ concurrent starts/joins
-3. Timer: ครูเลือกหนึ่ง duration สำหรับทั้ง 10, server deadline, late reject และ progression tests ตาม pacing mode ที่อนุมัติ
-4. Scoring: shared city sum, corrupt/responsibility effects, neutral timeout, normalization/bounds และ mapping 5 confirmed city states
+3. Timer: ครูเลือกหนึ่ง duration สำหรับทั้ง 10, synchronized server deadline, late reject และ automatic close tests
+4. Scoring: integrity `+50`, corruption `-100`, timeout `-20`, round average, clamp และ mapping 5 confirmed city states
 5. Duplicate/revision: simultaneous clicks/tabs, retry after network failure, no double contribution, optional answer change delta
 6. Privacy: no cross-player decision reads, projector only aggregate, no API payload mapping choice to identity
 7. Session restore: stale/corrupt keys, UID mismatch, refresh at every room status
 8. Demo/Firebase contract parity without REST polling
 9. Route tests: no congratulations/winner redirects; result is shared city outcome
 10. Teacher view: QR Code + city-first full-screen projector + total answers/completed players, no leaderboard/individual score/choice และไม่คัด mockup numbers
-11. Emulator integration for rules and transactions
+11. Firestore adapter/rules contract tests สำหรับ public questions, answer ownership และ teacher-only aggregate writes
 12. Staging concurrency/load rehearsal using new schema and explicit non-production target guard
 
 ### Package scripts found (not executed in Phase 1)
@@ -476,56 +482,55 @@
 
 | Risk | Severity | Evidence/current cause | Required mitigation |
 |---|---|---|---|
-| Realtime synchronization | High | room transaction และ participant batch แยก commit; Demo read-modify-write/polling เสี่ยง overwrite | ออกแบบ atomic boundaries, idempotent operations, server aggregate, reconnect tests; ห้าม REST polling |
-| Timer/progression stalls | Critical | ระบบเดิมให้ `TeacherPage` tab เดียวเรียก advance; future pacing ยังไม่ตัดสินใจ | ปิด pacing gate แล้วใช้ server-authoritative deadline และ coordinator/idempotency ที่สอดคล้อง |
-| Client clock/deadline bypass | Critical | `Date.now()` ตรวจ deadline ใน service; rules ไม่ใช้ `request.time` | enforce ที่ trusted backend/rules ด้วย server time |
+| Realtime synchronization | High | room transaction และ participant batch แยก commit; Demo read-modify-write/polling เสี่ยง overwrite | ออกแบบ teacher-owned batch boundaries, idempotent operations และ reconnect tests; ห้าม REST polling |
+| Timer/progression stalls | High | Teacher Client เป็น coordinator; ถ้าปิดแท็บอาจหยุดการปิดข้อ | restore trusted snapshot จาก localStorage, อ่าน room deadline และทำ close/finalize idempotent |
+| Student clock/deadline bypass | High | Student UI clock อาจคลาดเคลื่อน | ใช้ room deadline เดียว, Teacher Client ปิดข้อ และ rules ตรวจ `request.time` ตอน create answer |
 | Role locking | Critical | ไม่มี occupation field/assignment/immutability | atomic server assignment, immutable rules, restore from server |
-| Shared city scoring | Critical | มีเฉพาะ score ราย team; client คำนวณ correctness/delta | trusted aggregate pipeline + idempotency + normalization specification |
+| Shared city scoring | High | runtime เดิมมี score ราย team | Teacher Client trusted snapshot + stable answer ID + confirmed round-average policy |
 | Duplicate answers/contributions | High | Firebase transaction กันบางกรณี แต่ rules ไม่ตรวจ question uniqueness; Demo เสี่ยง lost update | contribution key, revision/delta transaction, concurrency tests |
 | Privacy | Critical | ครู subscribe team docs ที่มี selectedChoiceId/isCorrect; rules ให้ครูอ่านทั้งหมด | แยก private decisions จาก public aggregates และทดสอบ rules |
 | Session restore | High | localStorage ไม่มี version/UID validation; clear storage ทำ identity หลุด | versioned schema, server ownership check, recovery policy |
-| Firebase connection | Critical | ไม่มี confirmed Our City project/config/emulator; load scriptพร้อมยิง `.env.local` | project allowlist, emulator-first, staging credentials, ห้าม Matana Production |
-| Existing tests give false confidence | High | ไม่มี Firebase/rules/UI tests; historical QA count stale | rewrite tests และเพิ่ม emulator/integration/e2e coverage |
+| Firebase connection | Critical | ไม่มี confirmed Our City project/config; load scriptพร้อมยิง `.env.local` | project allowlist, Demo/staging first, ห้าม Matana Production |
+| Existing tests give false confidence | High | ไม่มี Firebase runtime/UI tests; historical QA count stale | rewrite tests และเพิ่ม integration/e2e coverage |
 | Legacy winner path | High | route/type/page/CSS ยัง active แม้ servicesคืน null | ถอน route/domain/data migration และ test ว่าไม่มี winner redirect |
 | Content completeness | Critical | repo ปัจจุบันมี Matana 25 ข้อและยังไม่มี question bank Our City 80 ข้อ | นำ canonical content ที่อนุมัติเข้า schema และเพิ่ม 8×10 validation ก่อน content implementation |
-| City visual thresholds | High | ยังไม่มี score range/stage mapping ที่ยืนยัน | ปิด scoring/visual decision gate ก่อน UI/service implementation |
+| City visual thresholds | Medium | threshold ยืนยันแล้วแต่ runtime เดิมยังไม่ใช้ | เพิ่ม boundary tests และ migrate ผ่าน trusted score pipeline |
 | Package manager ambiguity | Medium | มีทั้ง `package-lock.json` และ `pnpm-lock.yaml` tracked | ยืนยัน package manager หลักก่อนเปลี่ยน dependency; Phase 1 ไม่ติดตั้งอะไร |
 | Tracked temporary assets | Medium | `tmp/imagegen` tracked และซ้ำ public assets | จัด cleanup เฉพาะเมื่อ approved asset list พร้อม; Phase 1 ห้ามลบ |
 
 ## Open Decision Gates
 
-ต้องปิด gate ต่อไปนี้และอนุมัติแผนก่อนเริ่ม Phase 2:
+Decision gates ที่ยังเปิดหลัง Phase 4A:
 
 ### Product decisions ที่ยังเปิดจริง
 
-1. **Question pacing:** self-paced หรือ teacher-synchronized; Roadmap แนะนำ teacher-synchronized แต่ยังไม่ใช่ข้อยืนยัน จึงห้ามสมมติ global question index
-2. **Timeout progression:** เมื่อหมดเวลาครูกดข้อถัดไปหรือระบบเดินต่ออัตโนมัติ; Roadmap แนะนำให้ครูกดเองแต่ยังเปิดอยู่
-3. **Timer UI range:** ค่าต่ำสุด/สูงสุดและชุดตัวเลือกจำนวนวินาทีที่ครูเลือกได้ใน UI
-4. **Game finish:** จบอัตโนมัติเมื่อทุกคนครบหรือครูกดจบ
-5. **Late join:** ปฏิเสธหลัง start หรือให้เข้าเป็นผู้ชม/รูปแบบอื่น
-6. **Question order:** คงที่หรือสุ่มภายในคำถาม 10 ข้อของแต่ละอาชีพ
-7. **Choice editing before confirmation:** ผู้เล่นเปลี่ยนตัวเลือกที่เลือกไว้ก่อนกดยืนยันได้หรือไม่; หลัง submit ยังไม่มีข้อยืนยันว่าเปิดให้แก้
-8. **City score specification:** impact weights จริง, คะแนนเริ่มต้น, dimensions, min/max, normalization, thresholds, จังหวะอัปเดตภาพ และรูปแบบคะแนนที่แสดง
-9. **Reset role policy:** เมื่อเริ่มเกมใหม่โดยคง roster จะคงอาชีพเดิมหรือแจกใหม่; ไม่ว่าทางใดอาชีพต้องถูกล็อกตลอดเกมหนึ่งเกม
-10. **Room data retention:** อายุข้อมูลและ cleanup policy
-11. **Question import scope:** Google Sheets/JSON import อยู่ใน MVP หรือ Phase หลัง และวิธีนำเข้า
+1. **Timer UI range:** ค่าต่ำสุด/สูงสุดและชุดตัวเลือกจำนวนวินาทีที่ครูเลือกได้ใน UI
+2. **Next question:** หลังปิดแต่ละข้อจะเปิดข้อถัดไปอัตโนมัติหรือรอครูกด Next
+3. **Game finish:** หลัง question 10 จบอัตโนมัติหรือครูกดจบ
+4. **Late join:** ปฏิเสธหลัง start หรือให้เข้าเป็นผู้ชม/รูปแบบอื่น
+5. **Question selection:** เมื่อ role มี active มากกว่า 10 ข้อ จะเลือก 10 ข้อแรกตาม `sort_order` หรือใช้ policy อื่น
+6. **Choice editing before confirmation:** ผู้เล่นเปลี่ยนตัวเลือกที่เลือกไว้ก่อนกดยืนยันได้หรือไม่
+7. **Score display:** แสดงเลข, เปอร์เซ็นต์ หรือมาตรวัดบนจอครู
+8. **Reset role policy:** เมื่อเริ่มเกมใหม่โดยคง roster จะคงอาชีพเดิมหรือแจกใหม่
+9. **Room data retention:** อายุข้อมูลและ cleanup policy
 
 ### Technical design gates ที่ยังเปิดจริง
 
-1. **Timer/progression authority:** server-time schema และ coordinator สำหรับ pacing mode ที่เลือก โดยห้าม client-authoritative behavior
-2. **Privacy/aggregation authority:** กลไก Firebase ที่คำนวณ aggregate โดย teacher/projector ไม่อ่าน choice รายคน
-3. **Firebase environments:** Our City project, emulator/staging/prod separation, allowlist และ deployment process; ห้าม reuse Matana Production
+1. **Firebase project identity:** ยังไม่มี project ID/.firebaserc; ต้องยืนยัน Our City project ก่อนเชื่อมจริง
+2. **Google Sheets browser access:** ต้อง smoke test CSV URL/CORS จาก origin ที่ใช้สาธิตจริง
+3. **Teacher-device recovery:** ต้องกำหนดวิธีกู้ trusted snapshot หาก localStorage เครื่องครูถูกลบหรือเปลี่ยนเครื่อง
 4. **Demo scope:** local/in-memory หรือ cross-device ผ่านกลไก realtime ที่ไม่ใช่ REST polling
-5. **Asset delivery details:** ไฟล์เมือง 5 ชื่อและ reference UI ยืนยันแล้ว แต่ actual files, dimensions/licensing/fallback ยังต้องพร้อมก่อน UI phase; นี่เป็น readiness gate ไม่ใช่ product-rule decision
+5. **Asset delivery details:** dimensions/licensing/fallback ก่อน UI phase
 
 ### Gates ที่ปิดจาก Source of Truth reconciliation
 
 - Source-of-Truth availability gate เดิมปิดแล้ว: อ่านไฟล์ทั้ง 4 (`PROJECT_HANDOFF_CONFIRMED_V2.md`, `PROJECT_DECISIONS.json`, `CONFIRMED_FILES_AND_ASSETS.md`, `OUR_CITY_DEVELOPMENT_ROADMAP.md`) ครบและ reconcile แล้ว
 - ชื่อ/ID อาชีพ 8 รายการ, จำนวนคำถาม 8×10, 2 choices, role lock และ balanced allocation outcome ปิดแล้ว
 - Identity ขั้นต้นเป็นชื่อเล่น, QR Code, เป้าหมาย 30–40 คน และ teacher roster/progress intent ปิดแล้ว
-- Timer มีแน่นอนและครูตั้งวินาทีก่อน start เพื่อใช้กับทั้ง 10 ข้อปิดแล้ว; เปิดเฉพาะการเริ่มพร้อมกัน/แยกผู้เล่น, การเดินข้อถัดไปเมื่อหมดเวลา, ค่า min/max/ตัวเลือกใน UI และ authority details
+- Timer เป็น teacher-synchronized และปิดข้อเมื่อทุกคนตอบครบหรือหมดเวลาแล้ว; เปิดเฉพาะค่า min/max/ตัวเลือกใน UI
+- Google Sheets trusted sync, stable choice IDs, immutable room snapshot และ score policy/threshold ปิดแล้ว
 - City visual states/filenames 5 ระดับ, same-camera Crossfade, full-screen teacher reference และ no-3D MVP ปิดแล้ว
-- No winner/leaderboard core/role switching/REST polling/client-authoritative scoring และ framework constraints ปิดแล้ว
+- No winner/leaderboard core/role switching/REST polling/Student Client score submission และ framework constraints ปิดแล้ว
 
 ---
 
