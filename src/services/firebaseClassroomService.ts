@@ -40,6 +40,18 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
+const EXPECTED_FIREBASE_PROJECT_ID = 'our-city-our-choice'
+const missingFirebaseConfig = Object.entries(firebaseConfig)
+  .filter(([, value]) => typeof value !== 'string' || value.length === 0)
+  .map(([key]) => key)
+
+if (missingFirebaseConfig.length > 0) {
+  throw new Error(`ผู้ใช้:Firebase config ไม่ครบ: ${missingFirebaseConfig.join(', ')}`)
+}
+if (firebaseConfig.projectId !== EXPECTED_FIREBASE_PROJECT_ID) {
+  throw new Error(`ผู้ใช้:Firebase Project ID ต้องเป็น ${EXPECTED_FIREBASE_PROJECT_ID} เท่านั้น`)
+}
+
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
 const auth = getAuth(app)
 const db = getFirestore(app)
@@ -371,17 +383,22 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
   ): Promise<void> {
     const answerId = createClassroomAnswerId(playerId, questionId)
     const answerRef = doc(db, classroomPaths.answer(roomId, answerId))
-    if ((await getDoc(answerRef)).exists()) return
-    await setDoc(answerRef, {
-      answerId,
-      roomId,
-      playerId,
-      ownerUid,
-      questionNumber,
-      questionId,
-      choiceId,
-      submittedAt: serverTimestamp(),
-    })
+    try {
+      await setDoc(answerRef, {
+        answerId,
+        roomId,
+        playerId,
+        ownerUid,
+        questionNumber,
+        questionId,
+        choiceId,
+        submittedAt: serverTimestamp(),
+      })
+    } catch (error) {
+      const existing = await getDoc(answerRef).catch(() => null)
+      if (existing?.exists() && existing.data().ownerUid === ownerUid) return
+      throw error
+    }
   }
 
   async closeQuestion(
