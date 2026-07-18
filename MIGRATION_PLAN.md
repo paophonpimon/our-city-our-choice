@@ -100,7 +100,7 @@
 - Background 4 ไฟล์มีขนาด 1672×941; icon 2 ไฟล์มีขนาด 1254×1254
 - `tmp/imagegen` มีไฟล์ tracked 6 ไฟล์; สองไฟล์เป็นสำเนา byte-identical กับ public icons และอีกสี่ไฟล์เป็น image-generation intermediates
 - `tmp/dev-server` เป็น ignored directory; `stderr.log` ว่าง และ `stdout.log` เป็น log Vite/HMR เก่า รวม warning เรื่อง Fast Refresh ของ `GameContext.tsx`
-- Confirmed city asset inventory คือ `city-critical.webp`, `city-declining.webp`, `city-neutral.webp`, `city-improving.webp`, `city-prosperous.webp`; ทั้ง 5 ภาพต้องใช้มุมกล้อง/องค์ประกอบหลักเดียวกันและเปลี่ยนด้วย Crossfade
+- Confirmed city asset inventory คือ `public/images/city/city-critical.png` (ระดับ 1 เมืองทุจริตรุนแรงที่สุด), `public/images/city/city-declining.png` (ระดับ 2 เมืองเสื่อมโทรม), `public/images/city/city-neutral.png` (ระดับ 3 เมืองปกติ), `public/images/city/city-improving.png` (ระดับ 4 เมืองกำลังเจริญ) และ `public/images/city/city-prosperous.png` (ระดับ 5 เมืองเจริญสูงสุด); ทั้ง 5 ภาพต้องใช้มุมกล้อง/องค์ประกอบหลักเดียวกันและเปลี่ยนด้วย Crossfade
 - Confirmed teacher UI reference คือ `แดชบอร์ดครูในเมืองเราสร้าง.png` สำหรับโครง full-screen/projector แต่ไฟล์ภาพจริงยังไม่พบใน workspace ณ เวลา reconcile
 - MVP ไม่ทำเมือง 3D; Matana assets และ tracked imagegen intermediates ไม่ใช่ assets ปลายทางของเกมใหม่
 
@@ -378,7 +378,7 @@
 - ย้าย score จากแต่ละ Team ไป `CityState` ระดับ room; ทุก accepted decision รวมเป็นคะแนนเมืองเดียว
 - Choices มี impact ภายในระบบ (ตัวอย่าง `-1`, `0`, `+1`) และ feedback เชิงเหตุ/ผล; ตัวเลือกทุจริตหรือไม่รับผิดชอบต้องทำให้เมืองแย่ลงอย่างเห็นได้
 - Missing answer = ไม่มี contribution ไม่ใช่คะแนนลบ และคำตอบเดียวต้องไม่ถูกนับซ้ำ
-- Visual states 5 ระดับใช้ `city-critical.webp`, `city-declining.webp`, `city-neutral.webp`, `city-improving.webp`, `city-prosperous.webp` จากมุมกล้องเดียวกันและ Crossfade
+- Visual states 5 ระดับใช้ `city-critical.png`, `city-declining.png`, `city-neutral.png`, `city-improving.png`, `city-prosperous.png` จาก `public/images/city/` โดยเรียงความหมายจากระดับ 1 เมืองทุจริตรุนแรงที่สุดถึงระดับ 5 เมืองเจริญสูงสุด ใช้มุมกล้องเดียวกันและ Crossfade
 - Projector ต้องไม่เปิดเผย mapping ระหว่าง player identity กับ choice
 
 ### เสนอแนะ

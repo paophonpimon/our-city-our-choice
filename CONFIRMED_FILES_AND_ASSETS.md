@@ -29,11 +29,11 @@
 
 ## ชุดภาพเมืองที่ต้องสร้าง/จัดเตรียม
 
-- `city-critical.webp`
-- `city-declining.webp`
-- `city-neutral.webp`
-- `city-improving.webp`
-- `city-prosperous.webp`
+- `public/images/city/city-critical.png` — ระดับ 1 เมืองทุจริตรุนแรงที่สุด
+- `public/images/city/city-declining.png` — ระดับ 2 เมืองเสื่อมโทรม
+- `public/images/city/city-neutral.png` — ระดับ 3 เมืองปกติ
+- `public/images/city/city-improving.png` — ระดับ 4 เมืองกำลังเจริญ
+- `public/images/city/city-prosperous.png` — ระดับ 5 เมืองเจริญสูงสุด
 
 เงื่อนไข:
 - มุมกล้องและองค์ประกอบหลักต้องตรงกัน

@@ -89,12 +89,19 @@
     "กลุ่มที่ตอบแล้ว 28/32"
   ],
   "city_states": [
-    "city-critical.webp",
-    "city-declining.webp",
-    "city-neutral.webp",
-    "city-improving.webp",
-    "city-prosperous.webp"
+    "city-critical.png",
+    "city-declining.png",
+    "city-neutral.png",
+    "city-improving.png",
+    "city-prosperous.png"
   ],
+  "city_state_levels": {
+    "critical": "ระดับ 1 เมืองทุจริตรุนแรงที่สุด",
+    "declining": "ระดับ 2 เมืองเสื่อมโทรม",
+    "neutral": "ระดับ 3 เมืองปกติ",
+    "improving": "ระดับ 4 เมืองกำลังเจริญ",
+    "prosperous": "ระดับ 5 เมืองเจริญสูงสุด"
+  },
   "local_paths": {
     "current_project": "C:\\Users\\jiras\\Documents\\Our City, Our Choice",
     "old_prototype_reference_only": "C:\\Users\\jiras\\Documents\\Our City, Our Choice-old-next-d1",

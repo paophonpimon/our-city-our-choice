@@ -152,11 +152,11 @@
 
 ชื่อสถานะและไฟล์ที่ตกลงไว้:
 
-1. `critical` — `city-critical.webp`
-2. `declining` — `city-declining.webp`
-3. `neutral` — `city-neutral.webp`
-4. `improving` — `city-improving.webp`
-5. `prosperous` — `city-prosperous.webp`
+1. `critical` — ระดับ 1 เมืองทุจริตรุนแรงที่สุด — `city-critical.png`
+2. `declining` — ระดับ 2 เมืองเสื่อมโทรม — `city-declining.png`
+3. `neutral` — ระดับ 3 เมืองปกติ — `city-neutral.png`
+4. `improving` — ระดับ 4 เมืองกำลังเจริญ — `city-improving.png`
+5. `prosperous` — ระดับ 5 เมืองเจริญสูงสุด — `city-prosperous.png`
 
 ใช้ภาพเมืองมุมกล้องเดียวกันทั้ง 5 ภาพ และเปลี่ยนด้วย Crossfade  
 **ไม่สร้างเมือง 3D สำหรับ MVP**

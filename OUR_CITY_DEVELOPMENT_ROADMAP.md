@@ -932,12 +932,20 @@ function getCityLevel(scorePercent: number): CityLevel {
 ## ไฟล์ภาพ
 
 ```text
-city-critical.webp
-city-declining.webp
-city-neutral.webp
-city-improving.webp
-city-prosperous.webp
+city-critical.png
+city-declining.png
+city-neutral.png
+city-improving.png
+city-prosperous.png
 ```
+
+ระดับภาพที่ยืนยันแล้ว:
+
+1. `critical` — ระดับ 1 เมืองทุจริตรุนแรงที่สุด
+2. `declining` — ระดับ 2 เมืองเสื่อมโทรม
+3. `neutral` — ระดับ 3 เมืองปกติ
+4. `improving` — ระดับ 4 เมืองกำลังเจริญ
+5. `prosperous` — ระดับ 5 เมืองเจริญสูงสุด
 
 ## Asset Rules
 
@@ -946,7 +954,7 @@ city-prosperous.webp
 - มุมกล้องเดียวกัน
 - ตำแหน่งอาคารหลักตรงกัน
 - ไม่มีข้อความบนภาพ
-- ใช้ WebP
+- ใช้ PNG
 - ขนาดไฟล์ต้องเหมาะกับการโหลดพร้อมกัน
 - Preload ภาพทั้งหมดก่อนเริ่มเกม
 - Crossfade 500–1000ms
