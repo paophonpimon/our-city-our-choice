@@ -5,17 +5,19 @@ export const HomePage = () => (
     <img className="absolute inset-0 h-full w-full object-cover opacity-30" src="/images/city/city-neutral.png" alt="" />
     <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,11,16,.4),rgba(3,11,16,.95))]" />
     <section className="our-city-panel relative z-10 w-full max-w-3xl p-8 text-center md:p-12">
-      <p className="text-sm font-bold tracking-[.22em] text-[#f4c96d] uppercase">Different roles. Different choices. One shared city.</p>
+      <p className="text-sm font-bold tracking-[.22em] text-[#f4c96d] uppercase">Our City, Our Choice</p>
       <h1 className="mt-5 text-4xl font-black md:text-6xl">เมืองนี้อยู่ที่เรา</h1>
       <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-[#d4e1df]">
-        เกมสถานการณ์จำลองที่ทุกอาชีพตัดสินใจต่างกัน แต่ทุกคำตอบเปลี่ยนเมืองเดียวกัน
+        Different roles. Different choices. One shared city.<br />ทุกการตัดสินใจร่วมกันเปลี่ยนเมืองของเรา
       </p>
       <div className="mt-9 grid gap-3 sm:grid-cols-2">
-        <Link className="rounded-2xl bg-[#f0c866] px-6 py-4 text-lg font-black text-[#12242a] transition hover:brightness-110" to="/teacher">
-          เริ่มสำหรับครู
+        <Link className="home-action home-action--primary" to="/join">
+          <span aria-hidden="true">ร่วมเมือง</span>
+          <strong>นักเรียนเข้าร่วมเกม</strong>
         </Link>
-        <Link className="rounded-2xl border border-white/25 bg-white/10 px-6 py-4 text-lg font-black text-white transition hover:bg-white/15" to="/join">
-          เข้าห้องสำหรับนักเรียน
+        <Link className="home-action home-action--secondary" to="/teacher">
+          <span aria-hidden="true">ควบคุมเกม</span>
+          <strong>ครูเปิดจอควบคุม</strong>
         </Link>
       </div>
     </section>

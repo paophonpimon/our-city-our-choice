@@ -17,6 +17,14 @@ const CITY_LABELS = {
   prosperous: 'เมืองเจริญอย่างยั่งยืน',
 } as const
 
+export const CITY_REFLECTIONS = {
+  critical: 'เมืองได้รับผลกระทบรุนแรงจากการตัดสินใจที่ไม่โปร่งใส',
+  declining: 'เมืองกำลังเสื่อมถอยและต้องการความร่วมมือจากทุกคน',
+  neutral: 'เมืองยังดำเนินต่อไปได้ แต่ยังพัฒนาได้อีกมาก',
+  improving: 'เมืองกำลังพัฒนาเพราะประชาชนร่วมกันตัดสินใจอย่างรับผิดชอบ',
+  prosperous: 'เมืองเจริญรุ่งเรืองจากความซื่อสัตย์และความร่วมมือของทุกคน',
+} as const
+
 export const ResultPage = () => {
   const roomId = (useParams().roomCode ?? '').toUpperCase()
   const navigate = useNavigate()
@@ -58,15 +66,15 @@ export const ResultPage = () => {
       <img className="absolute inset-0 h-full w-full object-cover" src={getCityImagePath(room.cityLevel)} alt={CITY_LABELS[room.cityLevel]} />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,10,15,.25),rgba(2,10,15,.92))]" />
       <section className="relative z-10 flex min-h-dvh items-end justify-center px-5 py-8 md:py-12">
-        <div className="our-city-panel w-full max-w-5xl p-7 text-center md:p-10">
-          <p className="text-sm font-bold tracking-[.2em] text-[#f4c96d] uppercase">Final City Result</p>
+        <div className="final-city-panel our-city-panel w-full max-w-5xl p-7 text-center md:p-10">
+          <p className="text-sm font-bold tracking-[.2em] text-[#f4c96d] uppercase">Our City, Our Choice</p>
           <h1 className="mt-3 text-3xl font-black md:text-5xl">{CITY_LABELS[room.cityLevel]}</h1>
-          <p className="mt-3 text-lg text-[#d2dfdd]">ผลลัพธ์จากการตัดสินใจร่วมกันของทุกอาชีพ</p>
-          <div className="mt-7 grid gap-3 sm:grid-cols-4">
+          <p className="mx-auto mt-3 max-w-3xl text-lg text-[#d2dfdd]">{CITY_REFLECTIONS[room.cityLevel]}</p>
+          <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">คะแนนเมือง</span><strong className="mt-2 block text-3xl">{Math.round(room.cityScore)} / 1,000</strong></div>
-            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">สุจริต</span><strong className="mt-2 block text-3xl text-emerald-200">{totals.integrityCount}</strong></div>
-            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">ทุจริต</span><strong className="mt-2 block text-3xl text-red-200">{totals.corruptionCount}</strong></div>
-            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">ไม่ตอบ</span><strong className="mt-2 block text-3xl text-[#d7d3c8]">{totals.timeoutCount}</strong></div>
+            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">สุจริตรวม</span><strong className="mt-2 block text-3xl text-emerald-200">{totals.integrityCount}</strong></div>
+            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">ทุจริตรวม</span><strong className="mt-2 block text-3xl text-red-200">{totals.corruptionCount}</strong></div>
+            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">ไม่ตอบรวม</span><strong className="mt-2 block text-3xl text-[#d7d3c8]">{totals.timeoutCount}</strong></div>
           </div>
           <p className="mt-5 font-bold text-[#f4c96d]">ระดับเมือง: {room.cityLevel}</p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">

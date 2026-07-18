@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CityStage } from '../components/CityStage'
+import { createClassroomJoinUrl } from '../components/classroomUi'
+import { JoinQrCode } from '../components/JoinQrCode'
 import { LocationResults } from '../components/LocationResults'
 import { useGame } from '../context/GameContext'
 import { countAnswersForQuestion, shouldCloseQuestion } from '../domain/classroomGameLoop'
@@ -104,7 +106,7 @@ export const TeacherPage = () => {
   }, [answerCount, closeCurrentQuestion, remaining, room, trustedSnapshot])
 
   const joinLink = useMemo(
-    () => (roomId ? `${window.location.origin}/join?room=${encodeURIComponent(roomId)}` : ''),
+    () => (roomId ? createClassroomJoinUrl(window.location.origin, roomId) : ''),
     [roomId],
   )
 
@@ -176,6 +178,7 @@ export const TeacherPage = () => {
         answerCount={answerCount}
         remainingSeconds={remaining}
         room={room}
+        roundImpact={currentRound?.roundAverage ?? null}
         controls={
           <>
             {room.status === 'question' ? (
@@ -200,7 +203,7 @@ export const TeacherPage = () => {
       >
         {missingTrusted ? (
           <div className="mx-auto max-w-2xl rounded-2xl border border-red-300/40 bg-red-950/90 p-5 text-center text-lg font-bold">
-            ไม่พบ trusted snapshot ในเครื่องครู เครื่องนี้ไม่สามารถตรวจคำตอบต่อได้ ห้ามสร้างเฉลยใหม่จาก public snapshot
+            ไม่พบข้อมูลตรวจคำตอบที่บันทึกไว้ในเครื่องครู เครื่องนี้จึงไม่สามารถสรุปคำตอบต่อได้ กรุณากลับมาใช้เครื่องเดิม
           </div>
         ) : null}
         {room.status === 'question-closed' && currentRound ? <LocationResults summaries={currentRound.locationSummaries} /> : null}
@@ -210,21 +213,21 @@ export const TeacherPage = () => {
   }
 
   return (
-    <main className="our-city-page min-h-dvh px-5 py-8 md:px-8">
+    <main className="our-city-page min-h-dvh px-5 py-6 md:px-8">
       <div className="mx-auto max-w-7xl">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-bold tracking-[.18em] text-[#f4c96d] uppercase">Teacher Setup</p>
+            <p className="text-sm font-bold tracking-[.18em] text-[#f4c96d] uppercase">Our City, Our Choice</p>
             <h1 className="mt-1 text-3xl font-black md:text-5xl">เตรียมเมืองสำหรับชั้นเรียน</h1>
           </div>
           <Link className="rounded-xl border border-white/15 px-4 py-2 font-bold" to="/">หน้าหลัก</Link>
         </header>
 
-        <div className="mt-7 grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+        <div className="mt-5 grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
           <section className="our-city-panel p-6 md:p-8">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-bold text-[#8fc4c5]">Google Sheets</p>
+                <p className="text-sm font-bold text-[#8fc4c5]">สถานะคลังคำถาม</p>
                 <h2 className="mt-1 text-2xl font-black">คลังคำถาม</h2>
               </div>
               <button className="rounded-xl border border-white/20 px-4 py-2 font-bold" onClick={() => void loadQuestions()}>
@@ -233,7 +236,7 @@ export const TeacherPage = () => {
             </div>
             {sheetStatus === 'ready' && sheet ? (
               <>
-                <p className="mt-4 rounded-xl bg-emerald-400/10 px-4 py-3 font-bold text-emerald-200">โหลดสำเร็จ • active {sheet.activeQuestions} ข้อ</p>
+                <p className="mt-4 rounded-xl bg-emerald-400/10 px-4 py-3 font-bold text-emerald-200">พร้อมใช้งาน • คำถาม {sheet.activeQuestions} ข้อ</p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   {ROLES.map((role) => (
                     <div className="flex items-center justify-between rounded-xl bg-white/6 px-4 py-3" key={role.id}>
@@ -249,7 +252,7 @@ export const TeacherPage = () => {
           <section className="our-city-panel p-6 md:p-8">
             {!roomId ? (
               <>
-                <p className="text-sm font-bold text-[#8fc4c5]">Room Settings</p>
+                <p className="text-sm font-bold text-[#8fc4c5]">ตั้งค่าห้องเรียน</p>
                 <h2 className="mt-1 text-2xl font-black">สร้างห้อง</h2>
                 <label className="mt-6 block">
                   <span className="mb-2 block font-bold">วินาทีต่อคำถาม</span>
@@ -272,19 +275,17 @@ export const TeacherPage = () => {
               </>
             ) : (
               <>
-                <p className="text-sm font-bold text-[#8fc4c5]">Room Ready</p>
-                <div className="mt-2 flex items-end justify-between gap-4">
-                  <div><span className="text-sm text-[#b9cbca]">รหัสห้อง</span><h2 className="text-4xl font-black tracking-[.14em]">{roomId}</h2></div>
-                  <strong className="text-xl">{playersState.data.length} คน</strong>
+                <p className="text-sm font-bold text-[#8fc4c5]">ห้องพร้อมรับนักเรียน</p>
+                <JoinQrCode joinUrl={joinLink} roomId={roomId} />
+                <div className="teacher-lobby-summary">
+                  <div><span>ผู้เข้าร่วม</span><strong>{playersState.data.length} คน</strong></div>
+                  <div><span>เวลาต่อคำถาม</span><strong>{room?.questionDurationSec ?? questionDurationSec} วินาที</strong></div>
                 </div>
-                <div className="mt-5 rounded-xl bg-white/6 p-4">
-                  <p className="break-all text-sm text-[#c8d7d5]">{joinLink}</p>
-                  <button className="mt-3 rounded-lg border border-white/20 px-3 py-2 text-sm font-bold" onClick={() => void copyLink()}>คัดลอกลิงก์เข้าห้อง</button>
-                  {actionMessage ? <span className="ml-3 text-sm text-[#f4c96d]">{actionMessage}</span> : null}
-                </div>
-                <div className="mt-5 max-h-52 space-y-2 overflow-auto">
+                <button className="copy-join-link" onClick={() => void copyLink()}>คัดลอกลิงก์เข้าห้อง</button>
+                <span className="ml-3 text-sm text-[#f4c96d]" aria-live="polite">{actionMessage}</span>
+                <div className="teacher-player-list">
                   {playersState.data.map((player, index) => (
-                    <div className="flex justify-between rounded-xl bg-white/5 px-4 py-3" key={player.playerId}>
+                    <div className="teacher-player-row" key={player.playerId}>
                       <span>{index + 1}. {player.nickname}</span><span className="text-[#9eb4b4]">พร้อม</span>
                     </div>
                   ))}

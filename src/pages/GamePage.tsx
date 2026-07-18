@@ -116,8 +116,12 @@ export const GamePage = () => {
           </div>
 
           <div className="mt-6 min-h-14 text-center" aria-live="polite">
-            {existingAnswer ? <p className="rounded-xl bg-[#8fc4c5]/12 px-4 py-3 font-bold text-[#bce2df]">ส่งคำตอบแล้ว • รอครูปิดข้อ</p> : null}
-            {expired ? <p className="rounded-xl bg-white/8 px-4 py-3 font-bold text-[#d6d2c7]">หมดเวลา • รอครูสรุปผล</p> : null}
+            {existingAnswer && roomState.data.status === 'question' ? (
+              <p className="rounded-xl bg-[#8fc4c5]/12 px-4 py-3 font-bold text-[#bce2df]">
+                ส่งคำตอบแล้ว <span className="block text-sm font-medium text-[#a9c5c3]">รอผลจากเมือง</span>
+              </p>
+            ) : null}
+            {expired ? <p className="rounded-xl bg-white/8 px-4 py-3 font-bold text-[#d6d2c7]">หมดเวลา <span className="block text-sm font-medium">รอครูสรุปรอบ</span></p> : null}
             {roomState.data.status === 'question-closed' ? <p className="rounded-xl bg-[#f4c96d]/12 px-4 py-3 font-bold text-[#f9dda0]">จบคำถามข้อนี้แล้ว • รอครูกดข้อถัดไป</p> : null}
             {error ? <p className="mt-2 text-red-200">{error}</p> : null}
           </div>

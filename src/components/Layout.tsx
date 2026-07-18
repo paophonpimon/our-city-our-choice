@@ -32,11 +32,11 @@ export const ScenePage = ({ children, image, imageAlt = '', imagePosition = '50%
 
 export const BrandHeader = ({ backTo, backLabel = 'กลับหน้าแรก' }: { backTo?: string; backLabel?: string }) => (
   <header className="page-header">
-    <Link to="/" className="brand-mark" aria-label="มัทนาต้องรอด หน้าแรก">
-      <span className="brand-symbol" aria-hidden="true">ม</span>
+    <Link to="/" className="brand-mark" aria-label="เมืองนี้อยู่ที่เรา หน้าแรก">
+      <span className="brand-symbol" aria-hidden="true">เมือง</span>
       <span>
-        <strong>มัทนาต้องรอด</strong>
-        <small>ภารกิจคลายคำสาป</small>
+        <strong>เมืองนี้อยู่ที่เรา</strong>
+        <small>Our City, Our Choice</small>
       </span>
     </Link>
     {backTo ? (
@@ -57,7 +57,7 @@ export const LoadingPanel = ({ text = 'กำลังเชื่อมต่�
 export const ErrorPanel = ({ message, action }: { message: string; action?: ReactNode }) => (
   <section className="glass-panel mx-auto my-auto w-full max-w-xl p-7 text-center" role="alert">
     <div className="mx-auto grid size-12 place-items-center rounded-full border border-[#c9896b]/50 bg-[#521d3d]/70 text-xl" aria-hidden="true">!</div>
-    <h1 className="mt-4 text-2xl font-semibold">ไม่สามารถดำเนินภารกิจได้</h1>
+    <h1 className="mt-4 text-2xl font-semibold">ไม่สามารถดำเนินการได้</h1>
     <p className="mt-3 text-[#ded6c9]">{message}</p>
     {action ? <div className="mt-6">{action}</div> : null}
   </section>
@@ -65,8 +65,8 @@ export const ErrorPanel = ({ message, action }: { message: string; action?: Reac
 
 export const StatusPill = ({ status }: { status: 'waiting' | 'playing' | 'completed' | 'closed' }) => {
   const labels = {
-    waiting: 'รอเริ่มภารกิจ',
-    playing: 'กำลังดำเนินภารกิจ',
+    waiting: 'รอเริ่มเกม',
+    playing: 'กำลังเล่นเกม',
     completed: 'สรุปคะแนนแล้ว',
     closed: 'ห้องสิ้นสุดแล้ว',
   }
