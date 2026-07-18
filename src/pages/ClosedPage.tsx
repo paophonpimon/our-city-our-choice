@@ -11,7 +11,7 @@ export const ClosedPage = () => {
           <div className="closed-seal mx-auto" aria-hidden="true">ปิด</div>
           <p className="eyebrow mt-5">ห้อง {roomCode.toUpperCase()}</p>
           <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">ห้องกิจกรรมสิ้นสุดแล้ว</h1>
-          <p className="mt-4 text-lg text-[#d8d1c5]">ขอบคุณที่ร่วมภารกิจมัทนาต้องรอด</p>
+          <p className="mt-4 text-lg text-[#d8d1c5]">ขอบคุณที่ร่วมตัดสินใจเพื่อเมืองของเรา</p>
           <Link className="primary-button mx-auto mt-7 w-full max-w-sm" to="/">กลับหน้าแรก</Link>
         </section>
       </div>

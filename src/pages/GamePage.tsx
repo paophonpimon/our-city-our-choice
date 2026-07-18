@@ -1,153 +1,128 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ErrorPanel, LoadingPanel, ScenePage } from '../components/Layout'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useGame } from '../context/GameContext'
-import { questionsById } from '../data/questions'
-import { useRoom, useTeam } from '../hooks/useGameData'
-import { areAnswersLocked, getRemainingMilliseconds, getRevealRemainingMilliseconds } from '../lib/gameFlow'
-import { friendlyError } from '../services'
-import { getTeamSession } from '../services/sessionStorage'
-
-const formatCountdown = (milliseconds: number): string => {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1_000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`
-}
+import { getRoleQuestion } from '../domain/classroomGameLoop'
+import { orderChoicesForPlayer } from '../domain/classroomQuestions'
+import { ROLES } from '../domain/ourCity'
+import { usePlayer, usePlayerAnswers, useQuestions, useRoom } from '../hooks/useGameData'
+import { useCountdown } from '../hooks/useCountdown'
+import { classroomFriendlyError } from '../services'
+import { getClassroomStudentSession } from '../services/sessionStorage'
 
 export const GamePage = () => {
-  const { roomCode = '' } = useParams()
-  const normalizedCode = roomCode.toUpperCase()
+  const roomId = (useParams().roomCode ?? '').toUpperCase()
+  const session = getClassroomStudentSession()
+  const { service, uid } = useGame()
   const navigate = useNavigate()
-  const { service } = useGame()
-  const session = getTeamSession()
-  const roomState = useRoom(normalizedCode)
-  const teamState = useTeam(normalizedCode, session?.roomCode === normalizedCode ? session.teamId : '')
-  const [saving, setSaving] = useState(false)
+  const roomState = useRoom(roomId)
+  const playerState = usePlayer(roomId, session?.roomId === roomId ? session.playerId : '')
+  const questionsState = useQuestions(roomId)
+  const answersState = usePlayerAnswers(roomId, session?.playerId ?? '', uid)
+  const remaining = useCountdown(roomState.data?.questionDeadlineAt ?? null)
+  const [savingChoiceId, setSavingChoiceId] = useState('')
   const [error, setError] = useState('')
-  const [pendingChoiceId, setPendingChoiceId] = useState('')
-  const [now, setNow] = useState(Date.now())
-
-  const room = roomState.data
-  const team = teamState.data
-  const questionIndex = room?.currentQuestionIndex ?? 0
-  const questionId = room?.questionIds[questionIndex]
-  const question = questionId ? questionsById.get(questionId) : undefined
-  const savedAnswer = team?.answers.find((answer) => answer.questionId === questionId)
-  const selectedChoiceId = pendingChoiceId || savedAnswer?.selectedChoiceId || ''
-  const remainingMs = room ? getRemainingMilliseconds(room, now) : 0
-  const revealRemainingMs = room ? getRevealRemainingMilliseconds(room, now) : 0
-  const timeExpired = remainingMs <= 0
-  const hasAnswered = Boolean(savedAnswer || pendingChoiceId)
-  const answerWasCorrect = Boolean(selectedChoiceId && selectedChoiceId === question?.correctChoiceId)
-  const progress = Math.min(100, (questionIndex / 10) * 100)
 
   useEffect(() => {
-    if (room?.status !== 'playing') return
-    setNow(Date.now())
-    const intervalId = window.setInterval(() => setNow(Date.now()), 250)
-    return () => window.clearInterval(intervalId)
-  }, [room?.status, room?.questionStartedAt])
+    if (roomState.data?.status === 'finished') navigate(`/result/${roomId}`, { replace: true })
+  }, [navigate, roomId, roomState.data?.status])
 
-  useEffect(() => {
-    setPendingChoiceId('')
+  const question = useMemo(() => {
+    const room = roomState.data
+    const player = playerState.data
+    if (!room || !player?.roleId) return null
+    return getRoleQuestion(questionsState.data, player.roleId, room.currentQuestionNumber)
+  }, [playerState.data, questionsState.data, roomState.data])
+
+  const orderedChoices = useMemo(
+    () => (question && session ? orderChoicesForPlayer(question, roomId, session.playerId) : []),
+    [question, roomId, session],
+  )
+  const existingAnswer = question
+    ? answersState.data.find((answer) => answer.questionId === question.questionId)
+    : undefined
+  const role = ROLES.find((item) => item.id === playerState.data?.roleId)
+  const expired = roomState.data?.status === 'question' && remaining === 0 && !existingAnswer
+
+  if (!session || session.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
+  if (roomState.data?.status === 'waiting') return <Navigate replace to={`/lobby/${roomId}`} />
+
+  const answer = async (choiceId: string): Promise<void> => {
+    if (!roomState.data || !question || existingAnswer || expired) return
+    setSavingChoiceId(choiceId)
     setError('')
-    setSaving(false)
-  }, [questionId])
-
-  useEffect(() => {
-    if (!room || !team) return
-    if (room.status === 'closed') navigate(`/closed/${normalizedCode}`, { replace: true })
-    else if (room.winner) navigate(`/congratulations/${normalizedCode}`, { replace: true })
-    else if (room.status === 'completed') navigate(`/result/${normalizedCode}`, { replace: true })
-    else if (room.status === 'waiting') navigate(`/lobby/${normalizedCode}`, { replace: true })
-  }, [navigate, normalizedCode, room, team])
-
-  const categoryLabel = useMemo(() => {
-    const labels = { basic: 'พื้นฐานเรื่อง', characters: 'ตัวละคร', plot: 'เนื้อเรื่อง', poetry: 'วรรณศิลป์', theme: 'แก่นเรื่อง' }
-    return question ? labels[question.category] : ''
-  }, [question])
-
-  const answerQuestion = async (choiceId: string): Promise<void> => {
-    if (!room || !team || !question || areAnswersLocked(saving, timeExpired) || selectedChoiceId === choiceId) return
-    setSaving(true)
-    setError('')
-    setPendingChoiceId(choiceId)
     try {
-      await service.saveAnswer(normalizedCode, team.id, {
-        questionId: question.id,
-        selectedChoiceId: choiceId,
-        expectedQuestionIndex: questionIndex,
-      })
+      await service.submitAnswer(
+        roomId,
+        session.playerId,
+        uid,
+        roomState.data.currentQuestionNumber,
+        question.questionId,
+        choiceId,
+      )
     } catch (reason) {
-      setError(friendlyError(reason))
-      setPendingChoiceId('')
+      setError(classroomFriendlyError(reason))
     } finally {
-      setSaving(false)
+      setSavingChoiceId('')
     }
   }
 
+  if (roomState.loading || playerState.loading || questionsState.loading) {
+    return <main className="our-city-page grid min-h-dvh place-items-center text-xl">กำลังเตรียมคำถาม…</main>
+  }
+  if (!roomState.data || !playerState.data) {
+    return <Navigate replace to={`/join?room=${roomId}`} />
+  }
+  if (!playerState.data.roleId || !question) {
+    return <main className="our-city-page grid min-h-dvh place-items-center px-5 text-center"><p>กำลังรับอาชีพและคำถามจากครู…</p></main>
+  }
+
   return (
-    <ScenePage compact>
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-7">
-        {roomState.loading || teamState.loading ? (
-          <LoadingPanel text="กำลังนำคำถามกลับมา..." />
-        ) : !session || session.roomCode !== normalizedCode ? (
-          <ErrorPanel message="ไม่พบข้อมูลกลุ่มบนอุปกรณ์นี้" action={<Link className="primary-button w-full" to="/join">กลับหน้าเข้าร่วม</Link>} />
-        ) : !room || !team ? (
-          <ErrorPanel message={roomState.error || teamState.error || 'ไม่พบข้อมูลห้องหรือกลุ่มของคุณ'} action={<Link className="primary-button w-full" to="/join">กลับหน้าเข้าร่วม</Link>} />
-        ) : room.status === 'completed' ? (
-          <LoadingPanel text="กำลังสรุปคะแนนของกลุ่ม..." />
-        ) : !question ? (
-          <ErrorPanel message="ไม่พบคำถามของรอบนี้ กรุณาแจ้งครูผู้ควบคุมกิจกรรม" />
-        ) : (
-          <>
-            <header className="game-header">
-              <div className="min-w-0"><p className="text-xs text-[#aaa298]">กลุ่มผู้พิทักษ์</p><strong className="block truncate text-[#fff7df]">{team.teamName}</strong><small className="block truncate text-[#c0b7ab]">{team.guardianName}</small></div>
-              <div className="text-right"><p className="text-xs text-[#aaa298]">รอบที่ {room.currentRound}</p><strong className={`question-timer ${remainingMs <= 5_000 ? 'question-timer-urgent' : ''}`}>{timeExpired ? 'หมดเวลา' : formatCountdown(remainingMs)}</strong></div>
-            </header>
+    <main className="our-city-page min-h-dvh px-4 py-5 md:px-7 md:py-7">
+      <section className="mx-auto flex min-h-[calc(100dvh-2.5rem)] w-full max-w-4xl flex-col">
+        <header className="our-city-panel flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <p className="text-sm font-bold text-[#f4c96d]">{role?.label}</p>
+            <h1 className="text-2xl font-black">คำถามข้อที่ {roomState.data.currentQuestionNumber}/10</h1>
+          </div>
+          <div className={`rounded-2xl px-5 py-3 text-center ${remaining <= 5 ? 'bg-red-400/15 text-red-100' : 'bg-white/8'}`}>
+            <span className="block text-xs text-current/70">เวลาที่เหลือ</span>
+            <strong className="text-2xl">{roomState.data.status === 'question' ? remaining : 0} วิ</strong>
+          </div>
+        </header>
 
-            <section className="mt-4" aria-label={`คำถามข้อ ${questionIndex + 1} จาก 10 ข้อ`}>
-              <div className="mb-2 flex justify-between text-sm"><span>คำถามที่ {Math.min(questionIndex + 1, 10)} จาก 10</span><span className="text-[#c9a55f]">ทุกกลุ่มใช้เวลาเท่ากัน</span></div>
-              <div className="progress-track"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
-            </section>
+        <article className="our-city-panel mt-4 flex flex-1 flex-col p-6 md:p-9">
+          {question.imageUrl ? <img className="mb-6 max-h-64 w-full rounded-2xl object-cover" src={question.imageUrl} alt="ภาพประกอบสถานการณ์" /> : null}
+          <p className="text-sm font-bold tracking-[.14em] text-[#8fc4c5] uppercase">สถานการณ์ของคุณ</p>
+          <h2 className="mt-4 text-2xl leading-relaxed font-black md:text-4xl">{question.prompt}</h2>
 
-            <section className={`question-card mt-5 ${hasAnswered ? 'answer-saved' : ''}`}>
-              <div className="flex items-center justify-between gap-3"><span className="category-chip">{categoryLabel}</span><span className="text-sm text-[#aaa298]">เปลี่ยนคำตอบได้จนหมดเวลา</span></div>
-              <h1 className="mt-5 text-xl font-semibold leading-relaxed sm:text-2xl">{question.question}</h1>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {question.choices.map((choice, index) => (
-                  <button
-                    key={choice.id}
-                    className={`choice-button ${selectedChoiceId === choice.id ? 'choice-selected' : ''} ${timeExpired && selectedChoiceId === choice.id ? answerWasCorrect ? 'choice-result-correct' : 'choice-result-wrong' : ''}`}
-                    type="button"
-                    onClick={() => void answerQuestion(choice.id)}
-                    disabled={areAnswersLocked(saving, timeExpired)}
-                  >
-                    <span>{['ก', 'ข', 'ค', 'ง'][index]}</span><strong>{choice.text}</strong>
-                  </button>
-                ))}
-              </div>
-              <div className="feedback-region mt-5" aria-live="assertive">
-                {error ? <p className="error-message">{error}</p> : timeExpired ? selectedChoiceId ? (
-                  <div className={answerWasCorrect ? 'answer-result-correct' : 'answer-result-wrong'}>
-                    <strong>{answerWasCorrect ? '✓ ตอบถูก +1 คะแนน' : '✕ ตอบผิด'}</strong>
-                    <span>คะแนนสะสมของกลุ่มคุณ {team.score}/10</span>
-                    <small>{revealRemainingMs > 0 ? `ไปข้อถัดไปใน ${Math.ceil(revealRemainingMs / 1_000)} วินาที` : 'กำลังไปคำถามข้อถัดไป'}</small>
-                  </div>
-                ) : (
-                  <div className="answer-result-missed"><strong>ไม่ได้ตอบภายในเวลา</strong><span>คะแนนสะสมของกลุ่มคุณ {team.score}/10</span></div>
-                ) : saving ? (
-                  <p>กำลังบันทึกคำตอบ...</p>
-                ) : hasAnswered ? (
-                  <p className="answer-waiting"><span aria-hidden="true">✓</span> บันทึกแล้ว แตะตัวเลือกอื่นเพื่อเปลี่ยนได้จนหมดเวลา</p>
-                ) : null}
-              </div>
-            </section>
-            <p className="mx-auto mt-4 max-w-2xl text-center text-xs leading-relaxed text-[#999187]">เมื่อหมดเวลา ระบบจะแสดงว่าตอบถูกหรือผิดพร้อมคะแนนสะสม แล้วทุกกลุ่มจึงเปลี่ยนข้อพร้อมกัน</p>
-          </>
-        )}
-      </div>
-    </ScenePage>
+          <div className="mt-auto grid gap-4 pt-8 md:grid-cols-2">
+            {orderedChoices.map((choice, index) => (
+              <button
+                className={`min-h-32 rounded-2xl border p-5 text-left text-lg font-bold transition ${
+                  existingAnswer?.choiceId === choice.id
+                    ? 'border-[#f4c96d] bg-[#f4c96d]/12'
+                    : 'border-white/18 bg-white/7 hover:border-white/40 hover:bg-white/10'
+                } disabled:cursor-not-allowed disabled:opacity-55`}
+                disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || expired || roomState.data?.status !== 'question'}
+                key={choice.id}
+                onClick={() => void answer(choice.id)}
+              >
+                <span className="mr-3 inline-grid h-10 w-10 place-items-center rounded-full border border-white/25 text-[#f4c96d]">
+                  {index === 0 ? 'ก.' : 'ข.'}
+                </span>
+                {choice.text}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 min-h-14 text-center" aria-live="polite">
+            {existingAnswer ? <p className="rounded-xl bg-[#8fc4c5]/12 px-4 py-3 font-bold text-[#bce2df]">ส่งคำตอบแล้ว • รอครูปิดข้อ</p> : null}
+            {expired ? <p className="rounded-xl bg-white/8 px-4 py-3 font-bold text-[#d6d2c7]">หมดเวลา • รอครูสรุปผล</p> : null}
+            {roomState.data.status === 'question-closed' ? <p className="rounded-xl bg-[#f4c96d]/12 px-4 py-3 font-bold text-[#f9dda0]">จบคำถามข้อนี้แล้ว • รอครูกดข้อถัดไป</p> : null}
+            {error ? <p className="mt-2 text-red-200">{error}</p> : null}
+          </div>
+        </article>
+      </section>
+    </main>
   )
 }

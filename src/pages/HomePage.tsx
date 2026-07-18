@@ -1,30 +1,23 @@
 import { Link } from 'react-router-dom'
-import { ScenePage } from '../components/Layout'
 
 export const HomePage = () => (
-  <ScenePage image="/images/hero-curse.png" imageAlt="ดอกกุหลาบต้องคำสาปท่ามกลางป่ารัตติกาล" imagePosition="50% 58%">
-    <div className="home-shell mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-8">
-      <div className="home-ornament flex items-center justify-between text-[#eed7a2]">
-        <span className="ornament-line" aria-hidden="true">✦</span>
-        <p className="text-sm tracking-[0.22em]">วรรณคดีไทย · มัธยมศึกษาปีที่ ๕</p>
-        <span className="ornament-line" aria-hidden="true">✦</span>
+  <main className="our-city-page relative grid min-h-dvh place-items-center overflow-hidden px-5 py-12">
+    <img className="absolute inset-0 h-full w-full object-cover opacity-30" src="/images/city/city-neutral.png" alt="" />
+    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,11,16,.4),rgba(3,11,16,.95))]" />
+    <section className="our-city-panel relative z-10 w-full max-w-3xl p-8 text-center md:p-12">
+      <p className="text-sm font-bold tracking-[.22em] text-[#f4c96d] uppercase">Different roles. Different choices. One shared city.</p>
+      <h1 className="mt-5 text-4xl font-black md:text-6xl">เมืองนี้อยู่ที่เรา</h1>
+      <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-[#d4e1df]">
+        เกมสถานการณ์จำลองที่ทุกอาชีพตัดสินใจต่างกัน แต่ทุกคำตอบเปลี่ยนเมืองเดียวกัน
+      </p>
+      <div className="mt-9 grid gap-3 sm:grid-cols-2">
+        <Link className="rounded-2xl bg-[#f0c866] px-6 py-4 text-lg font-black text-[#12242a] transition hover:brightness-110" to="/teacher">
+          เริ่มสำหรับครู
+        </Link>
+        <Link className="rounded-2xl border border-white/25 bg-white/10 px-6 py-4 text-lg font-black text-white transition hover:bg-white/15" to="/join">
+          เข้าห้องสำหรับนักเรียน
+        </Link>
       </div>
-      <section className="home-content">
-        <div className="home-title-block">
-          <p className="eyebrow">ภารกิจแห่งรัตติกาล</p>
-          <h1 className="hero-title mt-3">มัทนา<br /><span>ต้องรอด</span></h1>
-        </div>
-        <div className="home-action-block">
-          <p className="max-w-xl text-lg leading-relaxed text-[#eee5d7] sm:text-xl">
-          ภารกิจคลายคำสาปจากวรรณคดีเรื่อง <strong className="font-medium text-[#f1ce7b]">มัทนะพาธา</strong>
-          </p>
-          <div className="mt-7 grid max-w-xl gap-3 sm:grid-cols-2">
-            <Link className="primary-button" to="/teacher"><span>สำหรับครู</span><span aria-hidden="true">→</span></Link>
-            <Link className="secondary-button" to="/join"><span>สำหรับผู้เรียน</span><span aria-hidden="true">→</span></Link>
-          </div>
-          <p className="mt-5 text-sm text-[#bdb5ac]">หนึ่งห้อง · สิบคำถาม · ทุกกลุ่มใช้เวลาเท่ากันและสรุปคะแนนพร้อมกันเมื่อจบรอบ</p>
-        </div>
-      </section>
-    </div>
-  </ScenePage>
+    </section>
+  </main>
 )

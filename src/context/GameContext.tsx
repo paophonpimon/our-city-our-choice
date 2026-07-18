@@ -1,15 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { gameServicePromise, friendlyError, type GameService } from '../services'
+import { classroomFriendlyError, classroomGameServicePromise, type ClassroomGameService } from '../services'
 
 interface GameContextValue {
-  service: GameService
+  service: ClassroomGameService
   uid: string
 }
 
 const GameContext = createContext<GameContextValue | null>(null)
 
 export const GameProvider = ({ children }: { children: ReactNode }) => {
-  const [service, setService] = useState<GameService | null>(null)
+  const [service, setService] = useState<ClassroomGameService | null>(null)
   const [uid, setUid] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -17,7 +17,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let active = true
     setError('')
-    gameServicePromise
+    classroomGameServicePromise
       .then(async (nextService) => {
         const nextUid = await nextService.ensureSession()
         if (active) {
@@ -26,7 +26,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         }
       })
       .catch((reason: unknown) => {
-        if (active) setError(friendlyError(reason))
+        if (active) setError(classroomFriendlyError(reason))
       })
     return () => {
       active = false

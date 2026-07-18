@@ -1,7 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { GameProvider } from './context/GameContext'
 import { ClosedPage } from './pages/ClosedPage'
-import { CongratulationsPage } from './pages/CongratulationsPage'
 import { GamePage } from './pages/GamePage'
 import { HomePage } from './pages/HomePage'
 import { JoinPage } from './pages/JoinPage'
@@ -20,7 +19,6 @@ const App = () => (
         <Route path="/lobby/:roomCode" element={<LobbyPage />} />
         <Route path="/game/:roomCode" element={<GamePage />} />
         <Route path="/result/:roomCode" element={<ResultPage />} />
-        <Route path="/congratulations/:roomCode" element={<CongratulationsPage />} />
         <Route path="/closed/:roomCode" element={<ClosedPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

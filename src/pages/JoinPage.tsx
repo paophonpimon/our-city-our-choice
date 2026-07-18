@@ -1,114 +1,74 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { BrandHeader, ScenePage } from '../components/Layout'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useGame } from '../context/GameContext'
-import { validateJoinInput } from '../lib/game'
-import { friendlyError } from '../services'
-import { saveTeamSession } from '../services/sessionStorage'
-import type { JoinInput } from '../types/game'
+import { classroomFriendlyError } from '../services'
+import { saveClassroomStudentSession } from '../services/sessionStorage'
 
 export const JoinPage = () => {
   const { service, uid } = useGame()
   const navigate = useNavigate()
-  const [values, setValues] = useState<JoinInput>({ roomCode: '', teamName: '', guardianName: '' })
-  const [errors, setErrors] = useState<Partial<Record<keyof JoinInput, string>>>({})
-  const [submitError, setSubmitError] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  const update = (field: keyof JoinInput, value: string): void => {
-    setValues((current) => ({ ...current, [field]: field === 'roomCode' ? value.toUpperCase() : value }))
-    setErrors((current) => ({ ...current, [field]: undefined }))
-  }
+  const [searchParams] = useSearchParams()
+  const [roomId, setRoomId] = useState(() => (searchParams.get('room') ?? '').trim().toUpperCase())
+  const [nickname, setNickname] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    const nextValues = {
-      roomCode: values.roomCode.trim().toUpperCase(),
-      teamName: values.teamName.trim(),
-      guardianName: values.guardianName.trim(),
-    }
-    const nextErrors = validateJoinInput(nextValues)
-    setErrors(nextErrors)
-    setSubmitError('')
-    if (Object.keys(nextErrors).length > 0) return
-    setBusy(true)
+    setSaving(true)
+    setError('')
     try {
-      const { team, room } = await service.joinRoom(nextValues, uid)
-      saveTeamSession({
-        roomCode: room.roomCode,
-        teamId: team.id,
-        teamName: team.teamName,
-        guardianName: team.guardianName,
+      const normalizedRoomId = roomId.trim().toUpperCase()
+      const player = await service.joinRoom({ roomId: normalizedRoomId, nickname }, uid)
+      saveClassroomStudentSession({
+        roomId: normalizedRoomId,
+        playerId: player.playerId,
+        nickname: player.nickname,
         role: 'student',
+        sessionVersion: 1,
       })
-      navigate(`/lobby/${room.roomCode}`, { replace: true })
+      navigate(`/lobby/${normalizedRoomId}`)
     } catch (reason) {
-      const message = friendlyError(reason)
-      if (message.startsWith('ชื่อกลุ่มนี้ถูกใช้แล้ว')) {
-        setErrors((current) => ({ ...current, teamName: message }))
-      } else {
-        setSubmitError(message)
-      }
+      setError(classroomFriendlyError(reason))
     } finally {
-      setBusy(false)
+      setSaving(false)
     }
   }
 
   return (
-    <ScenePage image="/images/hero-curse.png" imageAlt="ดอกกุหลาบต้องคำสาป" imagePosition="50% 55%">
-      <BrandHeader backTo="/" />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 items-center px-5 py-8 sm:px-8">
-        <div className="grid w-full items-center gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-          <section className="hidden lg:block">
-            <p className="eyebrow">สำหรับผู้เรียน</p>
-            <h1 className="mt-3 text-5xl font-semibold leading-tight">รวมพลัง<br />ผู้พิทักษ์</h1>
-            <p className="mt-4 max-w-sm text-lg leading-relaxed text-[#d8d1c5]">ตั้งชื่อกลุ่ม เลือกผู้พิทักษ์ แล้วใช้รหัสจากครูเพื่อเข้าสู่ภารกิจเดียวกัน</p>
-          </section>
-          <form className="glass-panel ml-auto w-full max-w-xl p-6 sm:p-8" onSubmit={submit} noValidate>
-            <p className="eyebrow">เข้าสู่ห้องกิจกรรม</p>
-            <h1 className="mt-2 text-3xl font-semibold">เตรียมทีมของคุณ</h1>
-            {service.isDemo ? (
-              <button type="button" className="demo-banner mt-5 w-full text-left" onClick={() => update('roomCode', service.demoRoomCode ?? 'MATANA')}>
-                <span className="demo-dot" aria-hidden="true" />
-                <span><strong>โหมดสาธิตพร้อมใช้</strong><small>แตะเพื่อใช้รหัสห้อง {service.demoRoomCode}</small></span>
-              </button>
-            ) : null}
-            <div className="mt-6 space-y-5">
-              <label className="field-label">
-                <span>รหัสห้อง</span>
-                <input
-                  className="text-center font-mono text-2xl uppercase tracking-[0.28em]"
-                  value={values.roomCode}
-                  onChange={(event) => update('roomCode', event.target.value.replace(/\s/g, ''))}
-                  maxLength={6}
-                  inputMode="text"
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  placeholder="ABC234"
-                  aria-invalid={Boolean(errors.roomCode)}
-                  aria-describedby={errors.roomCode ? 'room-code-error' : undefined}
-                />
-                {errors.roomCode ? <small id="room-code-error" className="field-error">{errors.roomCode}</small> : null}
-              </label>
-              <label className="field-label">
-                <span>ชื่อกลุ่ม</span>
-                <input value={values.teamName} onChange={(event) => update('teamName', event.target.value)} maxLength={40} autoComplete="off" placeholder="เช่น กุหลาบรัตติกาล" aria-invalid={Boolean(errors.teamName)} />
-                {errors.teamName ? <small className="field-error">{errors.teamName}</small> : null}
-              </label>
-              <label className="field-label">
-                <span>ชื่อผู้พิทักษ์</span>
-                <input value={values.guardianName} onChange={(event) => update('guardianName', event.target.value)} maxLength={40} autoComplete="name" placeholder="ตัวแทนประจำกลุ่ม" aria-invalid={Boolean(errors.guardianName)} />
-                {errors.guardianName ? <small className="field-error">{errors.guardianName}</small> : null}
-              </label>
-            </div>
-            {submitError ? <p className="error-message mt-5" role="alert">{submitError}</p> : null}
-            <button className="primary-button mt-6 w-full" type="submit" disabled={busy}>
-              <span>{busy ? 'กำลังเข้าร่วมห้อง...' : 'เข้าสู่ภารกิจ'}</span><span aria-hidden="true">→</span>
-            </button>
-            <Link className="quiet-link mx-auto mt-5 w-fit" to="/">กลับไปเลือกบทบาท</Link>
-          </form>
-        </div>
-      </div>
-    </ScenePage>
+    <main className="our-city-page grid min-h-dvh place-items-center px-5 py-10">
+      <section className="our-city-panel w-full max-w-lg p-7 md:p-9">
+        <Link className="text-sm font-bold text-[#9ec7c9]" to="/">← กลับหน้าหลัก</Link>
+        <p className="mt-7 text-sm font-bold tracking-[.18em] text-[#f4c96d] uppercase">Student Join</p>
+        <h1 className="mt-2 text-3xl font-black">เข้าร่วมเมือง</h1>
+        <p className="mt-3 text-[#c6d5d3]">กรอกรหัสห้องและชื่อที่เพื่อนจำได้ ชื่อในห้องต้องไม่ซ้ำกัน</p>
+        <form className="mt-7 space-y-5" onSubmit={(event) => void submit(event)}>
+          <label className="block">
+            <span className="mb-2 block font-bold">รหัสห้อง</span>
+            <input
+              className="w-full rounded-2xl border border-white/15 bg-white/8 px-4 py-4 text-xl font-black tracking-[.16em] uppercase outline-none focus:border-[#f4c96d]"
+              maxLength={6}
+              onChange={(event) => setRoomId(event.target.value.toUpperCase())}
+              required
+              value={roomId}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block font-bold">ชื่อของคุณ</span>
+            <input
+              className="w-full rounded-2xl border border-white/15 bg-white/8 px-4 py-4 text-lg outline-none focus:border-[#f4c96d]"
+              maxLength={30}
+              onChange={(event) => setNickname(event.target.value)}
+              required
+              value={nickname}
+            />
+          </label>
+          {error ? <p className="rounded-xl bg-red-400/12 px-4 py-3 text-red-200" role="alert">{error}</p> : null}
+          <button className="w-full rounded-2xl bg-[#f0c866] px-5 py-4 text-lg font-black text-[#102228] disabled:opacity-50" disabled={saving}>
+            {saving ? 'กำลังเข้าห้อง…' : 'เข้าห้อง'}
+          </button>
+        </form>
+      </section>
+    </main>
   )
 }

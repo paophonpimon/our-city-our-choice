@@ -1,14 +1,14 @@
-import type { GameService } from './gameService'
-import { DemoGameService } from './demoService'
+import type { ClassroomGameService } from './classroomGameService'
+import { DemoClassroomGameService } from './demoClassroomService'
 
 const demoMode = import.meta.env.VITE_DEMO_MODE !== 'false'
 
-const createService = async (): Promise<GameService> => {
-  if (demoMode) return new DemoGameService()
-  const { FirebaseGameService } = await import('./firebaseService')
-  return new FirebaseGameService()
+const createService = async (): Promise<ClassroomGameService> => {
+  if (demoMode) return new DemoClassroomGameService()
+  const { FirebaseClassroomGameService } = await import('./firebaseClassroomService')
+  return new FirebaseClassroomGameService()
 }
 
-export const gameServicePromise = createService()
-export { friendlyError } from './gameService'
-export type { GameService } from './gameService'
+export const classroomGameServicePromise = createService()
+export { classroomFriendlyError } from './classroomGameService'
+export type { ClassroomGameService } from './classroomGameService'
