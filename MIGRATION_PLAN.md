@@ -134,7 +134,7 @@
 8. คำถามแต่ละข้อมีสถานการณ์สั้น, ตัวเลือก 2 ทางน้ำหนักภาพเท่ากัน, impact ภายในระบบ (ตัวอย่าง `-1`, `0`, `+1`), feedback เชิงเหตุและผล และหัวข้อด้านความซื่อสัตย์/โปร่งใส/ความรับผิดชอบ
 9. ห้ามใช้สีเขียว/แดงชี้นำก่อนตอบและไม่แสดงถูก/ผิดแบบข้อสอบทั่วไป; หลังเลือกต้องมีขั้นยืนยันเพื่อลดการแตะผิด
 10. Client ส่งเพียง `choiceId`; Service/Backend เป็นผู้ตรวจ impact และคำนวณคะแนน คำตอบเดียวต้องไม่ถูกนับซ้ำ
-11. ครูกำหนดจำนวนวินาทีต่อคำถามก่อนเริ่มเกม และค่าที่เลือกหนึ่งครั้งใช้กับคำถามทั้ง 10 ข้อในเกมนั้น
+11. เกมมี Timer ต่อคำถาม ครูกำหนดจำนวนวินาทีก่อนเริ่มเกม และค่าที่เลือกหนึ่งครั้งใช้กับคำถามทั้ง 10 ข้อในเกมนั้น
 12. ผู้ไม่ตอบภายในเวลาไม่ถูกหักคะแนนเมืองโดยอัตโนมัติ
 
 ### ยืนยันแล้ว: shared city and teacher experience
@@ -353,6 +353,7 @@
 ### ยืนยันแล้ว
 
 - ครูกำหนด `questionDurationSeconds` ก่อน start และค่าหนึ่งเดียวนี้ใช้กับคำถามทั้ง 10 ข้อของ game
+- การมี Timer และสิทธิ์ของครูในการตั้งเวลาไม่ใช่ decision gate อีกต่อไป
 - เมื่อหมดเวลาแล้วไม่ตอบ ระบบไม่สร้าง automatic negative contribution
 - Backend/Firestore ต้องเป็น authoritative state; client ไม่เป็นผู้ตัดสิน deadline/impact/score แต่เพียงฝ่ายเดียว
 
@@ -365,6 +366,7 @@
 
 - Self-paced หรือ teacher-synchronized; จุดเริ่ม timer ของแต่ละข้อจึงอาจเป็น per-player หรือ room-level
 - เมื่อหมดเวลา ครูกดเปิดข้อถัดไปหรือระบบเดินต่ออัตโนมัติ; Roadmap เสนอให้ครูกดเองเพื่อมีช่วงอภิปราย แต่ยังไม่ใช่ข้อยืนยัน
+- ค่าต่ำสุด/สูงสุดและชุดตัวเลือกจำนวนวินาทีที่แสดงใน UI
 - เกมจบอัตโนมัติเมื่อทุกคนครบหรือครูกดจบ
 - Reveal/feedback duration และอนุญาตให้เปลี่ยนตัวเลือกก่อนกดยืนยันหรือไม่
 - หากเลือก synchronized mode ต้องกำหนด coordinator ที่ไม่ผูกกับ `TeacherPage` tab เดียว
@@ -498,14 +500,15 @@
 
 1. **Question pacing:** self-paced หรือ teacher-synchronized; Roadmap แนะนำ teacher-synchronized แต่ยังไม่ใช่ข้อยืนยัน จึงห้ามสมมติ global question index
 2. **Timeout progression:** เมื่อหมดเวลาครูกดข้อถัดไปหรือระบบเดินต่ออัตโนมัติ; Roadmap แนะนำให้ครูกดเองแต่ยังเปิดอยู่
-3. **Game finish:** จบอัตโนมัติเมื่อทุกคนครบหรือครูกดจบ
-4. **Late join:** ปฏิเสธหลัง start หรือให้เข้าเป็นผู้ชม/รูปแบบอื่น
-5. **Question order:** คงที่หรือสุ่มภายในคำถาม 10 ข้อของแต่ละอาชีพ
-6. **Choice editing before confirmation:** ผู้เล่นเปลี่ยนตัวเลือกที่เลือกไว้ก่อนกดยืนยันได้หรือไม่; หลัง submit ยังไม่มีข้อยืนยันว่าเปิดให้แก้
-7. **City score specification:** impact weights จริง, คะแนนเริ่มต้น, dimensions, min/max, normalization, thresholds, จังหวะอัปเดตภาพ และรูปแบบคะแนนที่แสดง
-8. **Reset role policy:** เมื่อเริ่มเกมใหม่โดยคง roster จะคงอาชีพเดิมหรือแจกใหม่; ไม่ว่าทางใดอาชีพต้องถูกล็อกตลอดเกมหนึ่งเกม
-9. **Room data retention:** อายุข้อมูลและ cleanup policy
-10. **Question import scope:** Google Sheets/JSON import อยู่ใน MVP หรือ Phase หลัง และวิธีนำเข้า
+3. **Timer UI range:** ค่าต่ำสุด/สูงสุดและชุดตัวเลือกจำนวนวินาทีที่ครูเลือกได้ใน UI
+4. **Game finish:** จบอัตโนมัติเมื่อทุกคนครบหรือครูกดจบ
+5. **Late join:** ปฏิเสธหลัง start หรือให้เข้าเป็นผู้ชม/รูปแบบอื่น
+6. **Question order:** คงที่หรือสุ่มภายในคำถาม 10 ข้อของแต่ละอาชีพ
+7. **Choice editing before confirmation:** ผู้เล่นเปลี่ยนตัวเลือกที่เลือกไว้ก่อนกดยืนยันได้หรือไม่; หลัง submit ยังไม่มีข้อยืนยันว่าเปิดให้แก้
+8. **City score specification:** impact weights จริง, คะแนนเริ่มต้น, dimensions, min/max, normalization, thresholds, จังหวะอัปเดตภาพ และรูปแบบคะแนนที่แสดง
+9. **Reset role policy:** เมื่อเริ่มเกมใหม่โดยคง roster จะคงอาชีพเดิมหรือแจกใหม่; ไม่ว่าทางใดอาชีพต้องถูกล็อกตลอดเกมหนึ่งเกม
+10. **Room data retention:** อายุข้อมูลและ cleanup policy
+11. **Question import scope:** Google Sheets/JSON import อยู่ใน MVP หรือ Phase หลัง และวิธีนำเข้า
 
 ### Technical design gates ที่ยังเปิดจริง
 
@@ -520,7 +523,7 @@
 - Source-of-Truth availability gate เดิมปิดแล้ว: อ่านไฟล์ทั้ง 4 (`PROJECT_HANDOFF_CONFIRMED_V2.md`, `PROJECT_DECISIONS.json`, `CONFIRMED_FILES_AND_ASSETS.md`, `OUR_CITY_DEVELOPMENT_ROADMAP.md`) ครบและ reconcile แล้ว
 - ชื่อ/ID อาชีพ 8 รายการ, จำนวนคำถาม 8×10, 2 choices, role lock และ balanced allocation outcome ปิดแล้ว
 - Identity ขั้นต้นเป็นชื่อเล่น, QR Code, เป้าหมาย 30–40 คน และ teacher roster/progress intent ปิดแล้ว
-- Timer มีแน่นอนและครูตั้งวินาทีก่อน start เพื่อใช้กับทั้ง 10 ข้อปิดแล้ว; เปิดเฉพาะ pacing/authority details
+- Timer มีแน่นอนและครูตั้งวินาทีก่อน start เพื่อใช้กับทั้ง 10 ข้อปิดแล้ว; เปิดเฉพาะการเริ่มพร้อมกัน/แยกผู้เล่น, การเดินข้อถัดไปเมื่อหมดเวลา, ค่า min/max/ตัวเลือกใน UI และ authority details
 - City visual states/filenames 5 ระดับ, same-camera Crossfade, full-screen teacher reference และ no-3D MVP ปิดแล้ว
 - No winner/leaderboard core/role switching/REST polling/client-authoritative scoring และ framework constraints ปิดแล้ว
 
