@@ -2,19 +2,25 @@ import type { PublicRoomQuestion } from '../domain/classroomQuestions'
 import type { CityLevel, QuestionNumber, RoleId } from '../domain/ourCity'
 import type { RoundScoreResult } from '../domain/cityScoring'
 
-export type ClassroomRoomStatus = 'waiting' | 'question' | 'question-closed' | 'finished' | 'closed'
+export type ClassroomRoomStatus = 'lobby' | 'role-draw' | 'playing' | 'round-result' | 'game-result' | 'finished'
 
 export interface ClassroomRoom {
   roomId: string
   teacherSessionId: string
   status: ClassroomRoomStatus
-  currentQuestionNumber: QuestionNumber
+  gameCycle: number
+  completedGameCount: number
+  currentQuestionNumber: QuestionNumber | 0
   questionDurationSec: number
   questionStartedAt: number | null
   questionDeadlineAt: number | null
   lockedPlayerCount: number
   cityScore: number
   cityLevel: CityLevel
+  integrityTotal: number
+  corruptionTotal: number
+  timeoutTotal: number
+  roleRotation: RoleId[]
   createdAt: number
   updatedAt: number
 }
@@ -25,6 +31,8 @@ export interface ClassroomPlayer {
   nicknameKey: string
   ownerUid: string
   roleId: RoleId | null
+  roleHistory: RoleId[]
+  roleOffset: number | null
   joinedAt: number
   lastSeenAt: number
 }
@@ -34,6 +42,7 @@ export interface ClassroomAnswerRecord {
   roomId: string
   playerId: string
   ownerUid: string
+  gameCycle: number
   questionNumber: QuestionNumber
   questionId: string
   choiceId: string
@@ -41,6 +50,7 @@ export interface ClassroomAnswerRecord {
 }
 
 export interface ClassroomRoundResult extends RoundScoreResult {
+  gameCycle: number
   finalizedAt: number
 }
 

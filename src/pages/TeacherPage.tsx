@@ -24,14 +24,13 @@ export const TeacherPage = () => {
   const { service, uid } = useGame()
   const navigate = useNavigate()
   const storedSession = getClassroomTeacherSession()
+  const restoredSnapshot = storedSession?.roomId ? restoreTeacherSnapshot(storedSession.roomId) : null
   const [roomId, setRoomId] = useState(storedSession?.roomId ?? '')
   const [questionDurationSec, setQuestionDurationSec] = useState(30)
-  const [sheetStatus, setSheetStatus] = useState<SheetStatus>('loading')
+  const [sheetStatus, setSheetStatus] = useState<SheetStatus>(restoredSnapshot ? 'ready' : 'loading')
   const [sheet, setSheet] = useState<ParsedQuestionSheet | null>(null)
   const [sheetError, setSheetError] = useState('')
-  const [trustedSnapshot, setTrustedSnapshot] = useState<RoomQuestionSnapshot | null>(() =>
-    storedSession?.roomId ? restoreTeacherSnapshot(storedSession.roomId) : null,
-  )
+  const [trustedSnapshot, setTrustedSnapshot] = useState<RoomQuestionSnapshot | null>(restoredSnapshot)
   const [actionError, setActionError] = useState('')
   const [actionMessage, setActionMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -43,9 +42,11 @@ export const TeacherPage = () => {
   const roundsState = useRounds(roomId)
   const room = roomState.data
   const remaining = useCountdown(room?.questionDeadlineAt ?? null)
-  const answerCount = room ? countAnswersForQuestion(answersState.data, room.currentQuestionNumber) : 0
+  const answerCount = room && room.currentQuestionNumber > 0
+    ? countAnswersForQuestion(answersState.data, room.currentQuestionNumber, room.gameCycle)
+    : 0
   const currentRound = room
-    ? roundsState.data.find((round) => round.questionNumber === room.currentQuestionNumber) ?? null
+    ? roundsState.data.find((round) => round.gameCycle === room.gameCycle && round.questionNumber === room.currentQuestionNumber) ?? null
     : null
 
   const loadQuestions = useCallback(async (): Promise<void> => {
@@ -71,19 +72,20 @@ export const TeacherPage = () => {
   }, [])
 
   useEffect(() => {
-    void loadQuestions()
-  }, [loadQuestions])
+    if (!trustedSnapshot) void loadQuestions()
+  }, [loadQuestions, trustedSnapshot])
 
   useEffect(() => {
     if (roomId) setTrustedSnapshot(restoreTeacherSnapshot(roomId))
   }, [roomId])
 
   useEffect(() => {
-    if (room?.status === 'finished') navigate(`/result/${room.roomId}`, { replace: true })
+    if (room?.status === 'role-draw') navigate(`/role-draw/${room.roomId}`, { replace: true })
+    if (room?.status === 'game-result' || room?.status === 'finished') navigate(`/result/${room.roomId}`, { replace: true })
   }, [navigate, room])
 
   const closeCurrentQuestion = useCallback(async (): Promise<void> => {
-    if (!room || room.status !== 'question' || !trustedSnapshot || closingRef.current) return
+    if (!room || room.status !== 'playing' || !trustedSnapshot || closingRef.current) return
     closingRef.current = true
     setActionError('')
     try {
@@ -97,7 +99,7 @@ export const TeacherPage = () => {
 
   useEffect(() => {
     if (
-      room?.status === 'question' &&
+      room?.status === 'playing' &&
       trustedSnapshot &&
       shouldCloseQuestion(answerCount, room.lockedPlayerCount, room.questionDeadlineAt)
     ) {
@@ -171,7 +173,7 @@ export const TeacherPage = () => {
     }
   }
 
-  if (room && (room.status === 'question' || room.status === 'question-closed')) {
+  if (room && (room.status === 'playing' || room.status === 'round-result')) {
     const missingTrusted = !trustedSnapshot
     return (
       <CityStage
@@ -181,7 +183,7 @@ export const TeacherPage = () => {
         roundImpact={currentRound?.roundAverage ?? null}
         controls={
           <>
-            {room.status === 'question' ? (
+            {room.status === 'playing' ? (
               <button
                 className="rounded-xl border border-white/30 bg-black/55 px-5 py-3 font-black text-white disabled:opacity-40"
                 disabled={missingTrusted || closingRef.current}
@@ -206,7 +208,7 @@ export const TeacherPage = () => {
             ไม่พบข้อมูลตรวจคำตอบที่บันทึกไว้ในเครื่องครู เครื่องนี้จึงไม่สามารถสรุปคำตอบต่อได้ กรุณากลับมาใช้เครื่องเดิม
           </div>
         ) : null}
-        {room.status === 'question-closed' && currentRound ? <LocationResults summaries={currentRound.locationSummaries} /> : null}
+        {room.status === 'round-result' && currentRound ? <LocationResults summaries={currentRound.locationSummaries} /> : null}
         {actionError ? <p className="mx-auto mt-3 max-w-xl rounded-xl bg-red-950/85 px-4 py-3 text-center">{actionError}</p> : null}
       </CityStage>
     )
@@ -293,7 +295,7 @@ export const TeacherPage = () => {
                 </div>
                 <button
                   className="mt-6 w-full rounded-2xl bg-[#f0c866] px-5 py-4 text-lg font-black text-[#102228] disabled:opacity-45"
-                  disabled={busy || playersState.data.length === 0 || sheetStatus !== 'ready' || room?.status !== 'waiting'}
+                  disabled={busy || playersState.data.length === 0 || sheetStatus !== 'ready' || room?.status !== 'lobby'}
                   onClick={() => void startGame()}
                 >
                   เริ่มเกม

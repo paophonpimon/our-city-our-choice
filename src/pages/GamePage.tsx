@@ -23,13 +23,14 @@ export const GamePage = () => {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (roomState.data?.status === 'finished') navigate(`/result/${roomId}`, { replace: true })
+    if (roomState.data?.status === 'role-draw') navigate(`/role-draw/${roomId}`, { replace: true })
+    if (roomState.data?.status === 'game-result' || roomState.data?.status === 'finished') navigate(`/result/${roomId}`, { replace: true })
   }, [navigate, roomId, roomState.data?.status])
 
   const question = useMemo(() => {
     const room = roomState.data
     const player = playerState.data
-    if (!room || !player?.roleId) return null
+    if (!room || !player?.roleId || room.currentQuestionNumber === 0) return null
     return getRoleQuestion(questionsState.data, player.roleId, room.currentQuestionNumber)
   }, [playerState.data, questionsState.data, roomState.data])
 
@@ -38,13 +39,14 @@ export const GamePage = () => {
     [question, roomId, session],
   )
   const existingAnswer = question
-    ? answersState.data.find((answer) => answer.questionId === question.questionId)
+    ? answersState.data.find((answer) => answer.gameCycle === roomState.data?.gameCycle && answer.questionId === question.questionId)
     : undefined
   const role = ROLES.find((item) => item.id === playerState.data?.roleId)
-  const expired = roomState.data?.status === 'question' && remaining === 0 && !existingAnswer
+  const expired = roomState.data?.status === 'playing' && remaining === 0 && !existingAnswer
 
   if (!session || session.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
-  if (roomState.data?.status === 'waiting') return <Navigate replace to={`/lobby/${roomId}`} />
+  if (roomState.data?.status === 'lobby') return <Navigate replace to={`/lobby/${roomId}`} />
+  if (roomState.data?.status === 'role-draw') return <Navigate replace to={`/role-draw/${roomId}`} />
 
   const answer = async (choiceId: string): Promise<void> => {
     if (!roomState.data || !question || existingAnswer || expired) return
@@ -81,12 +83,12 @@ export const GamePage = () => {
       <section className="mx-auto flex min-h-[calc(100dvh-2.5rem)] w-full max-w-4xl flex-col">
         <header className="our-city-panel flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div>
-            <p className="text-sm font-bold text-[#f4c96d]">{role?.label}</p>
+            <p className="text-sm font-bold text-[#f4c96d]">ชุดที่ {roomState.data.gameCycle + 1} • อาชีพ: {role?.label}</p>
             <h1 className="text-2xl font-black">คำถามข้อที่ {roomState.data.currentQuestionNumber}/10</h1>
           </div>
           <div className={`rounded-2xl px-5 py-3 text-center ${remaining <= 5 ? 'bg-red-400/15 text-red-100' : 'bg-white/8'}`}>
             <span className="block text-xs text-current/70">เวลาที่เหลือ</span>
-            <strong className="text-2xl">{roomState.data.status === 'question' ? remaining : 0} วิ</strong>
+            <strong className="text-2xl">{roomState.data.status === 'playing' ? remaining : 0} วิ</strong>
           </div>
         </header>
 
@@ -103,7 +105,7 @@ export const GamePage = () => {
                     ? 'border-[#f4c96d] bg-[#f4c96d]/12'
                     : 'border-white/18 bg-white/7 hover:border-white/40 hover:bg-white/10'
                 } disabled:cursor-not-allowed disabled:opacity-55`}
-                disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || expired || roomState.data?.status !== 'question'}
+                disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || expired || roomState.data?.status !== 'playing'}
                 key={choice.id}
                 onClick={() => void answer(choice.id)}
               >
@@ -116,13 +118,13 @@ export const GamePage = () => {
           </div>
 
           <div className="mt-6 min-h-14 text-center" aria-live="polite">
-            {existingAnswer && roomState.data.status === 'question' ? (
+            {existingAnswer && roomState.data.status === 'playing' ? (
               <p className="rounded-xl bg-[#8fc4c5]/12 px-4 py-3 font-bold text-[#bce2df]">
                 ส่งคำตอบแล้ว <span className="block text-sm font-medium text-[#a9c5c3]">รอผลจากเมือง</span>
               </p>
             ) : null}
             {expired ? <p className="rounded-xl bg-white/8 px-4 py-3 font-bold text-[#d6d2c7]">หมดเวลา <span className="block text-sm font-medium">รอครูสรุปรอบ</span></p> : null}
-            {roomState.data.status === 'question-closed' ? <p className="rounded-xl bg-[#f4c96d]/12 px-4 py-3 font-bold text-[#f9dda0]">จบคำถามข้อนี้แล้ว • รอครูกดข้อถัดไป</p> : null}
+            {roomState.data.status === 'round-result' ? <p className="rounded-xl bg-[#f4c96d]/12 px-4 py-3 font-bold text-[#f9dda0]">จบคำถามข้อนี้แล้ว • รอครูกดข้อถัดไป</p> : null}
             {error ? <p className="mt-2 text-red-200">{error}</p> : null}
           </div>
         </article>

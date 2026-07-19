@@ -1,6 +1,12 @@
 import { scoreClassroomRound } from '../domain/cityScoring'
 import type { RoomQuestionSnapshot } from '../domain/classroomQuestions'
-import { assignBalancedRoles, type QuestionNumber } from '../domain/ourCity'
+import {
+  assignRolesForCycle,
+  createBalancedRoleOffsets,
+  createRoleRotation,
+  MAX_GAME_CYCLES,
+  type QuestionNumber,
+} from '../domain/ourCity'
 import type {
   ClassroomAnswerRecord,
   ClassroomJoinInput,
@@ -10,7 +16,7 @@ import type {
   PublicRoomQuestion,
 } from '../types/classroomGame'
 import type { ClassroomGameService } from './classroomGameService'
-import { createClassroomAnswerId } from './classroomFirestore'
+import { createClassroomAnswerId, createClassroomRoundId } from './classroomFirestore'
 
 interface DemoClassroomRoomState {
   room: ClassroomRoom
@@ -24,7 +30,7 @@ interface DemoClassroomState {
   rooms: Record<string, DemoClassroomRoomState>
 }
 
-const STORAGE_KEY = 'our_city_classroom_demo_state_v1'
+const STORAGE_KEY = 'our_city_classroom_demo_state_v2'
 const UPDATE_EVENT = 'our-city-classroom-demo-update'
 let memoryState: DemoClassroomState = { rooms: {} }
 
@@ -114,14 +120,20 @@ export class DemoClassroomGameService implements ClassroomGameService {
     const room: ClassroomRoom = {
       roomId,
       teacherSessionId,
-      status: 'waiting',
-      currentQuestionNumber: 1,
+      status: 'lobby',
+      gameCycle: 0,
+      completedGameCount: 0,
+      currentQuestionNumber: 0,
       questionDurationSec,
       questionStartedAt: null,
       questionDeadlineAt: null,
       lockedPlayerCount: 0,
       cityScore: 500,
       cityLevel: 'neutral',
+      integrityTotal: 0,
+      corruptionTotal: 0,
+      timeoutTotal: 0,
+      roleRotation: [],
       createdAt: now,
       updatedAt: now,
     }
@@ -133,11 +145,13 @@ export class DemoClassroomGameService implements ClassroomGameService {
   async joinRoom(input: ClassroomJoinInput, ownerUid: string): Promise<ClassroomPlayer> {
     const state = readState()
     const roomState = getRoomState(state, input.roomId.trim().toUpperCase())
-    if (roomState.room.status !== 'waiting') throw new Error('ผู้ใช้:เกมเริ่มแล้ว ไม่สามารถเข้าร่วมได้')
+    if (roomState.room.status !== 'lobby') throw new Error('ผู้ใช้:เกมเริ่มแล้ว ไม่สามารถเข้าร่วมได้')
     const nickname = input.nickname.trim()
     if (!nickname) throw new Error('ผู้ใช้:กรุณากรอกชื่อ')
     const nicknameKey = nickname.toLocaleLowerCase('th')
-    if (Object.values(roomState.players).some((player) => player.nicknameKey === nicknameKey)) {
+    const existing = Object.values(roomState.players).find((player) => player.nicknameKey === nicknameKey)
+    if (existing) {
+      if (existing.ownerUid === ownerUid) return clone(existing)
       throw new Error('ผู้ใช้:ชื่อนี้ถูกใช้แล้วในห้อง')
     }
     const now = Date.now()
@@ -147,6 +161,8 @@ export class DemoClassroomGameService implements ClassroomGameService {
       nicknameKey,
       ownerUid,
       roleId: null,
+      roleHistory: [],
+      roleOffset: null,
       joinedAt: now,
       lastSeenAt: now,
     }
@@ -156,103 +172,67 @@ export class DemoClassroomGameService implements ClassroomGameService {
     return clone(player)
   }
 
-  subscribeRoom(
-    roomId: string,
-    listener: (room: ClassroomRoom | null) => void,
-    onError: (message: string) => void,
-  ): () => void {
+  subscribeRoom(roomId: string, listener: (room: ClassroomRoom | null) => void, onError: (message: string) => void): () => void {
     void onError
     const emit = (): void => emitNow(readState().rooms[roomId.toUpperCase()]?.room ?? null, listener)
     emit()
     return listen(emit)
   }
 
-  subscribePlayers(
-    roomId: string,
-    listener: (players: ClassroomPlayer[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
+  subscribePlayers(roomId: string, listener: (players: ClassroomPlayer[]) => void, onError: (message: string) => void): () => void {
     void onError
-    const emit = (): void => {
-      const players = Object.values(readState().rooms[roomId.toUpperCase()]?.players ?? {}).sort(
-        (left, right) => left.joinedAt - right.joinedAt,
-      )
-      emitNow(players, listener)
-    }
+    const emit = (): void => emitNow(
+      Object.values(readState().rooms[roomId.toUpperCase()]?.players ?? {}).sort((left, right) => left.joinedAt - right.joinedAt),
+      listener,
+    )
     emit()
     return listen(emit)
   }
 
-  subscribePlayer(
-    roomId: string,
-    playerId: string,
-    listener: (player: ClassroomPlayer | null) => void,
-    onError: (message: string) => void,
-  ): () => void {
+  subscribePlayer(roomId: string, playerId: string, listener: (player: ClassroomPlayer | null) => void, onError: (message: string) => void): () => void {
     void onError
     const emit = (): void => emitNow(readState().rooms[roomId.toUpperCase()]?.players[playerId] ?? null, listener)
     emit()
     return listen(emit)
   }
 
-  subscribeQuestions(
-    roomId: string,
-    listener: (questions: PublicRoomQuestion[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
+  subscribeQuestions(roomId: string, listener: (questions: PublicRoomQuestion[]) => void, onError: (message: string) => void): () => void {
     void onError
-    const emit = (): void => {
-      const questions = Object.values(readState().rooms[roomId.toUpperCase()]?.questions ?? {}).sort(
+    const emit = (): void => emitNow(
+      Object.values(readState().rooms[roomId.toUpperCase()]?.questions ?? {}).sort(
         (left, right) => left.questionNumber - right.questionNumber || left.roleId.localeCompare(right.roleId),
-      )
-      emitNow(questions, listener)
-    }
+      ),
+      listener,
+    )
     emit()
     return listen(emit)
   }
 
-  subscribeAnswers(
-    roomId: string,
-    listener: (answers: ClassroomAnswerRecord[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
+  subscribeAnswers(roomId: string, listener: (answers: ClassroomAnswerRecord[]) => void, onError: (message: string) => void): () => void {
     void onError
     const emit = (): void => emitNow(Object.values(readState().rooms[roomId.toUpperCase()]?.answers ?? {}), listener)
     emit()
     return listen(emit)
   }
 
-  subscribePlayerAnswers(
-    roomId: string,
-    playerId: string,
-    _ownerUid: string,
-    listener: (answers: ClassroomAnswerRecord[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
+  subscribePlayerAnswers(roomId: string, playerId: string, _ownerUid: string, listener: (answers: ClassroomAnswerRecord[]) => void, onError: (message: string) => void): () => void {
     void onError
-    const emit = (): void =>
-      emitNow(
-        Object.values(readState().rooms[roomId.toUpperCase()]?.answers ?? {}).filter(
-          (answer) => answer.playerId === playerId,
-        ),
-        listener,
-      )
+    const emit = (): void => emitNow(
+      Object.values(readState().rooms[roomId.toUpperCase()]?.answers ?? {}).filter((answer) => answer.playerId === playerId),
+      listener,
+    )
     emit()
     return listen(emit)
   }
 
-  subscribeRounds(
-    roomId: string,
-    listener: (rounds: ClassroomRoundResult[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
+  subscribeRounds(roomId: string, listener: (rounds: ClassroomRoundResult[]) => void, onError: (message: string) => void): () => void {
     void onError
-    const emit = (): void => {
-      const rounds = Object.values(readState().rooms[roomId.toUpperCase()]?.rounds ?? {}).sort(
-        (left, right) => left.questionNumber - right.questionNumber,
-      )
-      emitNow(rounds, listener)
-    }
+    const emit = (): void => emitNow(
+      Object.values(readState().rooms[roomId.toUpperCase()]?.rounds ?? {}).sort(
+        (left, right) => left.gameCycle - right.gameCycle || left.questionNumber - right.questionNumber,
+      ),
+      listener,
+    )
     emit()
     return listen(emit)
   }
@@ -261,40 +241,49 @@ export class DemoClassroomGameService implements ClassroomGameService {
     const state = readState()
     const roomState = getRoomState(state, roomId)
     assertTeacher(roomState.room, teacherSessionId)
-    if (roomState.room.status !== 'waiting') throw new Error('ผู้ใช้:เกมเริ่มแล้ว')
+    if (roomState.room.status !== 'lobby') throw new Error('ผู้ใช้:เกมเริ่มแล้ว')
+    if (snapshot.roomId !== roomState.room.roomId) throw new Error('ผู้ใช้:snapshot ไม่ตรงกับห้อง')
     const players = Object.values(roomState.players)
     if (players.length === 0) throw new Error('ผู้ใช้:ยังไม่มีนักเรียนในห้อง')
-    if (snapshot.roomId !== roomState.room.roomId) throw new Error('ผู้ใช้:snapshot ไม่ตรงกับห้อง')
-
-    for (const player of assignBalancedRoles(players)) roomState.players[player.playerId] = player
+    const roleRotation = createRoleRotation()
+    const offsets = createBalancedRoleOffsets(players.map((player) => player.playerId))
+    for (const player of assignRolesForCycle(players, roleRotation, 0, offsets)) roomState.players[player.playerId] = player
     roomState.questions = Object.fromEntries(snapshot.publicQuestions.map((question) => [question.questionId, clone(question)]))
-    const now = Date.now()
     Object.assign(roomState.room, {
-      status: 'question',
-      currentQuestionNumber: 1,
-      questionStartedAt: now,
-      questionDeadlineAt: now + roomState.room.questionDurationSec * 1_000,
+      status: 'role-draw',
+      roleRotation,
+      currentQuestionNumber: 0,
+      questionStartedAt: null,
+      questionDeadlineAt: null,
       lockedPlayerCount: players.length,
-      cityScore: 500,
-      cityLevel: 'neutral',
-      updatedAt: now,
+      updatedAt: Date.now(),
     } satisfies Partial<ClassroomRoom>)
     writeState(state)
   }
 
-  async submitAnswer(
-    roomId: string,
-    playerId: string,
-    ownerUid: string,
-    questionNumber: number,
-    questionId: string,
-    choiceId: string,
-  ): Promise<void> {
+  async beginQuestions(roomId: string, teacherSessionId: string): Promise<ClassroomRoom> {
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    assertTeacher(roomState.room, teacherSessionId)
+    if (roomState.room.status !== 'role-draw') throw new Error('ผู้ใช้:ยังไม่อยู่ในหน้าสุ่มอาชีพ')
+    const now = Date.now()
+    Object.assign(roomState.room, {
+      status: 'playing',
+      currentQuestionNumber: 1,
+      questionStartedAt: now,
+      questionDeadlineAt: now + roomState.room.questionDurationSec * 1_000,
+      updatedAt: now,
+    } satisfies Partial<ClassroomRoom>)
+    writeState(state)
+    return clone(roomState.room)
+  }
+
+  async submitAnswer(roomId: string, playerId: string, ownerUid: string, questionNumber: number, questionId: string, choiceId: string): Promise<void> {
     const state = readState()
     const roomState = getRoomState(state, roomId)
     const player = roomState.players[playerId]
     if (!player || player.ownerUid !== ownerUid) throw new Error('ผู้ใช้:ไม่พบผู้เล่นของคุณ')
-    if (roomState.room.status !== 'question' || roomState.room.currentQuestionNumber !== questionNumber) {
+    if (roomState.room.status !== 'playing' || roomState.room.currentQuestionNumber !== questionNumber) {
       throw new Error('ผู้ใช้:คำถามข้อนี้ปิดแล้ว')
     }
     if (roomState.room.questionDeadlineAt !== null && Date.now() >= roomState.room.questionDeadlineAt) {
@@ -305,13 +294,14 @@ export class DemoClassroomGameService implements ClassroomGameService {
       throw new Error('ผู้ใช้:คำถามไม่ตรงกับอาชีพหรือข้อปัจจุบัน')
     }
     if (!question.choices.some((choice) => choice.id === choiceId)) throw new Error('ผู้ใช้:ไม่พบตัวเลือกนี้')
-    const answerId = createClassroomAnswerId(playerId, questionId)
+    const answerId = createClassroomAnswerId(roomState.room.gameCycle, playerId, questionId)
     if (roomState.answers[answerId]) return
     roomState.answers[answerId] = {
       answerId,
       roomId: roomState.room.roomId,
       playerId,
       ownerUid,
+      gameCycle: roomState.room.gameCycle,
       questionNumber: questionNumber as QuestionNumber,
       questionId,
       choiceId,
@@ -321,18 +311,16 @@ export class DemoClassroomGameService implements ClassroomGameService {
     writeState(state)
   }
 
-  async closeQuestion(
-    roomId: string,
-    teacherSessionId: string,
-    snapshot: RoomQuestionSnapshot,
-  ): Promise<ClassroomRoundResult> {
+  async closeQuestion(roomId: string, teacherSessionId: string, snapshot: RoomQuestionSnapshot): Promise<ClassroomRoundResult> {
     const state = readState()
     const roomState = getRoomState(state, roomId)
     assertTeacher(roomState.room, teacherSessionId)
     const questionNumber = roomState.room.currentQuestionNumber
-    const existing = roomState.rounds[String(questionNumber)]
+    if (questionNumber === 0) throw new Error('ผู้ใช้:ยังไม่ได้เริ่มคำถาม')
+    const roundId = createClassroomRoundId(roomState.room.gameCycle, questionNumber)
+    const existing = roomState.rounds[roundId]
     if (existing) return clone(existing)
-    if (roomState.room.status !== 'question') throw new Error('ผู้ใช้:คำถามไม่ได้เปิดอยู่')
+    if (roomState.room.status !== 'playing') throw new Error('ผู้ใช้:คำถามไม่ได้เปิดอยู่')
     if (snapshot.roomId !== roomState.room.roomId) throw new Error('ผู้ใช้:trusted snapshot ไม่ตรงกับห้อง')
     const lockedPlayers = Object.values(roomState.players).map((player) => {
       if (!player.roleId) throw new Error('ผู้ใช้:มีผู้เล่นที่ยังไม่ได้รับอาชีพ')
@@ -343,14 +331,17 @@ export class DemoClassroomGameService implements ClassroomGameService {
       questionNumber,
       lockedPlayers,
       snapshot.trustedQuestions,
-      Object.values(roomState.answers),
+      Object.values(roomState.answers).filter((answer) => answer.gameCycle === roomState.room.gameCycle),
     )
-    const round: ClassroomRoundResult = { ...result, finalizedAt: Date.now() }
-    roomState.rounds[String(questionNumber)] = round
+    const round: ClassroomRoundResult = { ...result, gameCycle: roomState.room.gameCycle, finalizedAt: Date.now() }
+    roomState.rounds[roundId] = round
     Object.assign(roomState.room, {
-      status: 'question-closed',
+      status: 'round-result',
       cityScore: result.newCityScore,
       cityLevel: result.cityLevel,
+      integrityTotal: roomState.room.integrityTotal + result.integrityCount,
+      corruptionTotal: roomState.room.corruptionTotal + result.corruptionCount,
+      timeoutTotal: roomState.room.timeoutTotal + result.timeoutCount,
       updatedAt: Date.now(),
     } satisfies Partial<ClassroomRoom>)
     writeState(state)
@@ -361,11 +352,11 @@ export class DemoClassroomGameService implements ClassroomGameService {
     const state = readState()
     const roomState = getRoomState(state, roomId)
     assertTeacher(roomState.room, teacherSessionId)
-    if (roomState.room.status !== 'question-closed') throw new Error('ผู้ใช้:กรุณาปิดคำถามปัจจุบันก่อน')
+    if (roomState.room.status !== 'round-result') throw new Error('ผู้ใช้:กรุณาปิดคำถามปัจจุบันก่อน')
     if (roomState.room.currentQuestionNumber >= 10) throw new Error('ผู้ใช้:ครบ 10 ข้อแล้ว กรุณาดูผลเมือง')
     const now = Date.now()
     roomState.room.currentQuestionNumber = (roomState.room.currentQuestionNumber + 1) as QuestionNumber
-    roomState.room.status = 'question'
+    roomState.room.status = 'playing'
     roomState.room.questionStartedAt = now
     roomState.room.questionDeadlineAt = now + roomState.room.questionDurationSec * 1_000
     roomState.room.updatedAt = now
@@ -377,9 +368,43 @@ export class DemoClassroomGameService implements ClassroomGameService {
     const state = readState()
     const roomState = getRoomState(state, roomId)
     assertTeacher(roomState.room, teacherSessionId)
-    if (roomState.room.currentQuestionNumber !== 10 || roomState.room.status !== 'question-closed') {
+    if (roomState.room.currentQuestionNumber !== 10 || roomState.room.status !== 'round-result') {
       throw new Error('ผู้ใช้:เกมยังไม่จบครบ 10 ข้อ')
     }
+    roomState.room.status = 'game-result'
+    roomState.room.completedGameCount = roomState.room.gameCycle + 1
+    roomState.room.updatedAt = Date.now()
+    writeState(state)
+  }
+
+  async continueCityProgress(roomId: string, teacherSessionId: string): Promise<ClassroomRoom> {
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    assertTeacher(roomState.room, teacherSessionId)
+    if (roomState.room.status !== 'game-result') throw new Error('ผู้ใช้:เกมชุดปัจจุบันยังไม่จบ')
+    if (roomState.room.gameCycle >= MAX_GAME_CYCLES - 1) throw new Error('ผู้ใช้:นักเรียนทดลองครบทั้ง 8 อาชีพแล้ว')
+    const nextCycle = roomState.room.gameCycle + 1
+    const players = Object.values(roomState.players)
+    for (const player of assignRolesForCycle(players, roomState.room.roleRotation, nextCycle)) {
+      roomState.players[player.playerId] = player
+    }
+    Object.assign(roomState.room, {
+      gameCycle: nextCycle,
+      status: 'role-draw',
+      currentQuestionNumber: 0,
+      questionStartedAt: null,
+      questionDeadlineAt: null,
+      updatedAt: Date.now(),
+    } satisfies Partial<ClassroomRoom>)
+    writeState(state)
+    return clone(roomState.room)
+  }
+
+  async endActivity(roomId: string, teacherSessionId: string): Promise<void> {
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    assertTeacher(roomState.room, teacherSessionId)
+    if (roomState.room.status !== 'game-result') throw new Error('ผู้ใช้:เกมชุดปัจจุบันยังไม่จบ')
     roomState.room.status = 'finished'
     roomState.room.updatedAt = Date.now()
     writeState(state)

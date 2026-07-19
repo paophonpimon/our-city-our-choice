@@ -33,7 +33,6 @@ export const CityStage = ({ room, remainingSeconds, answerCount, roundImpact, co
       setDisplayScore(to)
       return
     }
-
     const startedAt = performance.now()
     let frame = 0
     const animate = (now: number): void => {
@@ -47,26 +46,21 @@ export const CityStage = ({ room, remainingSeconds, answerCount, roundImpact, co
 
   return (
     <main className="city-stage" aria-label="ภาพรวมเมืองสำหรับจอครู">
-      <img
-        className="city-stage__image"
-        key={room.cityLevel}
-        src={getCityImagePath(room.cityLevel)}
-        alt={CITY_LEVEL_LABELS[room.cityLevel]}
-      />
+      <img className="city-stage__image" key={room.cityLevel} src={getCityImagePath(room.cityLevel)} alt={CITY_LEVEL_LABELS[room.cityLevel]} />
       <div className="city-stage__shade" aria-hidden="true" />
       <header className="city-stage__topbar">
         <div className="city-stage__identity">
           <p className="city-stage__eyebrow">เมืองนี้อยู่ที่เรา</p>
-          <h1>คำถามข้อที่ {room.currentQuestionNumber}/10</h1>
+          <h1>ชุดที่ {room.gameCycle + 1} • คำถามข้อที่ {room.currentQuestionNumber}/10</h1>
         </div>
         <div className="city-stage__metrics">
-          <div><span>เวลา</span><strong>{room.status === 'question' ? remainingSeconds : 0} วิ</strong></div>
+          <div><span>เวลา</span><strong>{room.status === 'playing' ? remainingSeconds : 0} วิ</strong></div>
           <div><span>ตอบแล้ว</span><strong>{answerCount} / {room.lockedPlayerCount}</strong></div>
           <div className="city-stage__score"><span>คะแนนเมือง</span><strong>{Math.round(displayScore).toLocaleString('th-TH')} / 1,000</strong></div>
           <div><span>ระดับเมือง</span><strong>{CITY_LEVEL_LABELS[room.cityLevel]}</strong></div>
         </div>
       </header>
-      {room.status === 'question-closed' && roundImpact !== null && roundImpact !== undefined ? (
+      {room.status === 'round-result' && roundImpact !== null && roundImpact !== undefined ? (
         <div className={`city-stage__round-impact ${roundImpact >= 0 ? 'is-positive' : 'is-negative'}`} aria-live="polite">
           ผลกระทบรอบนี้ <strong>{signed(roundImpact)}</strong>
         </div>

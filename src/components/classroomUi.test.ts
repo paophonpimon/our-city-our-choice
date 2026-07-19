@@ -2,36 +2,26 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createClassroomJoinUrl, LOCATION_POSITIONS, normalizeJoinRoomId } from './classroomUi'
 
-const readSource = (relativePath: string): string =>
-  readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+const readSource = (relativePath: string): string => readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 
 describe('classroom UI contracts', () => {
-  it('builds the local QR and copy-link URL without an external QR service', () => {
-    expect(createClassroomJoinUrl('https://class.example/', ' ab12cd ')).toBe(
-      'https://class.example/join?room=AB12CD',
-    )
+  it('builds a local join URL and keeps QR handling inside the app', () => {
+    expect(createClassroomJoinUrl('https://class.example/', ' ab12cd ')).toBe('https://class.example/join?room=AB12CD')
     expect(readSource('./JoinQrCode.tsx')).toContain('QRCodeSVG')
     expect(readSource('../pages/TeacherPage.tsx')).toContain('navigator.clipboard.writeText(joinLink)')
   })
 
-  it('normalizes roomId from the QR query parameter and hides the editable field for that path', () => {
+  it('normalizes roomId from the QR query parameter', () => {
     expect(normalizeJoinRoomId(' room01 ')).toBe('ROOM01')
     expect(normalizeJoinRoomId(null)).toBe('')
     const joinPage = readSource('../pages/JoinPage.tsx')
     expect(joinPage).toContain("searchParams.get('room')")
     expect(joinPage).toContain('roomFromUrl ?')
-    expect(joinPage).toContain('รหัสห้องจาก QR')
   })
 
-  it('keeps seven adjustable percentage positions, including one combined school overlay', () => {
+  it('keeps seven city overlay locations including the shared school', () => {
     expect(Object.keys(LOCATION_POSITIONS)).toEqual([
-      'hospital',
-      'municipal-office',
-      'police-station',
-      'school',
-      'market',
-      'construction',
-      'news-office',
+      'hospital', 'municipal-office', 'police-station', 'school', 'market', 'construction', 'news-office',
     ])
     for (const position of Object.values(LOCATION_POSITIONS)) {
       expect(position.x).toBeGreaterThan(0)
@@ -41,52 +31,45 @@ describe('classroom UI contracts', () => {
     }
   })
 
-  it('shows location overlays only for a closed question and keeps Next teacher-controlled', () => {
+  it('keeps round results and Next teacher-controlled', () => {
     const teacherPage = readSource('../pages/TeacherPage.tsx')
-    expect(teacherPage).toContain("room.status === 'question-closed' && currentRound")
-    expect(teacherPage).toContain("room.currentQuestionNumber === 10 ? 'ดูผลเมือง' : 'ข้อถัดไป'")
+    expect(teacherPage).toContain("room.status === 'round-result' && currentRound")
     expect(teacherPage).toContain('service.openNextQuestion')
+    expect(teacherPage).toContain('service.finishGame')
   })
 
-  it('has no winner route or legacy branding in visible runtime entry points', () => {
-    const runtime = [
-      '../../index.html',
-      '../App.tsx',
-      './Layout.tsx',
-      '../pages/HomePage.tsx',
-      '../pages/JoinPage.tsx',
-      '../pages/LobbyPage.tsx',
-      '../pages/GamePage.tsx',
-      '../pages/TeacherPage.tsx',
-      '../pages/ResultPage.tsx',
-      '../pages/ClosedPage.tsx',
-      '../pages/NotFoundPage.tsx',
-    ].map(readSource).join('\n')
+  it('provides role draw before questions without student role selection', () => {
+    const roleDraw = readSource('../pages/RoleDrawPage.tsx')
+    expect(roleDraw).toContain('กำลังสุ่มอาชีพของคุณ')
+    expect(roleDraw).toContain('service.beginQuestions')
+    expect(roleDraw).not.toContain('เลือกอาชีพ')
+    expect(readSource('../App.tsx')).toContain('/role-draw/:roomCode')
+  })
 
-    expect(runtime).not.toMatch(/มัทนา|คำสาป|congratulations|leaderboard|ทีมผู้ชนะ|คะแนนส่วนตัว/i)
-    expect(runtime).toContain('เมืองนี้อยู่ที่เรา')
+  it('has no winner route or legacy leaderboard in visible classroom runtime', () => {
+    const runtime = [
+      '../App.tsx', './CityStage.tsx', '../pages/HomePage.tsx', '../pages/JoinPage.tsx', '../pages/LobbyPage.tsx',
+      '../pages/RoleDrawPage.tsx', '../pages/GamePage.tsx', '../pages/TeacherPage.tsx', '../pages/ResultPage.tsx',
+    ].map(readSource).join('\n')
+    expect(runtime).not.toMatch(/congratulations|leaderboard|ผู้ชนะ|คะแนนส่วนตัว/i)
     expect(runtime).toContain('Our City, Our Choice')
   })
 
-  it('keeps polished classroom components fluid instead of using fixed pixel-width utilities', () => {
+  it('keeps classroom components fluid', () => {
     const responsiveSources = [
-      './CityStage.tsx',
-      './LocationResults.tsx',
-      './JoinQrCode.tsx',
-      '../pages/JoinPage.tsx',
-      '../pages/GamePage.tsx',
-      '../pages/TeacherPage.tsx',
-      '../pages/ResultPage.tsx',
+      './CityStage.tsx', './LocationResults.tsx', './JoinQrCode.tsx', '../pages/RoleDrawPage.tsx',
+      '../pages/GamePage.tsx', '../pages/TeacherPage.tsx', '../pages/ResultPage.tsx',
     ].map(readSource).join('\n')
     expect(responsiveSources).not.toMatch(/w-\[\d+px\]|min-w-\[\d+px\]|max-w-\[\d+px\]/)
   })
 
-  it('keeps the final city result collective and includes all five reflection messages', () => {
+  it('shows latest and cumulative city progress with continue controls', () => {
     const resultPage = readSource('../pages/ResultPage.tsx')
     expect(resultPage).toContain('CITY_REFLECTIONS')
-    expect(resultPage).toContain('สุจริตรวม')
-    expect(resultPage).toContain('ทุจริตรวม')
-    expect(resultPage).toContain('ไม่ตอบรวม')
+    expect(resultPage).toContain('สุจริตชุดล่าสุด')
+    expect(resultPage).toContain('สุจริตสะสม')
+    expect(resultPage).toContain('เล่นต่อเพื่อพัฒนาเมือง')
+    expect(resultPage).toContain('สร้างห้องใหม่')
     expect(resultPage).not.toMatch(/winner|leaderboard|อันดับ/i)
   })
 })

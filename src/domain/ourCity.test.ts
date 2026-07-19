@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_GAME_CYCLES,
   QUESTIONS_PER_PLAYER,
   ROLE_IDS,
   ROLES,
   assignBalancedRoles,
+  assignRolesForCycle,
   createAnswerKey,
+  createBalancedRoleOffsets,
+  createRoleRotation,
   formatQuestionProgressLabel,
+  getRoleForCycle,
+  isGameCycle,
   isPositiveInteger,
   isRoleId,
   validateRoomSettings,
@@ -90,5 +96,43 @@ describe('Our City room settings', () => {
       valid: false,
       errors: ['question-duration-must-be-positive-integer', 'questions-per-player-must-be-10'],
     })
+  })
+})
+
+describe('Our City role rotation', () => {
+  it('creates one stable rotation containing all eight roles', () => {
+    const rotation = createRoleRotation(() => 0)
+    expect(rotation).toHaveLength(8)
+    expect(new Set(rotation)).toEqual(new Set(ROLE_IDS))
+  })
+
+  it('assigns balanced offsets and therefore balanced roles in every cycle', () => {
+    const playerIds = Array.from({ length: 34 }, (_, index) => `player-${index + 1}`)
+    const offsets = createBalancedRoleOffsets(playerIds, () => 0)
+
+    for (let cycle = 0; cycle < MAX_GAME_CYCLES; cycle += 1) {
+      const counts = Object.fromEntries(ROLE_IDS.map((roleId) => [roleId, 0])) as Record<(typeof ROLE_IDS)[number], number>
+      for (const playerId of playerIds) counts[getRoleForCycle(ROLE_IDS, offsets[playerId], cycle)] += 1
+      expect(Math.max(...Object.values(counts)) - Math.min(...Object.values(counts))).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('gives every player all eight roles exactly once and persists history', () => {
+    const playerId = 'player-1'
+    let player = { playerId, roleId: null, roleHistory: [], roleOffset: 3 } as const
+
+    for (let cycle = 0; cycle < MAX_GAME_CYCLES; cycle += 1) {
+      player = assignRolesForCycle([player], ROLE_IDS, cycle)[0]
+    }
+
+    expect(player.roleHistory).toHaveLength(8)
+    expect(new Set(player.roleHistory)).toEqual(new Set(ROLE_IDS))
+  })
+
+  it('accepts only cycle indexes zero through seven', () => {
+    expect(isGameCycle(0)).toBe(true)
+    expect(isGameCycle(7)).toBe(true)
+    expect(isGameCycle(8)).toBe(false)
+    expect(isGameCycle(-1)).toBe(false)
   })
 })

@@ -19,7 +19,15 @@ import {
 } from 'firebase/firestore'
 import { scoreClassroomRound } from '../domain/cityScoring'
 import type { RoomQuestionSnapshot } from '../domain/classroomQuestions'
-import { assignBalancedRoles, isRoleId, type QuestionNumber } from '../domain/ourCity'
+import {
+  assignRolesForCycle,
+  createBalancedRoleOffsets,
+  createRoleRotation,
+  isRoleId,
+  MAX_GAME_CYCLES,
+  type QuestionNumber,
+  type RoleId,
+} from '../domain/ourCity'
 import type {
   ClassroomAnswerRecord,
   ClassroomJoinInput,
@@ -44,10 +52,7 @@ const EXPECTED_FIREBASE_PROJECT_ID = 'our-city-our-choice'
 const missingFirebaseConfig = Object.entries(firebaseConfig)
   .filter(([, value]) => typeof value !== 'string' || value.length === 0)
   .map(([key]) => key)
-
-if (missingFirebaseConfig.length > 0) {
-  throw new Error(`ผู้ใช้:Firebase config ไม่ครบ: ${missingFirebaseConfig.join(', ')}`)
-}
+if (missingFirebaseConfig.length > 0) throw new Error(`ผู้ใช้:Firebase config ไม่ครบ: ${missingFirebaseConfig.join(', ')}`)
 if (firebaseConfig.projectId !== EXPECTED_FIREBASE_PROJECT_ID) {
   throw new Error(`ผู้ใช้:Firebase Project ID ต้องเป็น ${EXPECTED_FIREBASE_PROJECT_ID} เท่านั้น`)
 }
@@ -59,23 +64,29 @@ const db = getFirestore(app)
 const toMillis = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (value instanceof Timestamp) return value.toMillis()
-  if (value && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
-    return (value as { toMillis(): number }).toMillis()
-  }
+  if (value && typeof (value as { toMillis?: unknown }).toMillis === 'function') return (value as { toMillis(): number }).toMillis()
   return null
 }
+
+const roleList = (value: unknown): RoleId[] => Array.isArray(value) ? value.filter(isRoleId) : []
 
 const mapRoom = (data: DocumentData): ClassroomRoom => ({
   roomId: String(data.roomId ?? ''),
   teacherSessionId: String(data.teacherSessionId ?? ''),
   status: data.status as ClassroomRoom['status'],
-  currentQuestionNumber: Number(data.currentQuestionNumber ?? 1) as QuestionNumber,
+  gameCycle: Number(data.gameCycle ?? 0),
+  completedGameCount: Number(data.completedGameCount ?? 0),
+  currentQuestionNumber: Number(data.currentQuestionNumber ?? 0) as ClassroomRoom['currentQuestionNumber'],
   questionDurationSec: Number(data.questionDurationSec ?? 30),
   questionStartedAt: toMillis(data.questionStartedAt),
   questionDeadlineAt: toMillis(data.questionDeadlineAt),
   lockedPlayerCount: Number(data.lockedPlayerCount ?? 0),
   cityScore: Number(data.cityScore ?? 500),
   cityLevel: data.cityLevel as ClassroomRoom['cityLevel'],
+  integrityTotal: Number(data.integrityTotal ?? 0),
+  corruptionTotal: Number(data.corruptionTotal ?? 0),
+  timeoutTotal: Number(data.timeoutTotal ?? 0),
+  roleRotation: roleList(data.roleRotation),
   createdAt: toMillis(data.createdAt) ?? Date.now(),
   updatedAt: toMillis(data.updatedAt) ?? Date.now(),
 })
@@ -88,6 +99,8 @@ const mapPlayer = (snapshot: QueryDocumentSnapshot<DocumentData> | { id: string;
     nicknameKey: String(data.nicknameKey ?? ''),
     ownerUid: String(data.ownerUid ?? ''),
     roleId: isRoleId(data.roleId) ? data.roleId : null,
+    roleHistory: roleList(data.roleHistory),
+    roleOffset: Number.isInteger(data.roleOffset) ? Number(data.roleOffset) : null,
     joinedAt: toMillis(data.joinedAt) ?? Date.now(),
     lastSeenAt: toMillis(data.lastSeenAt) ?? Date.now(),
   }
@@ -112,6 +125,7 @@ const mapAnswer = (snapshot: QueryDocumentSnapshot<DocumentData>): ClassroomAnsw
     roomId: String(data.roomId),
     playerId: String(data.playerId),
     ownerUid: String(data.ownerUid),
+    gameCycle: Number(data.gameCycle ?? 0),
     questionNumber: Number(data.questionNumber) as QuestionNumber,
     questionId: String(data.questionId),
     choiceId: String(data.choiceId),
@@ -120,6 +134,7 @@ const mapAnswer = (snapshot: QueryDocumentSnapshot<DocumentData>): ClassroomAnsw
 }
 
 const mapRound = (data: DocumentData): ClassroomRoundResult => ({
+  gameCycle: Number(data.gameCycle ?? 0),
   questionNumber: Number(data.questionNumber) as QuestionNumber,
   integrityCount: Number(data.integrityCount ?? 0),
   corruptionCount: Number(data.corruptionCount ?? 0),
@@ -143,17 +158,14 @@ const fnvHash = (value: string): string => {
 }
 
 const randomRoomId = (): string => Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, 'X')
-
 const requireRoom = async (roomId: string): Promise<ClassroomRoom> => {
   const snapshot = await getDoc(doc(db, classroomPaths.room(roomId)))
   if (!snapshot.exists()) throw new Error('ผู้ใช้:ไม่พบห้องนี้')
   return mapRoom(snapshot.data())
 }
-
-const assertTeacher = (room: ClassroomRoom, teacherSessionId: string): void => {
-  if (room.teacherSessionId !== teacherSessionId) throw new Error('ผู้ใช้:ไม่มีสิทธิ์ควบคุมห้องนี้')
+const assertTeacher = (room: ClassroomRoom, uid: string): void => {
+  if (room.teacherSessionId !== uid) throw new Error('ผู้ใช้:ไม่มีสิทธิ์ควบคุมห้องนี้')
 }
-
 const onErrorMessage = (listener: (message: string) => void) => (error: Error): void => listener(classroomFriendlyError(error))
 
 export class FirebaseClassroomGameService implements ClassroomGameService {
@@ -163,73 +175,55 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     if (auth.currentUser) return auth.currentUser.uid
     return new Promise((resolve, reject) => {
       let signingIn = false
-      const unsubscribe = onAuthStateChanged(
-        auth,
-        (user) => {
-          if (user) {
-            unsubscribe()
-            resolve(user.uid)
-          } else if (!signingIn) {
-            signingIn = true
-            signInAnonymously(auth).catch((error: unknown) => {
-              unsubscribe()
-              reject(error)
-            })
-          }
-        },
-        reject,
-      )
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          unsubscribe()
+          resolve(user.uid)
+        } else if (!signingIn) {
+          signingIn = true
+          signInAnonymously(auth).catch((error: unknown) => { unsubscribe(); reject(error) })
+        }
+      }, reject)
     })
   }
 
   async createRoom(teacherSessionId: string, questionDurationSec: number): Promise<ClassroomRoom> {
-    if (!Number.isInteger(questionDurationSec) || questionDurationSec <= 0) {
-      throw new Error('ผู้ใช้:เวลาต่อคำถามต้องเป็นจำนวนเต็มบวก')
-    }
+    if (!Number.isInteger(questionDurationSec) || questionDurationSec <= 0) throw new Error('ผู้ใช้:เวลาต่อคำถามต้องเป็นจำนวนเต็มบวก')
     let roomId = ''
     for (let attempt = 0; attempt < 12; attempt += 1) {
       const candidate = randomRoomId()
-      if (!(await getDoc(doc(db, classroomPaths.room(candidate)))).exists()) {
-        roomId = candidate
-        break
-      }
+      if (!(await getDoc(doc(db, classroomPaths.room(candidate)))).exists()) { roomId = candidate; break }
     }
     if (!roomId) throw new Error('ผู้ใช้:สร้างรหัสห้องไม่ได้ กรุณาลองใหม่')
     const now = Date.now()
-    await setDoc(doc(db, classroomPaths.room(roomId)), {
+    const room: ClassroomRoom = {
       roomId,
       teacherSessionId,
-      status: 'waiting',
-      currentQuestionNumber: 1,
+      status: 'lobby',
+      gameCycle: 0,
+      completedGameCount: 0,
+      currentQuestionNumber: 0,
       questionDurationSec,
       questionStartedAt: null,
       questionDeadlineAt: null,
       lockedPlayerCount: 0,
       cityScore: 500,
       cityLevel: 'neutral',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
-    return {
-      roomId,
-      teacherSessionId,
-      status: 'waiting',
-      currentQuestionNumber: 1,
-      questionDurationSec,
-      questionStartedAt: null,
-      questionDeadlineAt: null,
-      lockedPlayerCount: 0,
-      cityScore: 500,
-      cityLevel: 'neutral',
+      integrityTotal: 0,
+      corruptionTotal: 0,
+      timeoutTotal: 0,
+      roleRotation: [],
       createdAt: now,
       updatedAt: now,
     }
+    await setDoc(doc(db, classroomPaths.room(roomId)), { ...room, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+    return room
   }
 
   async joinRoom(input: ClassroomJoinInput, ownerUid: string): Promise<ClassroomPlayer> {
     const roomId = input.roomId.trim().toUpperCase()
     const room = await requireRoom(roomId)
-    if (room.status !== 'waiting') throw new Error('ผู้ใช้:เกมเริ่มแล้ว ไม่สามารถเข้าร่วมได้')
+    if (room.status !== 'lobby') throw new Error('ผู้ใช้:เกมเริ่มแล้ว ไม่สามารถเข้าร่วมได้')
     const nickname = input.nickname.trim()
     if (!nickname) throw new Error('ผู้ใช้:กรุณากรอกชื่อ')
     const nicknameKey = nickname.toLocaleLowerCase('th')
@@ -242,158 +236,72 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       throw new Error('ผู้ใช้:ชื่อนี้ถูกใช้แล้วในห้อง')
     }
     const now = Date.now()
-    await setDoc(playerRef, {
-      playerId,
-      nickname,
-      nicknameKey,
-      ownerUid,
-      roleId: null,
-      joinedAt: serverTimestamp(),
-      lastSeenAt: serverTimestamp(),
-    })
-    return { playerId, nickname, nicknameKey, ownerUid, roleId: null, joinedAt: now, lastSeenAt: now }
+    const player: ClassroomPlayer = { playerId, nickname, nicknameKey, ownerUid, roleId: null, roleHistory: [], roleOffset: null, joinedAt: now, lastSeenAt: now }
+    await setDoc(playerRef, { ...player, joinedAt: serverTimestamp(), lastSeenAt: serverTimestamp() })
+    return player
   }
 
   subscribeRoom(roomId: string, listener: (room: ClassroomRoom | null) => void, onError: (message: string) => void): () => void {
-    return onSnapshot(
-      doc(db, classroomPaths.room(roomId)),
-      (snapshot) => listener(snapshot.exists() ? mapRoom(snapshot.data()) : null),
-      onErrorMessage(onError),
-    )
+    return onSnapshot(doc(db, classroomPaths.room(roomId)), (snapshot) => listener(snapshot.exists() ? mapRoom(snapshot.data()) : null), onErrorMessage(onError))
   }
-
-  subscribePlayers(
-    roomId: string,
-    listener: (players: ClassroomPlayer[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
-    return onSnapshot(
-      collection(db, `${classroomPaths.room(roomId)}/players`),
-      (snapshot) => listener(snapshot.docs.map(mapPlayer).sort((left, right) => left.joinedAt - right.joinedAt)),
-      onErrorMessage(onError),
-    )
+  subscribePlayers(roomId: string, listener: (players: ClassroomPlayer[]) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(collection(db, `${classroomPaths.room(roomId)}/players`), (snapshot) => listener(snapshot.docs.map(mapPlayer).sort((a, b) => a.joinedAt - b.joinedAt)), onErrorMessage(onError))
   }
-
-  subscribePlayer(
-    roomId: string,
-    playerId: string,
-    listener: (player: ClassroomPlayer | null) => void,
-    onError: (message: string) => void,
-  ): () => void {
-    return onSnapshot(
-      doc(db, classroomPaths.player(roomId, playerId)),
-      (snapshot) => listener(snapshot.exists() ? mapPlayer({ id: snapshot.id, data: () => snapshot.data() }) : null),
-      onErrorMessage(onError),
-    )
+  subscribePlayer(roomId: string, playerId: string, listener: (player: ClassroomPlayer | null) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(doc(db, classroomPaths.player(roomId, playerId)), (snapshot) => listener(snapshot.exists() ? mapPlayer({ id: snapshot.id, data: () => snapshot.data() }) : null), onErrorMessage(onError))
   }
-
-  subscribeQuestions(
-    roomId: string,
-    listener: (questions: PublicRoomQuestion[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
-    return onSnapshot(
-      collection(db, `${classroomPaths.room(roomId)}/questions`),
-      (snapshot) =>
-        listener(
-          snapshot.docs
-            .map((document) => mapQuestion(document.data()))
-            .sort((left, right) => left.questionNumber - right.questionNumber || left.roleId.localeCompare(right.roleId)),
-        ),
-      onErrorMessage(onError),
-    )
+  subscribeQuestions(roomId: string, listener: (questions: PublicRoomQuestion[]) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(collection(db, `${classroomPaths.room(roomId)}/questions`), (snapshot) => listener(snapshot.docs.map((item) => mapQuestion(item.data())).sort((a, b) => a.questionNumber - b.questionNumber || a.roleId.localeCompare(b.roleId))), onErrorMessage(onError))
   }
-
-  subscribeAnswers(
-    roomId: string,
-    listener: (answers: ClassroomAnswerRecord[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
-    return onSnapshot(
-      collection(db, `${classroomPaths.room(roomId)}/answers`),
-      (snapshot) => listener(snapshot.docs.map(mapAnswer)),
-      onErrorMessage(onError),
-    )
+  subscribeAnswers(roomId: string, listener: (answers: ClassroomAnswerRecord[]) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(collection(db, `${classroomPaths.room(roomId)}/answers`), (snapshot) => listener(snapshot.docs.map(mapAnswer)), onErrorMessage(onError))
   }
-
-  subscribePlayerAnswers(
-    roomId: string,
-    _playerId: string,
-    ownerUid: string,
-    listener: (answers: ClassroomAnswerRecord[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
-    return onSnapshot(
-      query(collection(db, `${classroomPaths.room(roomId)}/answers`), where('ownerUid', '==', ownerUid)),
-      (snapshot) => listener(snapshot.docs.map(mapAnswer)),
-      onErrorMessage(onError),
-    )
+  subscribePlayerAnswers(roomId: string, _playerId: string, ownerUid: string, listener: (answers: ClassroomAnswerRecord[]) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(query(collection(db, `${classroomPaths.room(roomId)}/answers`), where('ownerUid', '==', ownerUid)), (snapshot) => listener(snapshot.docs.map(mapAnswer)), onErrorMessage(onError))
   }
-
-  subscribeRounds(
-    roomId: string,
-    listener: (rounds: ClassroomRoundResult[]) => void,
-    onError: (message: string) => void,
-  ): () => void {
-    return onSnapshot(
-      collection(db, `${classroomPaths.room(roomId)}/rounds`),
-      (snapshot) =>
-        listener(
-          snapshot.docs.map((document) => mapRound(document.data())).sort((left, right) => left.questionNumber - right.questionNumber),
-        ),
-      onErrorMessage(onError),
-    )
+  subscribeRounds(roomId: string, listener: (rounds: ClassroomRoundResult[]) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(collection(db, `${classroomPaths.room(roomId)}/rounds`), (snapshot) => listener(snapshot.docs.map((item) => mapRound(item.data())).sort((a, b) => a.gameCycle - b.gameCycle || a.questionNumber - b.questionNumber)), onErrorMessage(onError))
   }
 
   async startGame(roomId: string, teacherSessionId: string, snapshot: RoomQuestionSnapshot): Promise<void> {
     const room = await requireRoom(roomId)
     assertTeacher(room, teacherSessionId)
-    if (room.status !== 'waiting') throw new Error('ผู้ใช้:เกมเริ่มแล้ว')
+    if (room.status !== 'lobby') throw new Error('ผู้ใช้:เกมเริ่มแล้ว')
     if (snapshot.roomId !== roomId) throw new Error('ผู้ใช้:snapshot ไม่ตรงกับห้อง')
-    const playersSnapshot = await getDocs(collection(db, `${classroomPaths.room(roomId)}/players`))
-    const players = playersSnapshot.docs.map(mapPlayer)
+    const playerSnapshot = await getDocs(collection(db, `${classroomPaths.room(roomId)}/players`))
+    const players = playerSnapshot.docs.map(mapPlayer)
     if (players.length === 0) throw new Error('ผู้ใช้:ยังไม่มีนักเรียนในห้อง')
-    const assigned = assignBalancedRoles(players)
-    const now = Date.now()
+    const roleRotation = createRoleRotation()
+    const offsets = createBalancedRoleOffsets(players.map((player) => player.playerId))
+    const assigned = assignRolesForCycle(players, roleRotation, 0, offsets)
     const batch = writeBatch(db)
-    for (const player of assigned) batch.update(doc(db, classroomPaths.player(roomId, player.playerId)), { roleId: player.roleId })
-    for (const question of snapshot.publicQuestions) {
-      batch.set(doc(db, classroomPaths.question(roomId, question.questionId)), toPublicQuestionDocument(question))
-    }
+    for (const player of assigned) batch.update(doc(db, classroomPaths.player(roomId, player.playerId)), { roleId: player.roleId, roleHistory: player.roleHistory, roleOffset: player.roleOffset })
+    for (const question of snapshot.publicQuestions) batch.set(doc(db, classroomPaths.question(roomId, question.questionId)), toPublicQuestionDocument(question))
     batch.update(doc(db, classroomPaths.room(roomId)), {
-      status: 'question',
-      currentQuestionNumber: 1,
-      questionStartedAt: Timestamp.fromMillis(now),
-      questionDeadlineAt: Timestamp.fromMillis(now + room.questionDurationSec * 1_000),
-      lockedPlayerCount: players.length,
-      cityScore: 500,
-      cityLevel: 'neutral',
-      updatedAt: serverTimestamp(),
+      status: 'role-draw', roleRotation, currentQuestionNumber: 0, questionStartedAt: null, questionDeadlineAt: null,
+      lockedPlayerCount: players.length, updatedAt: serverTimestamp(),
     })
     await batch.commit()
   }
 
-  async submitAnswer(
-    roomId: string,
-    playerId: string,
-    ownerUid: string,
-    questionNumber: number,
-    questionId: string,
-    choiceId: string,
-  ): Promise<void> {
-    const answerId = createClassroomAnswerId(playerId, questionId)
+  async beginQuestions(roomId: string, teacherSessionId: string): Promise<ClassroomRoom> {
+    const room = await requireRoom(roomId)
+    assertTeacher(room, teacherSessionId)
+    if (room.status !== 'role-draw') throw new Error('ผู้ใช้:ยังไม่อยู่ในหน้าสุ่มอาชีพ')
+    const now = Date.now()
+    await updateDoc(doc(db, classroomPaths.room(roomId)), {
+      status: 'playing', currentQuestionNumber: 1, questionStartedAt: Timestamp.fromMillis(now),
+      questionDeadlineAt: Timestamp.fromMillis(now + room.questionDurationSec * 1_000), updatedAt: serverTimestamp(),
+    })
+    return { ...room, status: 'playing', currentQuestionNumber: 1, questionStartedAt: now, questionDeadlineAt: now + room.questionDurationSec * 1_000, updatedAt: now }
+  }
+
+  async submitAnswer(roomId: string, playerId: string, ownerUid: string, questionNumber: number, questionId: string, choiceId: string): Promise<void> {
+    const room = await requireRoom(roomId)
+    const answerId = createClassroomAnswerId(room.gameCycle, playerId, questionId)
     const answerRef = doc(db, classroomPaths.answer(roomId, answerId))
     try {
-      await setDoc(answerRef, {
-        answerId,
-        roomId,
-        playerId,
-        ownerUid,
-        questionNumber,
-        questionId,
-        choiceId,
-        submittedAt: serverTimestamp(),
-      })
+      await setDoc(answerRef, { answerId, roomId, playerId, ownerUid, gameCycle: room.gameCycle, questionNumber, questionId, choiceId, submittedAt: serverTimestamp() })
     } catch (error) {
       const existing = await getDoc(answerRef).catch(() => null)
       if (existing?.exists() && existing.data().ownerUid === ownerUid) return
@@ -401,76 +309,83 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     }
   }
 
-  async closeQuestion(
-    roomId: string,
-    teacherSessionId: string,
-    snapshot: RoomQuestionSnapshot,
-  ): Promise<ClassroomRoundResult> {
+  async closeQuestion(roomId: string, teacherSessionId: string, snapshot: RoomQuestionSnapshot): Promise<ClassroomRoundResult> {
     const room = await requireRoom(roomId)
     assertTeacher(room, teacherSessionId)
-    const roundRef = doc(db, classroomPaths.round(roomId, room.currentQuestionNumber))
+    if (room.currentQuestionNumber === 0) throw new Error('ผู้ใช้:ยังไม่ได้เริ่มคำถาม')
+    const roundRef = doc(db, classroomPaths.round(roomId, room.gameCycle, room.currentQuestionNumber))
     const existing = await getDoc(roundRef)
     if (existing.exists()) return mapRound(existing.data())
-    if (room.status !== 'question') throw new Error('ผู้ใช้:คำถามไม่ได้เปิดอยู่')
+    if (room.status !== 'playing') throw new Error('ผู้ใช้:คำถามไม่ได้เปิดอยู่')
     if (snapshot.roomId !== roomId) throw new Error('ผู้ใช้:trusted snapshot ไม่ตรงกับห้อง')
-    const [playersSnapshot, answersSnapshot] = await Promise.all([
+    const [playerSnapshot, answerSnapshot] = await Promise.all([
       getDocs(collection(db, `${classroomPaths.room(roomId)}/players`)),
       getDocs(collection(db, `${classroomPaths.room(roomId)}/answers`)),
     ])
-    const lockedPlayers = playersSnapshot.docs.map(mapPlayer).map((player) => {
+    const lockedPlayers = playerSnapshot.docs.map(mapPlayer).map((player) => {
       if (!player.roleId) throw new Error('ผู้ใช้:มีผู้เล่นที่ยังไม่ได้รับอาชีพ')
       return { playerId: player.playerId, roleId: player.roleId }
     })
-    const result = scoreClassroomRound(
-      room.cityScore,
-      room.currentQuestionNumber,
-      lockedPlayers,
-      snapshot.trustedQuestions,
-      answersSnapshot.docs.map(mapAnswer),
-    )
+    const answers = answerSnapshot.docs.map(mapAnswer).filter((answer) => answer.gameCycle === room.gameCycle)
+    const result = scoreClassroomRound(room.cityScore, room.currentQuestionNumber, lockedPlayers, snapshot.trustedQuestions, answers)
     const finalizedAt = Date.now()
     const batch = writeBatch(db)
-    batch.set(roundRef, { ...result, finalizedAt: serverTimestamp() })
+    batch.set(roundRef, { ...result, gameCycle: room.gameCycle, finalizedAt: serverTimestamp() })
     batch.update(doc(db, classroomPaths.room(roomId)), {
-      status: 'question-closed',
-      cityScore: result.newCityScore,
-      cityLevel: result.cityLevel,
+      status: 'round-result', cityScore: result.newCityScore, cityLevel: result.cityLevel,
+      integrityTotal: room.integrityTotal + result.integrityCount,
+      corruptionTotal: room.corruptionTotal + result.corruptionCount,
+      timeoutTotal: room.timeoutTotal + result.timeoutCount,
       updatedAt: serverTimestamp(),
     })
     await batch.commit()
-    return { ...result, finalizedAt }
+    return { ...result, gameCycle: room.gameCycle, finalizedAt }
   }
 
   async openNextQuestion(roomId: string, teacherSessionId: string): Promise<ClassroomRoom> {
     const room = await requireRoom(roomId)
     assertTeacher(room, teacherSessionId)
-    if (room.status !== 'question-closed') throw new Error('ผู้ใช้:กรุณาปิดคำถามปัจจุบันก่อน')
-    if (room.currentQuestionNumber >= 10) throw new Error('ผู้ใช้:ครบ 10 ข้อแล้ว กรุณาดูผลเมือง')
+    if (room.status !== 'round-result') throw new Error('ผู้ใช้:กรุณาปิดคำถามปัจจุบันก่อน')
+    if (room.currentQuestionNumber === 0 || room.currentQuestionNumber >= 10) throw new Error('ผู้ใช้:ครบ 10 ข้อแล้ว กรุณาดูผลเมือง')
     const now = Date.now()
     const nextQuestionNumber = (room.currentQuestionNumber + 1) as QuestionNumber
     await updateDoc(doc(db, classroomPaths.room(roomId)), {
-      status: 'question',
-      currentQuestionNumber: nextQuestionNumber,
-      questionStartedAt: Timestamp.fromMillis(now),
-      questionDeadlineAt: Timestamp.fromMillis(now + room.questionDurationSec * 1_000),
-      updatedAt: serverTimestamp(),
+      status: 'playing', currentQuestionNumber: nextQuestionNumber, questionStartedAt: Timestamp.fromMillis(now),
+      questionDeadlineAt: Timestamp.fromMillis(now + room.questionDurationSec * 1_000), updatedAt: serverTimestamp(),
     })
-    return {
-      ...room,
-      status: 'question',
-      currentQuestionNumber: nextQuestionNumber,
-      questionStartedAt: now,
-      questionDeadlineAt: now + room.questionDurationSec * 1_000,
-      updatedAt: now,
-    }
+    return { ...room, status: 'playing', currentQuestionNumber: nextQuestionNumber, questionStartedAt: now, questionDeadlineAt: now + room.questionDurationSec * 1_000, updatedAt: now }
   }
 
   async finishGame(roomId: string, teacherSessionId: string): Promise<void> {
     const room = await requireRoom(roomId)
     assertTeacher(room, teacherSessionId)
-    if (room.currentQuestionNumber !== 10 || room.status !== 'question-closed') {
-      throw new Error('ผู้ใช้:เกมยังไม่จบครบ 10 ข้อ')
-    }
+    if (room.currentQuestionNumber !== 10 || room.status !== 'round-result') throw new Error('ผู้ใช้:เกมยังไม่จบครบ 10 ข้อ')
+    await updateDoc(doc(db, classroomPaths.room(roomId)), { status: 'game-result', completedGameCount: room.gameCycle + 1, updatedAt: serverTimestamp() })
+  }
+
+  async continueCityProgress(roomId: string, teacherSessionId: string): Promise<ClassroomRoom> {
+    const room = await requireRoom(roomId)
+    assertTeacher(room, teacherSessionId)
+    if (room.status !== 'game-result') throw new Error('ผู้ใช้:เกมชุดปัจจุบันยังไม่จบ')
+    if (room.gameCycle >= MAX_GAME_CYCLES - 1) throw new Error('ผู้ใช้:นักเรียนทดลองครบทั้ง 8 อาชีพแล้ว')
+    const playerSnapshot = await getDocs(collection(db, `${classroomPaths.room(roomId)}/players`))
+    const players = playerSnapshot.docs.map(mapPlayer)
+    const nextCycle = room.gameCycle + 1
+    const assigned = assignRolesForCycle(players, room.roleRotation, nextCycle)
+    const batch = writeBatch(db)
+    for (const player of assigned) batch.update(doc(db, classroomPaths.player(roomId, player.playerId)), { roleId: player.roleId, roleHistory: player.roleHistory })
+    batch.update(doc(db, classroomPaths.room(roomId)), {
+      gameCycle: nextCycle, status: 'role-draw', currentQuestionNumber: 0,
+      questionStartedAt: null, questionDeadlineAt: null, updatedAt: serverTimestamp(),
+    })
+    await batch.commit()
+    return { ...room, gameCycle: nextCycle, status: 'role-draw', currentQuestionNumber: 0, questionStartedAt: null, questionDeadlineAt: null, updatedAt: Date.now() }
+  }
+
+  async endActivity(roomId: string, teacherSessionId: string): Promise<void> {
+    const room = await requireRoom(roomId)
+    assertTeacher(room, teacherSessionId)
+    if (room.status !== 'game-result') throw new Error('ผู้ใช้:เกมชุดปัจจุบันยังไม่จบ')
     await updateDoc(doc(db, classroomPaths.room(roomId)), { status: 'finished', updatedAt: serverTimestamp() })
   }
 }

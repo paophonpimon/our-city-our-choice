@@ -9,10 +9,11 @@ export const LobbyPage = () => {
   const playerState = usePlayer(roomId, session?.roomId === roomId ? session.playerId : '')
 
   if (!session || session.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
-  if (roomState.data?.status === 'question' || roomState.data?.status === 'question-closed') {
+  if (roomState.data?.status === 'role-draw') return <Navigate replace to={`/role-draw/${roomId}`} />
+  if (roomState.data?.status === 'playing' || roomState.data?.status === 'round-result') {
     return <Navigate replace to={`/game/${roomId}`} />
   }
-  if (roomState.data?.status === 'finished') return <Navigate replace to={`/result/${roomId}`} />
+  if (roomState.data?.status === 'game-result' || roomState.data?.status === 'finished') return <Navigate replace to={`/result/${roomId}`} />
 
   return (
     <main className="our-city-page grid min-h-dvh place-items-center px-5 py-10 text-center">

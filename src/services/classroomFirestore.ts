@@ -17,6 +17,7 @@ export interface ClassroomAnswer {
   roomId: string
   playerId: string
   ownerUid: string
+  gameCycle: number
   questionNumber: QuestionNumber
   questionId: string
   choiceId: string
@@ -40,14 +41,21 @@ export const classroomPaths = {
   player: (roomId: string, playerId: string) => `rooms/${roomId}/players/${playerId}`,
   question: (roomId: string, questionId: string) => `rooms/${roomId}/questions/${questionId}`,
   answer: (roomId: string, answerId: string) => `rooms/${roomId}/answers/${answerId}`,
-  round: (roomId: string, questionNumber: number) => `rooms/${roomId}/rounds/${questionNumber}`,
+  round: (roomId: string, gameCycle: number, questionNumber: number) => `rooms/${roomId}/rounds/${gameCycle}::${questionNumber}`,
 } as const
 
-export const createClassroomAnswerId = (playerId: string, questionId: string): string => {
-  if (!playerId.trim() || !questionId.trim() || playerId.includes('/') || questionId.includes('/')) {
-    throw new Error('playerId and questionId must be non-empty Firestore-safe IDs')
+export const createClassroomAnswerId = (gameCycle: number, playerId: string, questionId: string): string => {
+  if (!Number.isInteger(gameCycle) || gameCycle < 0 || !playerId.trim() || !questionId.trim() || playerId.includes('/') || questionId.includes('/')) {
+    throw new Error('gameCycle and Firestore-safe playerId/questionId are required')
   }
-  return `${playerId}::${questionId}`
+  return `${gameCycle}::${playerId}::${questionId}`
+}
+
+export const createClassroomRoundId = (gameCycle: number, questionNumber: number): string => {
+  if (!Number.isInteger(gameCycle) || gameCycle < 0 || !Number.isInteger(questionNumber) || questionNumber < 1 || questionNumber > 10) {
+    throw new Error('gameCycle and questionNumber must be valid')
+  }
+  return `${gameCycle}::${questionNumber}`
 }
 
 export const toPublicQuestionDocument = (question: PublicRoomQuestion): PublicRoomQuestion => ({
@@ -76,7 +84,7 @@ export const submitClassroomAnswer = async (
   db: Firestore,
   input: Omit<ClassroomAnswer, 'answerId' | 'submittedAt'>,
 ): Promise<string> => {
-  const answerId = createClassroomAnswerId(input.playerId, input.questionId)
+  const answerId = createClassroomAnswerId(input.gameCycle, input.playerId, input.questionId)
   await setDoc(doc(db, classroomPaths.answer(input.roomId, answerId)), {
     ...input,
     answerId,
@@ -100,17 +108,19 @@ export const subscribeClassroomAnswers = (
 export const writeRoundResult = async (
   db: Firestore,
   roomId: string,
+  gameCycle: number,
   result: RoundScoreResult,
 ): Promise<void> => {
   const batch = writeBatch(db)
-  batch.set(doc(db, classroomPaths.round(roomId, result.questionNumber)), {
+  batch.set(doc(db, classroomPaths.round(roomId, gameCycle, result.questionNumber)), {
     ...result,
+    gameCycle,
     finalizedAt: serverTimestamp(),
   })
   batch.update(doc(db, classroomPaths.room(roomId)), {
     cityScore: result.newCityScore,
     cityLevel: result.cityLevel,
-    status: 'question-closed',
+    status: 'round-result',
     updatedAt: serverTimestamp(),
   })
   await batch.commit()

@@ -53,6 +53,7 @@ export interface ClassroomGameService {
     onError: (message: string) => void,
   ): ClassroomUnsubscribe
   startGame(roomId: string, teacherSessionId: string, snapshot: RoomQuestionSnapshot): Promise<void>
+  beginQuestions(roomId: string, teacherSessionId: string): Promise<ClassroomRoom>
   submitAnswer(
     roomId: string,
     playerId: string,
@@ -68,6 +69,8 @@ export interface ClassroomGameService {
   ): Promise<ClassroomRoundResult>
   openNextQuestion(roomId: string, teacherSessionId: string): Promise<ClassroomRoom>
   finishGame(roomId: string, teacherSessionId: string): Promise<void>
+  continueCityProgress(roomId: string, teacherSessionId: string): Promise<ClassroomRoom>
+  endActivity(roomId: string, teacherSessionId: string): Promise<void>
 }
 
 export const classroomFriendlyError = (error: unknown): string => {

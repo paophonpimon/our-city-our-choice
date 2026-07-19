@@ -11,8 +11,9 @@ export const getRoleQuestion = (
 
 export const countAnswersForQuestion = (
   answers: readonly ClassroomAnswerRecord[],
-  questionNumber: QuestionNumber,
-): number => new Set(answers.filter((answer) => answer.questionNumber === questionNumber).map((answer) => answer.playerId)).size
+  questionNumber: QuestionNumber | 0,
+  gameCycle?: number,
+): number => new Set(answers.filter((answer) => answer.questionNumber === questionNumber && (gameCycle === undefined || answer.gameCycle === gameCycle)).map((answer) => answer.playerId)).size
 
 export const shouldCloseQuestion = (
   answerCount: number,
@@ -30,8 +31,9 @@ export const getCityImagePath = (cityLevel: CityLevel): string => `/images/city/
 
 export const getFinalAnswerTotals = (
   rounds: readonly ClassroomRoundResult[],
+  gameCycle?: number,
 ): { integrityCount: number; corruptionCount: number; timeoutCount: number } =>
-  rounds.reduce(
+  rounds.filter((round) => gameCycle === undefined || round.gameCycle === gameCycle).reduce(
     (total, round) => ({
       integrityCount: total.integrityCount + round.integrityCount,
       corruptionCount: total.corruptionCount + round.corruptionCount,

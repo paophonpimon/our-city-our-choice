@@ -26,6 +26,8 @@ service cloud.firestore {
         && request.resource.data.roomId == roomId
         && request.resource.data.keys().hasAll([
           'status',
+          'gameCycle',
+          'completedGameCount',
           'currentQuestionNumber',
           'questionDurationSec',
           'questionStartedAt',
@@ -33,6 +35,10 @@ service cloud.firestore {
           'lockedPlayerCount',
           'cityScore',
           'cityLevel',
+          'integrityTotal',
+          'corruptionTotal',
+          'timeoutTotal',
+          'roleRotation',
           'updatedAt'
         ]);
       allow update: if isTeacher(roomId)
@@ -42,13 +48,26 @@ service cloud.firestore {
       match /players/{playerId} {
         allow read: if signedIn();
         allow create: if signedIn()
-          && room(roomId).status == 'waiting'
+          && room(roomId).status == 'lobby'
           && request.resource.data.ownerUid == request.auth.uid
           && request.resource.data.playerId == playerId
-          && request.resource.data.roleId == null;
+          && request.resource.data.roleId == null
+          && request.resource.data.roleHistory.size() == 0
+          && request.resource.data.roleOffset == null;
         allow update: if (
           isTeacher(roomId)
-          && (resource.data.roleId == null || request.resource.data.roleId == resource.data.roleId)
+          && request.resource.data.playerId == resource.data.playerId
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.nickname == resource.data.nickname
+          && request.resource.data.nicknameKey == resource.data.nicknameKey
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'roleId',
+            'roleHistory',
+            'roleOffset'
+          ])
+          && request.resource.data.roleHistory.size() <= 8
+          && request.resource.data.roleOffset >= 0
+          && request.resource.data.roleOffset < 8
         ) || (
           isPlayerOwner(roomId, playerId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt'])
@@ -80,6 +99,7 @@ service cloud.firestore {
             'roomId',
             'playerId',
             'ownerUid',
+            'gameCycle',
             'questionNumber',
             'questionId',
             'choiceId',
@@ -89,7 +109,9 @@ service cloud.firestore {
           && request.resource.data.roomId == roomId
           && request.resource.data.ownerUid == request.auth.uid
           && isPlayerOwner(roomId, request.resource.data.playerId)
-          && answerId == request.resource.data.playerId + '::' + request.resource.data.questionId
+          && request.resource.data.gameCycle == room(roomId).gameCycle
+          && answerId == string(request.resource.data.gameCycle) + '::' + request.resource.data.playerId + '::' + request.resource.data.questionId
+          && room(roomId).status == 'playing'
           && request.resource.data.questionNumber == room(roomId).currentQuestionNumber
           && request.resource.data.submittedAt == request.time
           && request.time <= room(roomId).questionDeadlineAt

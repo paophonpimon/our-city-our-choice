@@ -1,4 +1,5 @@
 export const QUESTIONS_PER_PLAYER = 10 as const
+export const MAX_GAME_CYCLES = 8 as const
 
 export const QUESTION_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 
@@ -38,7 +39,7 @@ export const CITY_LEVELS = ['critical', 'declining', 'neutral', 'improving', 'pr
 
 export type CityLevel = (typeof CITY_LEVELS)[number]
 
-export const GAME_STATUSES = ['lobby', 'role-reveal', 'question', 'question-closed', 'finished'] as const
+export const GAME_STATUSES = ['lobby', 'role-draw', 'playing', 'round-result', 'game-result', 'finished'] as const
 
 export type GameStatus = (typeof GAME_STATUSES)[number]
 
@@ -63,7 +64,9 @@ export interface PlayerState {
 export interface RoomState {
   roomId: string
   status: GameStatus
-  currentQuestionNumber: QuestionNumber
+  gameCycle: number
+  completedGameCount: number
+  currentQuestionNumber: QuestionNumber | 0
   questionDurationSec: number
   questionStartedAt: DomainTimestamp | null
   questionDeadlineAt: DomainTimestamp | null
@@ -73,6 +76,10 @@ export interface RoomState {
   completedPlayers: number
   cityScore: number
   cityLevel: CityLevel
+  integrityTotal: number
+  corruptionTotal: number
+  timeoutTotal: number
+  roleRotation: RoleId[]
   createdAt: DomainTimestamp
   updatedAt: DomainTimestamp
 }
@@ -128,6 +135,13 @@ export interface CityLevelPolicy {
 export interface RoleAssignablePlayer {
   playerId: string
   roleId: RoleId | null
+}
+
+export interface RotatingRolePlayer {
+  playerId: string
+  roleId: RoleId | null
+  roleHistory: readonly RoleId[]
+  roleOffset: number | null
 }
 
 export type RoomSettingsValidationError =
@@ -216,3 +230,62 @@ export const assignBalancedRoles = <T extends RoleAssignablePlayer>(
 }
 
 export const assignRolesToUnassignedPlayers = assignBalancedRoles
+
+export const isGameCycle = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < MAX_GAME_CYCLES
+
+export const createRoleRotation = (
+  random: () => number = Math.random,
+): RoleId[] => {
+  const rotation = [...ROLE_IDS]
+  for (let index = rotation.length - 1; index > 0; index -= 1) {
+    const selected = Math.floor(random() * (index + 1))
+    ;[rotation[index], rotation[selected]] = [rotation[selected], rotation[index]]
+  }
+  validateRoleOrder(rotation)
+  return rotation
+}
+
+export const createBalancedRoleOffsets = (
+  playerIds: readonly string[],
+  random: () => number = Math.random,
+): Readonly<Record<string, number>> => {
+  if (new Set(playerIds).size !== playerIds.length || playerIds.some((playerId) => !playerId.trim())) {
+    throw new Error('playerIds must be unique non-empty values')
+  }
+  const shuffled = [...playerIds]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const selected = Math.floor(random() * (index + 1))
+    ;[shuffled[index], shuffled[selected]] = [shuffled[selected], shuffled[index]]
+  }
+  return Object.fromEntries(shuffled.map((playerId, index) => [playerId, index % ROLE_IDS.length]))
+}
+
+export const getRoleForCycle = (
+  roleRotation: readonly RoleId[],
+  roleOffset: number,
+  gameCycle: number,
+): RoleId => {
+  validateRoleOrder(roleRotation)
+  if (!Number.isInteger(roleOffset) || roleOffset < 0 || roleOffset >= ROLE_IDS.length) {
+    throw new Error('roleOffset must be an integer from 0 to 7')
+  }
+  if (!isGameCycle(gameCycle)) throw new Error('gameCycle must be an integer from 0 to 7')
+  return roleRotation[(roleOffset + gameCycle) % ROLE_IDS.length]
+}
+
+export const assignRolesForCycle = <T extends RotatingRolePlayer>(
+  players: readonly T[],
+  roleRotation: readonly RoleId[],
+  gameCycle: number,
+  initialOffsets?: Readonly<Record<string, number>>,
+): Array<T & { roleId: RoleId; roleHistory: RoleId[]; roleOffset: number }> => {
+  if (!isGameCycle(gameCycle)) throw new Error('gameCycle must be an integer from 0 to 7')
+  return players.map((player) => {
+    const roleOffset = player.roleOffset ?? initialOffsets?.[player.playerId]
+    if (roleOffset === undefined || roleOffset === null) throw new Error(`missing roleOffset for ${player.playerId}`)
+    const roleId = getRoleForCycle(roleRotation, roleOffset, gameCycle)
+    if (player.roleHistory.includes(roleId)) throw new Error(`role ${roleId} was already assigned to ${player.playerId}`)
+    return { ...player, roleId, roleOffset, roleHistory: [...player.roleHistory, roleId] }
+  })
+}
