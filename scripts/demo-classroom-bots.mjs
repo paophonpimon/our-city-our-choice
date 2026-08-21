@@ -6,7 +6,7 @@ const corruptCount = Number(process.argv[process.argv.indexOf('--corrupt') + 1] 
 const staggerMs = Number(process.argv[process.argv.indexOf('--stagger-ms') + 1] || 0)
 const maxQuestion = Number(process.argv[process.argv.indexOf('--max-question') + 1] || 10)
 
-if (!/^[A-Z0-9]{6}$/.test(roomId)) throw new Error('room code must contain 6 letters/numbers')
+if (!/^[A-HJ-NP-Z2-9]{4}$/.test(roomId)) throw new Error('room code must contain 4 unambiguous letters/numbers')
 if (!Number.isInteger(staggerMs) || staggerMs < 0 || staggerMs > 10_000) throw new Error('stagger-ms must be 0-10000')
 if (!Number.isInteger(maxQuestion) || maxQuestion < 1 || maxQuestion > 10) throw new Error('max-question must be 1-10')
 

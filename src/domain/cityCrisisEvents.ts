@@ -1,5 +1,6 @@
 import type { LocationId, LocationSummary, LockedPlayer } from './cityScoring'
 import { LOCATION_BY_ROLE, SCORE_POLICY, clampCityScore, getCityLevel } from './cityScoring'
+import { stableCoinFlip } from './deterministicOrder'
 import { ROLE_IDS, type CityLevel, type RoleId } from './ourCity'
 
 export const CRISIS_EVENT_IDS = ['construction-audit', 'public-emergency'] as const
@@ -89,6 +90,23 @@ export const getCrisisEvent = (indexOrId: CrisisEventIndex | CrisisEventId): Cit
 
 export const getCrisisEventAfterQuestion = (questionNumber: number): CityCrisisEvent | null =>
   questionNumber === 4 ? CITY_CRISIS_EVENTS[0] : questionNumber === 8 ? CITY_CRISIS_EVENTS[1] : null
+
+/**
+ * Orders a crisis dilemma's two choices for display to one player.
+ * `dilemma.choices` always stores the integrity choice first (see the
+ * `dilemma()` builder above); this derives a per-(room, player, event, role)
+ * deterministic flip so the integrity choice is not always shown in the
+ * same position. Refresh/reconnect-safe: pure function of stable inputs.
+ */
+export const orderCrisisChoicesForPlayer = (
+  dilemma: CrisisRoleDilemma,
+  roomId: string,
+  playerId: string,
+  eventId: CrisisEventId,
+): readonly [CrisisEventChoice, CrisisEventChoice] =>
+  stableCoinFlip([roomId, playerId, eventId, dilemma.roleId].join(' '))
+    ? dilemma.choices
+    : [dilemma.choices[1], dilemma.choices[0]]
 
 export const CRISIS_SCORE_POLICY = {
   integrity: SCORE_POLICY.integrity * 2,

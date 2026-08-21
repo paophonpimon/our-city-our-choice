@@ -33,7 +33,7 @@ const earlyCorruptThrough = Number(argumentValue('--early-corrupt-through', 0))
 const lateCorruptFrom = Number(argumentValue('--late-corrupt-from', 0))
 const cycleFlip = process.argv.includes('--cycle-flip')
 
-if (!/^[A-Z0-9]{6}$/.test(roomId)) throw new Error('ใช้ --room ตามด้วยรหัสห้อง 6 ตัว เช่น --room YLXK2N')
+if (!/^[A-HJ-NP-Z2-9]{4}$/.test(roomId)) throw new Error('ใช้ --room ตามด้วยรหัสห้อง 4 ตัว เช่น --room Y2XK')
 if (!Number.isInteger(botCount) || botCount < 1 || botCount > MAX_COUNT) {
   throw new Error(`--count ต้องเป็นจำนวนเต็มระหว่าง 1-${MAX_COUNT}`)
 }

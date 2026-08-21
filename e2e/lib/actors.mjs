@@ -96,7 +96,7 @@ export class TeacherActor extends BaseActor {
     const shareRow = this.page.locator('.teacher-lobby-share-row span')
     await shareRow.waitFor({ state: 'visible', timeout: 20_000 })
     const text = await shareRow.textContent()
-    const match = text?.match(/room=([A-Za-z0-9]{6})/i)
+    const match = text?.match(/room=([A-Za-z2-9]{4})/i)
     const roomId = match ? match[1].toUpperCase() : null
     if (!roomId) throw new Error(`Could not parse room code from share link text: "${text}"`)
     this.roomId = roomId

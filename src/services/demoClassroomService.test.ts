@@ -106,6 +106,24 @@ const completeCurrentCycle = async (
 
 beforeEach(() => resetDemoClassroomStateForTests())
 
+describe('room code generation', () => {
+  it('creates a 4-character code from the unambiguous alphabet only', async () => {
+    const service = new DemoClassroomGameService()
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const room = await service.createRoom(`${teacherUid}-${attempt}`, 30)
+      expect(room.roomId).toMatch(/^[A-HJ-NP-Z2-9]{4}$/)
+    }
+  })
+
+  it('never generates a duplicate code across many rooms', async () => {
+    const service = new DemoClassroomGameService()
+    const roomIds = await Promise.all(
+      Array.from({ length: 25 }, (_, index) => service.createRoom(`${teacherUid}-${index}`, 30)),
+    )
+    expect(new Set(roomIds.map((room) => room.roomId)).size).toBe(roomIds.length)
+  })
+})
+
 describe('Continue City Progress setup and role draw', () => {
   it('creates a new room with fresh city progress and empty role history', async () => {
     const service = new DemoClassroomGameService()

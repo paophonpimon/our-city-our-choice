@@ -1,4 +1,14 @@
-import { QUESTIONS_PER_PLAYER, ROLE_IDS, isRoleId, type QuestionNumber, type RoleId } from './ourCity'
+﻿import { stableBalancedPattern } from './deterministicOrder'
+import {
+  assignRolesForCycle,
+  MAX_GAME_CYCLES,
+  QUESTIONS_PER_PLAYER,
+  ROLE_IDS,
+  isRoleId,
+  type QuestionNumber,
+  type RoleId,
+  type RotatingRolePlayer,
+} from './ourCity'
 
 export const QUESTION_SHEET_HEADERS = [
   'active',
@@ -40,6 +50,11 @@ export interface PublicRoomQuestion {
   questionNumber: QuestionNumber
   prompt: string
   choices: readonly [StableChoice, StableChoice]
+  // Purely positional and non-semantic: which choices[] index (0 or 1) to
+  // render first for a given playerId. Never reveals which choice is
+  // integrity — see computeChoiceOrderByQuestion, which is the only place
+  // integrityChoiceId is consulted (server/trusted-side, never published).
+  choiceOrder: Readonly<Record<string, 0 | 1>>
   imageUrl: string | null
 }
 
@@ -199,6 +214,10 @@ export const toPublicRoomQuestion = (question: RoomTrustedQuestion): PublicRoomQ
   questionNumber: question.questionNumber,
   prompt: question.prompt,
   choices: question.choices.map((choice) => ({ ...choice })) as [StableChoice, StableChoice],
+  // Populated separately by computeChoiceOrderByQuestion once the roster is
+  // known — startGame() is the only caller with both trusted (integrity)
+  // data and the full player list at the same time.
+  choiceOrder: {},
   imageUrl: question.imageUrl,
 })
 
@@ -229,23 +248,71 @@ export const createRoomQuestionSnapshot = (
   }
 }
 
-const stableHash = (value: string): number => {
-  let hash = 0x811c9dc5
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return hash >>> 0
-}
-
+/**
+ * Orders a question's two choices for display to one player. Purely
+ * mechanical: looks up the precomputed positional bit for this player
+ * (see computeChoiceOrderByQuestion) and applies it. Never sees, needs, or
+ * could derive which choice is integrity — the balance guarantee lives
+ * entirely in how choiceOrder was computed, not here.
+ */
 export const orderChoicesForPlayer = (
   question: PublicRoomQuestion,
-  roomId: string,
   playerId: string,
-): readonly [StableChoice, StableChoice] =>
-  stableHash(`${roomId}\u0000${playerId}\u0000${question.questionId}`) % 2 === 0
-    ? question.choices
-    : [question.choices[1], question.choices[0]]
+): readonly [StableChoice, StableChoice] => {
+  const firstIndex = question.choiceOrder[playerId] ?? 0
+  return firstIndex === 0 ? question.choices : [question.choices[1], question.choices[0]]
+}
+
+/**
+ * Precomputes a 5/5-balanced, non-semantic display-order bit for every
+ * (player, question) pair across all MAX_GAME_CYCLES cycles of role
+ * rotation, keyed by questionId then playerId.
+ *
+ * This must run once, at startGame(): question documents are immutable in
+ * Firestore (see firestore.rules) and the roster is frozen the moment the
+ * room leaves 'lobby', so no later cycle transition (continueCityProgress)
+ * gets another chance to add entries. Role rotation is a pure function of
+ * (roleRotation, roleOffset, gameCycle), so every cycle's assignment can be
+ * derived up front here even though it plays out one cycle at a time later.
+ *
+ * integrityChoiceId is read here — the only place it's ever consulted — to
+ * decide, per player and question, whether the integrity choice happens to
+ * be at index 0 or 1, and therefore which index to record as "show first"
+ * to hit exactly 5/10. The output map only ever stores that 0/1 index: a
+ * question with choiceOrder[playerId] = 0 means "this player was dealt
+ * integrity-first for this question", identically to choiceOrder = 1
+ * meaning "integrity-second" — the map alone cannot distinguish which,
+ * because it never stores integrityChoiceId or any other content-linked
+ * value. See classroomFirestore.test.ts for the regression test on this
+ * boundary.
+ */
+export const computeChoiceOrderByQuestion = (
+  trustedQuestions: readonly RoomTrustedQuestion[],
+  players: readonly RotatingRolePlayer[],
+  roleRotation: readonly RoleId[],
+  initialOffsets: Readonly<Record<string, number>>,
+  roomId: string,
+): Record<string, Record<string, 0 | 1>> => {
+  const orderByQuestion: Record<string, Record<string, 0 | 1>> = {}
+  for (const question of trustedQuestions) orderByQuestion[question.questionId] = {}
+
+  let cyclePlayers: readonly RotatingRolePlayer[] = players
+  for (let gameCycle = 0; gameCycle < MAX_GAME_CYCLES; gameCycle += 1) {
+    cyclePlayers = assignRolesForCycle(cyclePlayers, roleRotation, gameCycle, initialOffsets)
+    for (const player of cyclePlayers) {
+      const seed = [roomId, player.playerId, String(gameCycle)].join(' ')
+      const pattern = stableBalancedPattern(seed, 5, QUESTIONS_PER_PLAYER)
+      for (const question of trustedQuestions) {
+        if (question.roleId !== player.roleId) continue
+        const wantIntegrityFirst = pattern[question.questionNumber - 1] ?? true
+        const isChoice0Integrity = question.choices[0].id === question.integrityChoiceId
+        const order = orderByQuestion[question.questionId]
+        if (order) order[player.playerId] = wantIntegrityFirst === isChoice0Integrity ? 0 : 1
+      }
+    }
+  }
+  return orderByQuestion
+}
 
 export const isRoomQuestionSnapshot = (value: unknown): value is RoomQuestionSnapshot => {
   if (!value || typeof value !== 'object') return false

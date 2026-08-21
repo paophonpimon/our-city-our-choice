@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -45,4 +46,9 @@ const sharedDemoState = (): Plugin => {
 export default defineConfig({
   plugins: [react(), tailwindcss(), sharedDemoState()],
   build: { target: 'es2022' },
+  test: {
+    // firestore-tests/ needs a live emulator and has its own config + npm
+    // script (test:rules) — keep it out of the default `npm test` run.
+    exclude: ['**/node_modules/**', '**/dist/**', 'firestore-tests/**'],
+  },
 })

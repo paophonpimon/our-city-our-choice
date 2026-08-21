@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createRoomQuestionSnapshot } from '../domain/classroomQuestions'
+import { computeChoiceOrderByQuestion, createRoomQuestionSnapshot } from '../domain/classroomQuestions'
+import { createBalancedRoleOffsets, createRoleRotation, type RotatingRolePlayer } from '../domain/ourCity'
 import { createTrustedQuestions } from '../test/classroomFixtures'
 import { classroomPaths, createClassroomAnswerId, toPublicQuestionDocument } from './classroomFirestore'
 
@@ -12,14 +13,38 @@ describe('simple classroom Firestore data', () => {
     expect(createClassroomAnswerId(2, 'p1', 'doctor-01')).toBe('2::p1::doctor-01')
   })
 
-  it('never includes integrity mapping in a public Firestore question', () => {
+  // Security boundary regression test: students must never receive the
+  // semantic answer key, in any form, on any question document actually
+  // written by startGame(). This exercises the real production path
+  // (trusted snapshot -> public question -> computeChoiceOrderByQuestion ->
+  // Firestore document shape), not just an empty/default choiceOrder.
+  it('never leaks integrity/corruption truth in the document startGame() actually writes', () => {
     const snapshot = createRoomQuestionSnapshot('ROOM01', createTrustedQuestions(), 100)
-    const question = snapshot.publicQuestions[0]
-    if (!question) throw new Error('snapshot is empty')
-    const document = toPublicQuestionDocument(question)
+    const players: RotatingRolePlayer[] = Array.from({ length: 8 }, (_, index) => ({
+      playerId: `player-${index}`,
+      roleId: null,
+      roleHistory: [],
+      roleOffset: null,
+    }))
+    const roleRotation = createRoleRotation()
+    const offsets = createBalancedRoleOffsets(players.map((player) => player.playerId))
+    const choiceOrderByQuestion = computeChoiceOrderByQuestion(snapshot.trustedQuestions, players, roleRotation, offsets, 'ROOM01')
 
-    expect(document).not.toHaveProperty('integrityChoiceId')
-    expect(document).not.toHaveProperty('corruptionChoiceId')
-    expect(Object.keys(document)).toEqual(['questionId', 'roleId', 'questionNumber', 'prompt', 'choices', 'imageUrl'])
+    for (const publicQuestion of snapshot.publicQuestions) {
+      const document = {
+        ...toPublicQuestionDocument(publicQuestion),
+        choiceOrder: choiceOrderByQuestion[publicQuestion.questionId] ?? {},
+      }
+      expect(Object.keys(document).sort()).toEqual(
+        ['choiceOrder', 'choices', 'imageUrl', 'prompt', 'questionId', 'questionNumber', 'roleId'],
+      )
+      expect(document).not.toHaveProperty('integrityChoiceId')
+      expect(document).not.toHaveProperty('corruptionChoiceId')
+      // choiceOrder values must be plain 0/1 — never a choice id string or
+      // anything else that could be correlated back to which is integrity.
+      for (const value of Object.values(document.choiceOrder)) {
+        expect(value === 0 || value === 1).toBe(true)
+      }
+    }
   })
 })

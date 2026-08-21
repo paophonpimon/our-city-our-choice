@@ -61,7 +61,7 @@ export const JoinPage = () => {
         <section className="game-join-card">
           <div className="game-join-card__heading"><span aria-hidden="true">👤</span><div><small>ข้อมูลนักเรียน</small><h2>เข้าร่วมห้องเรียน</h2><p>กรอกข้อมูลให้ครบถ้วนก่อนเข้าสู่เมือง</p></div></div>
           <form aria-busy={saving} onSubmit={(event) => void submit(event)}>
-            {roomFromUrl ? <div className="game-join-room"><span>รหัสห้องจาก QR</span><strong>{roomId}</strong><i>✓ พบห้องแล้ว</i></div> : <label><span>รหัสห้อง</span><input autoCapitalize="characters" inputMode="text" maxLength={6} onChange={(event) => setRoomId(event.target.value.toUpperCase())} placeholder="เช่น A1B2C3" required value={roomId} /></label>}
+            {roomFromUrl ? <div className="game-join-room"><span>รหัสห้องจาก QR</span><strong>{roomId}</strong><i>✓ พบห้องแล้ว</i></div> : <label><span>รหัสห้อง</span><input autoCapitalize="characters" inputMode="text" maxLength={4} onChange={(event) => setRoomId(event.target.value.toUpperCase())} placeholder="เช่น A23B" required value={roomId} /></label>}
             <label><span>ชื่อ–สกุล</span><input autoComplete="name" autoFocus={Boolean(roomFromUrl)} maxLength={30} onChange={(event) => setNickname(event.target.value)} placeholder="กรอกชื่อและนามสกุล" required value={nickname} /></label>
             <div className="game-join-fields">
               <label><span>ชั้น</span><input autoComplete="off" maxLength={20} onChange={(event) => setClassSection(event.target.value)} placeholder="เช่น ม.1/1" required value={classSection} /></label>

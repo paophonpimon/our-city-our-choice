@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CITY_CRISIS_EVENTS, CRISIS_SCORE_POLICY, scoreCrisisEvent } from './cityCrisisEvents'
+import { CITY_CRISIS_EVENTS, CRISIS_SCORE_POLICY, orderCrisisChoicesForPlayer, scoreCrisisEvent } from './cityCrisisEvents'
 import { ROLE_IDS } from './ourCity'
 
 const players = ROLE_IDS.map((roleId, index) => ({ playerId: `p${index}`, roleId }))
@@ -31,5 +31,39 @@ describe('city crisis scoring', () => {
     const result = scoreCrisisEvent(50, event, players, answers)
     expect(result.newCityScore).toBe(0)
     expect(result.locationSummaries.school).toMatchObject({ participantCount: 2, corruptionCount: 2, scoreAverage: -200 })
+  })
+})
+
+describe('crisis choice display order', () => {
+  it('the raw dilemma always stores integrity first (this is the bug orderCrisisChoicesForPlayer must hide from players)', () => {
+    for (const event of CITY_CRISIS_EVENTS) {
+      for (const roleId of ROLE_IDS) {
+        expect(event.dilemmas[roleId].choices[0].id).toBe(event.dilemmas[roleId].integrityChoiceId)
+      }
+    }
+  })
+
+  it('never changes which choice ids are on offer, only their display order', () => {
+    const dilemma = CITY_CRISIS_EVENTS[0].dilemmas.doctor
+    const ordered = orderCrisisChoicesForPlayer(dilemma, 'ROOM01', 'player-1', CITY_CRISIS_EVENTS[0].id)
+    expect(new Set(ordered.map((choice) => choice.id))).toEqual(new Set(dilemma.choices.map((choice) => choice.id)))
+  })
+
+  it('is deterministic across a simulated refresh/reconnect for the same player', () => {
+    const dilemma = CITY_CRISIS_EVENTS[0].dilemmas.doctor
+    const first = orderCrisisChoicesForPlayer(dilemma, 'ROOM01', 'player-9', CITY_CRISIS_EVENTS[0].id)
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(orderCrisisChoicesForPlayer(dilemma, 'ROOM01', 'player-9', CITY_CRISIS_EVENTS[0].id)).toEqual(first)
+    }
+  })
+
+  it('does not put the integrity choice in a fixed position across players', () => {
+    const dilemma = CITY_CRISIS_EVENTS[0].dilemmas.doctor
+    const positions = new Set(
+      Array.from({ length: 12 }, (_, index) =>
+        orderCrisisChoicesForPlayer(dilemma, 'ROOM01', `player-${index}`, CITY_CRISIS_EVENTS[0].id)[0].id === dilemma.integrityChoiceId,
+      ),
+    )
+    expect(positions.size).toBe(2)
   })
 })

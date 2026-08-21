@@ -10,3 +10,4 @@ coverage
 *.tsbuildinfo
 .firebase/
 artifacts/
+e2e/.artifacts/

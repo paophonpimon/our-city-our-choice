@@ -27,6 +27,7 @@ service cloud.firestore {
     match /rooms/{roomId} {
       allow read: if signedIn();
       allow create: if signedIn()
+        && roomId.matches('^[A-HJ-NP-Z2-9]{4}$')
         && request.resource.data.teacherSessionId == request.auth.uid
         && request.resource.data.roomId == roomId
         && request.resource.data.keys().hasAll([
@@ -105,6 +106,7 @@ service cloud.firestore {
             'questionNumber',
             'prompt',
             'choices',
+            'choiceOrder',
             'imageUrl'
           ]);
         allow update, delete: if false;

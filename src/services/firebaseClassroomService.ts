@@ -20,7 +20,8 @@ import {
 } from 'firebase/firestore'
 import { getCityLevel, scoreClassroomRound } from '../domain/cityScoring'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
-import type { RoomQuestionSnapshot } from '../domain/classroomQuestions'
+import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
+import { randomRoomId } from '../domain/roomCode'
 import {
   assignRolesForCycle,
   createBalancedRoleOffsets,
@@ -127,6 +128,14 @@ const mapPlayer = (snapshot: QueryDocumentSnapshot<DocumentData> | { id: string;
   }
 }
 
+const mapChoiceOrder = (value: unknown): Record<string, 0 | 1> => {
+  if (!value || typeof value !== 'object') return {}
+  const entries = Object.entries(value as Record<string, unknown>).filter(
+    (entry): entry is [string, 0 | 1] => entry[1] === 0 || entry[1] === 1,
+  )
+  return Object.fromEntries(entries)
+}
+
 const mapQuestion = (data: DocumentData): PublicRoomQuestion => ({
   questionId: String(data.questionId),
   roleId: data.roleId,
@@ -136,6 +145,7 @@ const mapQuestion = (data: DocumentData): PublicRoomQuestion => ({
     { id: String(data.choices?.[0]?.id ?? ''), text: String(data.choices?.[0]?.text ?? '') },
     { id: String(data.choices?.[1]?.id ?? ''), text: String(data.choices?.[1]?.text ?? '') },
   ],
+  choiceOrder: mapChoiceOrder(data.choiceOrder),
   imageUrl: typeof data.imageUrl === 'string' && data.imageUrl ? data.imageUrl : null,
 })
 
@@ -219,7 +229,9 @@ const fnvHash = (value: string): string => {
   return (hash >>> 0).toString(36)
 }
 
-const randomRoomId = (): string => Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, 'X')
+const ROOM_CODE_CREATE_ATTEMPTS = 12
+
+class RoomIdCollisionError extends Error {}
 const requireRoom = async (roomId: string): Promise<ClassroomRoom> => {
   const snapshot = await getDoc(doc(db, classroomPaths.room(roomId)))
   if (!snapshot.exists()) throw new Error('ผู้ใช้:ไม่พบห้องนี้')
@@ -275,14 +287,8 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
 
   async createRoom(teacherSessionId: string, questionDurationSec: number): Promise<ClassroomRoom> {
     if (!Number.isInteger(questionDurationSec) || questionDurationSec <= 0) throw new Error('ผู้ใช้:เวลาต่อคำถามต้องเป็นจำนวนเต็มบวก')
-    let roomId = ''
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      const candidate = randomRoomId()
-      if (!(await getDoc(doc(db, classroomPaths.room(candidate)))).exists()) { roomId = candidate; break }
-    }
-    if (!roomId) throw new Error('ผู้ใช้:สร้างรหัสห้องไม่ได้ กรุณาลองใหม่')
     const now = Date.now()
-    const room: ClassroomRoom = {
+    const buildRoom = (roomId: string): ClassroomRoom => ({
       roomId,
       teacherSessionId,
       status: 'lobby',
@@ -305,9 +311,29 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       roleRotation: [],
       createdAt: now,
       updatedAt: now,
+    })
+
+    for (let attempt = 0; attempt < ROOM_CODE_CREATE_ATTEMPTS; attempt += 1) {
+      const candidate = randomRoomId()
+      const roomRef = doc(db, classroomPaths.room(candidate))
+      const room = buildRoom(candidate)
+      try {
+        // A transaction (not a check-then-write) so two teachers racing on
+        // the same candidate code can never both succeed: Firestore aborts
+        // and retries the loser against fresh data, so it observes the
+        // winner's doc and throws here instead of overwriting it.
+        await runTransaction(db, async (transaction) => {
+          const existing = await transaction.get(roomRef)
+          if (existing.exists()) throw new RoomIdCollisionError()
+          transaction.set(roomRef, { ...room, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+        })
+        return room
+      } catch (error) {
+        if (error instanceof RoomIdCollisionError) continue
+        throw error
+      }
     }
-    await setDoc(doc(db, classroomPaths.room(roomId)), { ...room, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
-    return room
+    throw new Error('ผู้ใช้:สร้างรหัสห้องไม่ได้ กรุณาลองใหม่')
   }
 
   async joinRoom(input: ClassroomJoinInput, ownerUid: string): Promise<ClassroomPlayer> {
@@ -389,9 +415,18 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     const roleRotation = createRoleRotation()
     const offsets = createBalancedRoleOffsets(players.map((player) => player.playerId))
     const assigned = assignRolesForCycle(players, roleRotation, 0, offsets)
+    // Computed once, up front, for every cycle a player will ever reach:
+    // question documents are immutable (firestore.rules) and no one can
+    // join after this point, so this is the only chance to record it.
+    const choiceOrderByQuestion = computeChoiceOrderByQuestion(snapshot.trustedQuestions, players, roleRotation, offsets, roomId)
     const batch = writeBatch(db)
     for (const player of assigned) batch.update(doc(db, classroomPaths.player(roomId, player.playerId)), { roleId: player.roleId, roleHistory: player.roleHistory, roleOffset: player.roleOffset })
-    for (const question of snapshot.publicQuestions) batch.set(doc(db, classroomPaths.question(roomId, question.questionId)), toPublicQuestionDocument(question))
+    for (const question of snapshot.publicQuestions) {
+      batch.set(doc(db, classroomPaths.question(roomId, question.questionId)), {
+        ...toPublicQuestionDocument(question),
+        choiceOrder: choiceOrderByQuestion[question.questionId] ?? {},
+      })
+    }
     batch.update(doc(db, classroomPaths.room(roomId)), {
       status: 'role-draw', roleRotation, currentQuestionNumber: 0, currentCrisisEventIndex: 0, currentCrisisEventId: null, questionStartedAt: null, questionDeadlineAt: null,
       lockedPlayerCount: players.length, updatedAt: serverTimestamp(),

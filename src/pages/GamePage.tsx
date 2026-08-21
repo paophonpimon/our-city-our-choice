@@ -9,7 +9,7 @@ import { usePlayer, usePlayerAnswers, useQuestions, useRoom } from '../hooks/use
 import { useCountdown } from '../hooks/useCountdown'
 import { classroomFriendlyError } from '../services'
 import { getClassroomStudentSession, saveClassroomViewerRole } from '../services/sessionStorage'
-import { getCrisisEvent } from '../domain/cityCrisisEvents'
+import { getCrisisEvent, orderCrisisChoicesForPlayer } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord } from '../types/classroomGame'
 
 export const GamePage = () => {
@@ -51,14 +51,18 @@ export const GamePage = () => {
   }, [playerState.data, questionsState.data, roomState.data])
 
   const orderedChoices = useMemo(
-    () => (question && session ? orderChoicesForPlayer(question, roomId, session.playerId) : []),
-    [question, roomId, session],
+    () => (question && session ? orderChoicesForPlayer(question, session.playerId) : []),
+    [question, session],
   )
   const existingAnswer = question
     ? answersState.data.find((answer) => isQuestionAnswerRecord(answer) && answer.gameCycle === roomState.data?.gameCycle && answer.questionNumber === roomState.data?.currentQuestionNumber && answer.questionId === question.questionId)
     : undefined
   const crisisEvent = roomState.data?.currentCrisisEventId ? getCrisisEvent(roomState.data.currentCrisisEventId) : null
   const crisisDilemma = crisisEvent && playerState.data?.roleId ? crisisEvent.dilemmas[playerState.data.roleId] : null
+  const orderedCrisisChoices = useMemo(
+    () => (crisisDilemma && crisisEvent && session ? orderCrisisChoicesForPlayer(crisisDilemma, roomId, session.playerId, crisisEvent.id) : []),
+    [crisisDilemma, crisisEvent, roomId, session],
+  )
   const existingCrisisAnswer = crisisEvent
     ? answersState.data.find((answer) => isCrisisAnswerRecord(answer) && answer.gameCycle === roomState.data?.gameCycle && answer.eventId === crisisEvent.id)
     : undefined
@@ -130,7 +134,7 @@ export const GamePage = () => {
                 <p className="crisis-student-kicker">สถานการณ์เฉพาะบทบาท</p>
                 <h2>{crisisDilemma.prompt}</h2>
                 <div className="crisis-student-choices">
-                  {crisisDilemma.choices.map((choice, index) => (
+                  {orderedCrisisChoices.map((choice, index) => (
                     <button disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId)} key={choice.id} onClick={() => void answerCrisis(choice.id)}>
                       <span>{index === 0 ? 'ก.' : 'ข.'}</span>{choice.text}
                     </button>

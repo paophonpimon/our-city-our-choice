@@ -90,6 +90,9 @@ export const toPublicQuestionDocument = (question: PublicRoomQuestion): PublicRo
   questionNumber: question.questionNumber,
   prompt: question.prompt,
   choices: [{ ...question.choices[0] }, { ...question.choices[1] }],
+  // Passed through as-is; startGame() is the only real caller and always
+  // overwrites this with the real computeChoiceOrderByQuestion result.
+  choiceOrder: { ...question.choiceOrder },
   imageUrl: question.imageUrl,
 })
 

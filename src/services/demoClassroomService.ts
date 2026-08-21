@@ -1,5 +1,6 @@
 import { scoreClassroomRound } from '../domain/cityScoring'
-import type { RoomQuestionSnapshot } from '../domain/classroomQuestions'
+import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
+import { randomRoomId } from '../domain/roomCode'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import {
   assignRolesForCycle,
@@ -129,7 +130,7 @@ const createId = (): string =>
 
 const createRoomId = (state: DemoClassroomState): string => {
   let roomId = ''
-  do roomId = Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, 'X')
+  do roomId = randomRoomId()
   while (state.rooms[roomId])
   return roomId
 }
@@ -352,7 +353,11 @@ export class DemoClassroomGameService implements ClassroomGameService {
     const roleRotation = createRoleRotation()
     const offsets = createBalancedRoleOffsets(players.map((player) => player.playerId))
     for (const player of assignRolesForCycle(players, roleRotation, 0, offsets)) roomState.players[player.playerId] = player
-    roomState.questions = Object.fromEntries(snapshot.publicQuestions.map((question) => [question.questionId, clone(question)]))
+    const choiceOrderByQuestion = computeChoiceOrderByQuestion(snapshot.trustedQuestions, players, roleRotation, offsets, roomId)
+    roomState.questions = Object.fromEntries(snapshot.publicQuestions.map((question) => [
+      question.questionId,
+      clone({ ...question, choiceOrder: choiceOrderByQuestion[question.questionId] ?? {} }),
+    ]))
     Object.assign(roomState.room, {
       status: 'role-draw',
       roleRotation,

@@ -26,8 +26,8 @@ describe('playable classroom loop helpers', () => {
   it('keeps deterministic choice order after refresh', () => {
     const question = snapshot.publicQuestions[0]
     if (!question) throw new Error('missing question')
-    expect(orderChoicesForPlayer(question, 'ROOM01', 'player-1')).toEqual(
-      orderChoicesForPlayer(question, 'ROOM01', 'player-1'),
+    expect(orderChoicesForPlayer(question, 'player-1')).toEqual(
+      orderChoicesForPlayer(question, 'player-1'),
     )
   })
 
