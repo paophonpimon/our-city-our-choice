@@ -23,4 +23,19 @@ describe('Firebase project guard', () => {
     ].join('\n')
     expect(activeConfiguration).not.toContain('matana-must-survive')
   })
+
+  it('keeps Firestore realtime listeners working through buffered tablet and school networks', () => {
+    const classroomService = readFileSync(new URL('./firebaseClassroomService.ts', import.meta.url), 'utf8')
+    expect(classroomService).toContain('experimentalAutoDetectLongPolling: true')
+  })
+
+  it('accepts active-room answers from both legacy and current classroom clients', () => {
+    const rules = readProjectFile('firestore.rules')
+    expect(rules).toContain("!request.resource.data.keys().hasAny(['recordType'])")
+    expect(rules).toContain("request.resource.data.recordType == 'question'")
+    expect(rules).toContain("affectedKeys().hasOnly(['ownerUid', 'lastSeenAt'])")
+    expect(rules).toContain('request.resource.data.ownerUid == request.auth.uid')
+    expect(rules).toContain('!exists(/databases/$(database)/documents/rooms/$(roomId)/answers/$(answerId))')
+    expect(rules).toContain('isPlayerOwnerAfter(roomId, request.resource.data.playerId)')
+  })
 })

@@ -11,8 +11,8 @@ import { RoleDrawPage } from './pages/RoleDrawPage'
 import { TeacherPage } from './pages/TeacherPage'
 
 const App = () => (
-  <GameProvider>
-    <BrowserRouter>
+  <BrowserRouter>
+    <GameProvider>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/teacher" element={<TeacherPage />} />
@@ -24,8 +24,8 @@ const App = () => (
         <Route path="/closed/:roomCode" element={<ClosedPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-    </BrowserRouter>
-  </GameProvider>
+    </GameProvider>
+  </BrowserRouter>
 )
 
 export default App

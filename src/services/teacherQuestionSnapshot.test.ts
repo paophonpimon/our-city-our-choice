@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createRoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { createTrustedQuestions } from '../test/classroomFixtures'
 import {
+  clearAllTeacherSnapshots,
   deserializeTeacherSnapshot,
   getTeacherSnapshotStorageKey,
   restoreTeacherSnapshot,
@@ -11,6 +12,12 @@ import {
 
 class MemoryStorage implements StorageLike {
   private readonly values = new Map<string, string>()
+  get length(): number {
+    return this.values.size
+  }
+  key(index: number): string | null {
+    return [...this.values.keys()][index] ?? null
+  }
   getItem(key: string): string | null {
     return this.values.get(key) ?? null
   }
@@ -43,5 +50,18 @@ describe('teacher trusted snapshot restore', () => {
     const snapshot = createRoomQuestionSnapshot('OTHER', createTrustedQuestions(), 100)
     storage.setItem(getTeacherSnapshotStorageKey('ROOM01'), JSON.stringify(snapshot))
     expect(restoreTeacherSnapshot('ROOM01', storage)).toBeNull()
+  })
+
+  it('clears every old teacher snapshot without touching unrelated local data', () => {
+    const storage = new MemoryStorage()
+    saveTeacherSnapshot(createRoomQuestionSnapshot('ROOM01', createTrustedQuestions(), 100), storage)
+    saveTeacherSnapshot(createRoomQuestionSnapshot('ROOM02', createTrustedQuestions(), 100), storage)
+    storage.setItem('unrelated-setting', 'keep')
+
+    clearAllTeacherSnapshots(storage)
+
+    expect(restoreTeacherSnapshot('ROOM01', storage)).toBeNull()
+    expect(restoreTeacherSnapshot('ROOM02', storage)).toBeNull()
+    expect(storage.getItem('unrelated-setting')).toBe('keep')
   })
 })

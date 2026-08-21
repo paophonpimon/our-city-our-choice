@@ -35,9 +35,68 @@ export const ROLES = [
   { id: 'journalist', label: 'นักข่าว', order: 8 },
 ] as const satisfies readonly RoleDefinition[]
 
+export interface RoleCivicGuidance {
+  influence: string
+  responsibility: string
+}
+
+export const ROLE_CIVIC_GUIDANCE: Readonly<Record<RoleId, RoleCivicGuidance>> = {
+  doctor: {
+    influence: 'มีผลต่อสุขภาพ ความปลอดภัย และคุณภาพชีวิตของประชาชน',
+    responsibility: 'รักษาทุกคนอย่างเท่าเทียม ใช้ทรัพยากรทางการแพทย์อย่างโปร่งใส และไม่รับผลประโยชน์เพื่อแซงคิวหรือเอื้อประโยชน์ให้ใคร',
+  },
+  municipal: {
+    influence: 'มีผลต่องบประมาณ บริการสาธารณะ และทิศทางการพัฒนาเมือง',
+    responsibility: 'จัดสรรงบประมาณอย่างเป็นธรรม เปิดเผยการทำงาน และยึดประโยชน์ของประชาชนมากกว่าพวกพ้องหรือผลประโยชน์ส่วนตัว',
+  },
+  police: {
+    influence: 'มีผลต่อความปลอดภัย ความยุติธรรม และความเชื่อมั่นในกฎหมาย',
+    responsibility: 'บังคับใช้กฎหมายกับทุกคนอย่างเท่าเทียม ปกป้องผู้บริสุทธิ์ และไม่รับสินบนหรือใช้อำนาจช่วยเหลือผู้กระทำผิด',
+  },
+  teacher: {
+    influence: 'มีผลต่อความคิด พฤติกรรม และอนาคตของนักเรียน',
+    responsibility: 'เป็นแบบอย่างที่ดี สอนให้นักเรียนซื่อสัตย์ กล้าทำสิ่งที่ถูกต้อง และปฏิบัติต่อนักเรียนทุกคนอย่างยุติธรรม',
+  },
+  merchant: {
+    influence: 'มีผลต่อผู้บริโภค เศรษฐกิจชุมชน และความเป็นธรรมในการค้า',
+    responsibility: 'ขายสินค้าอย่างซื่อสัตย์ ไม่โกงราคา น้ำหนัก หรือคุณภาพ เสียภาษีถูกต้อง และไม่ติดสินบนเพื่อเอาเปรียบคู่แข่ง',
+  },
+  contractor: {
+    influence: 'มีผลต่อความปลอดภัยของอาคาร คุณภาพโครงสร้าง และงบประมาณสาธารณะ',
+    responsibility: 'ก่อสร้างตามมาตรฐาน ใช้วัสดุที่มีคุณภาพ ตรวจสอบงบได้ และไม่ลดสเปกหรือจ่ายผลประโยชน์เพื่อให้ได้งาน',
+  },
+  student: {
+    influence: 'มีผลต่อบรรยากาศในโรงเรียนและอนาคตของเมืองในฐานะพลเมืองรุ่นใหม่',
+    responsibility: 'ซื่อสัตย์ในการเรียน ไม่โกงหรือช่วยปกปิดการโกง กล้าตั้งคำถาม และร่วมดูแลส่วนรวมด้วยการตัดสินใจอย่างรับผิดชอบ',
+  },
+  journalist: {
+    influence: 'มีผลต่อข้อมูลที่ประชาชนได้รับและการตรวจสอบผู้มีอำนาจ',
+    responsibility: 'ตรวจสอบข้อเท็จจริง นำเสนออย่างเป็นธรรม เปิดโปงการทุจริตโดยมีหลักฐาน และไม่รับผลประโยชน์เพื่อบิดเบือนหรือปิดข่าว',
+  },
+}
+
 export const CITY_LEVELS = ['critical', 'declining', 'neutral', 'improving', 'prosperous'] as const
 
 export type CityLevel = (typeof CITY_LEVELS)[number]
+
+export const CITY_LEVEL_VALUES = {
+  critical: -2,
+  declining: -1,
+  neutral: 0,
+  improving: 1,
+  prosperous: 2,
+} as const satisfies Record<CityLevel, -2 | -1 | 0 | 1 | 2>
+
+export const CITY_LEVEL_LABELS = {
+  critical: 'แย่มาก',
+  declining: 'แย่',
+  neutral: 'เมืองปกติ',
+  improving: 'กำลังพัฒนา',
+  prosperous: 'พัฒนา',
+} as const satisfies Record<CityLevel, string>
+
+export const formatCityLevel = (level: CityLevel): string =>
+  `Lv.${CITY_LEVEL_VALUES[level]} ${CITY_LEVEL_LABELS[level]}`
 
 export const GAME_STATUSES = ['lobby', 'role-draw', 'playing', 'round-result', 'game-result', 'finished'] as const
 

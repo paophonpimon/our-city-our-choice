@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createRoomQuestionSnapshot } from './classroomQuestions'
-import { SCORE_POLICY, getCityLevel, scoreClassroomRound, type LockedPlayer } from './cityScoring'
+import {
+  SCORE_POLICY,
+  getCityLevel,
+  scoreClassroomRound,
+  type LockedPlayer,
+} from './cityScoring'
 import { createTrustedQuestions } from '../test/classroomFixtures'
 
 const snapshot = createRoomQuestionSnapshot('ROOM01', createTrustedQuestions(), 100)
@@ -80,8 +85,8 @@ describe('classroom city scoring', () => {
     [0, 'critical'],
     [199, 'critical'],
     [200, 'declining'],
-    [399, 'declining'],
-    [400, 'neutral'],
+    [299, 'declining'],
+    [300, 'neutral'],
     [599, 'neutral'],
     [600, 'improving'],
     [799, 'improving'],

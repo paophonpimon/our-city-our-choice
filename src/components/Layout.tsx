@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { CityLoader } from './CityLoader'
 
 interface ScenePageProps {
   children: ReactNode
@@ -33,10 +34,10 @@ export const ScenePage = ({ children, image, imageAlt = '', imagePosition = '50%
 export const BrandHeader = ({ backTo, backLabel = 'กลับหน้าแรก' }: { backTo?: string; backLabel?: string }) => (
   <header className="page-header">
     <Link to="/" className="brand-mark" aria-label="เมืองนี้อยู่ที่เรา หน้าแรก">
-      <span className="brand-symbol" aria-hidden="true">เมือง</span>
+      <span className="brand-symbol" aria-hidden="true">🏙️</span>
       <span>
-        <strong>เมืองนี้อยู่ที่เรา</strong>
-        <small>Our City, Our Choice</small>
+        <strong>OUR CITY, OUR CHOICE</strong>
+        <small>เมืองนี้...อยู่ที่เรา</small>
       </span>
     </Link>
     {backTo ? (
@@ -48,9 +49,8 @@ export const BrandHeader = ({ backTo, backLabel = 'กลับหน้าแ�
 )
 
 export const LoadingPanel = ({ text = 'กำลังเชื่อมต่อกับห้องกิจกรรม...' }: { text?: string }) => (
-  <div className="glass-panel mx-auto my-auto w-full max-w-xl p-8 text-center" aria-live="polite">
-    <div className="mystic-loader mx-auto" aria-hidden="true" />
-    <p className="mt-5 text-lg text-[#fff7df]">{text}</p>
+  <div className="glass-panel mx-auto my-auto w-full max-w-xl p-8">
+    <CityLoader variant="inline" message={text} />
   </div>
 )
 

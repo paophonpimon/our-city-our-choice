@@ -80,7 +80,7 @@ export const clampCityScore = (score: number): number =>
 export const getCityLevel = (score: number): CityLevel => {
   const clamped = clampCityScore(score)
   if (clamped <= 199) return 'critical'
-  if (clamped <= 399) return 'declining'
+  if (clamped <= 299) return 'declining'
   if (clamped <= 599) return 'neutral'
   if (clamped <= 799) return 'improving'
   return 'prosperous'

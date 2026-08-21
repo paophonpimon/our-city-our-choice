@@ -3,15 +3,24 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useGame } from '../context/GameContext'
 import { normalizeJoinRoomId } from '../components/classroomUi'
 import { classroomFriendlyError } from '../services'
-import { saveClassroomStudentSession } from '../services/sessionStorage'
+import { saveClassroomStudentSession, saveClassroomViewerRole } from '../services/sessionStorage'
+import type { ClassSection } from '../types/classroomGame'
+
+const JOIN_STEPS = [
+  ['1', 'กรอกข้อมูลของคุณ', 'ใช้ชื่อ ชั้น และเลขที่จริงเพื่อให้ครูตรวจสอบได้ง่าย'],
+  ['2', 'รอรับอาชีพ', 'เมื่อครูเริ่มเกม ระบบจะสุ่มหนึ่งในแปดอาชีพให้'],
+  ['3', 'ช่วยกันสร้างเมือง', 'ตอบคำถามตามบทบาท ทุกการเลือกส่งผลต่อเมือง'],
+] as const
 
 export const JoinPage = () => {
-  const { service, uid } = useGame()
+  const { service, refreshSession } = useGame()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const roomFromUrl = normalizeJoinRoomId(searchParams.get('room'))
   const [roomId, setRoomId] = useState(roomFromUrl)
   const [nickname, setNickname] = useState('')
+  const [classSection, setClassSection] = useState<ClassSection>('')
+  const [studentNumber, setStudentNumber] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -22,14 +31,11 @@ export const JoinPage = () => {
     setError('')
     try {
       const normalizedRoomId = roomId.trim().toUpperCase()
-      const player = await service.joinRoom({ roomId: normalizedRoomId, nickname }, uid)
-      saveClassroomStudentSession({
-        roomId: normalizedRoomId,
-        playerId: player.playerId,
-        nickname: player.nickname,
-        role: 'student',
-        sessionVersion: 1,
-      })
+      const normalizedClassSection = classSection.trim()
+      const currentUid = await refreshSession()
+      const player = await service.joinRoom({ roomId: normalizedRoomId, nickname, classSection: normalizedClassSection, studentNumber: Number(studentNumber) }, currentUid)
+      saveClassroomStudentSession({ roomId: normalizedRoomId, playerId: player.playerId, nickname: player.nickname, classSection: player.classSection ?? normalizedClassSection, studentNumber: player.studentNumber ?? Number(studentNumber), role: 'student', sessionVersion: 1 })
+      saveClassroomViewerRole('student')
       navigate(`/lobby/${normalizedRoomId}`)
     } catch (reason) {
       setError(classroomFriendlyError(reason))
@@ -39,49 +45,33 @@ export const JoinPage = () => {
   }
 
   return (
-    <main className="our-city-page grid min-h-dvh place-items-center px-5 py-10">
-      <section className="our-city-panel w-full max-w-lg p-7 md:p-9">
-        <Link className="text-sm font-bold text-[#9ec7c9]" to="/">← กลับหน้าหลัก</Link>
-        <p className="mt-7 text-sm font-bold tracking-[.18em] text-[#f4c96d] uppercase">Our City, Our Choice</p>
-        <h1 className="mt-2 text-3xl font-black">นักเรียนเข้าร่วมเกม</h1>
-        <p className="mt-3 text-[#c6d5d3]">ใช้ชื่อที่เพื่อนจำได้ และไม่ซ้ำกับคนอื่นในห้อง</p>
-        <form className="mt-7 space-y-5" aria-busy={saving} onSubmit={(event) => void submit(event)}>
-          {roomFromUrl ? (
-            <div className="join-room-summary">
-              <span>รหัสห้องจาก QR</span>
-              <strong>{roomId}</strong>
+    <main className="game-join-page">
+      <header className="game-public-header">
+        <Link className="game-brand" to="/" aria-label="Our City, Our Choice หน้าหลัก"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b><small>เมืองนี้...อยู่ที่เรา</small></strong></Link>
+        <Link className="game-home-link" to="/"><span aria-hidden="true">⌂</span> หน้าหลัก</Link>
+      </header>
+      <section className="game-join-shell">
+        <aside className="game-join-intro">
+          <p className="game-kicker">เตรียมพร้อมเข้าสู่เมือง</p>
+          <h1>เข้าร่วมเกม<br /><em>แล้วสร้างเมืองไปด้วยกัน</em></h1>
+          <p>ใช้เวลาไม่ถึงหนึ่งนาที จากนั้นรอรับอาชีพและร่วมตัดสินใจพร้อมกับเพื่อนทั้งห้อง</p>
+          <div className="game-join-steps">{JOIN_STEPS.map(([number, title, detail]) => <article key={number}><span>{number}</span><div><strong>{title}</strong><p>{detail}</p></div></article>)}</div>
+          <div className="game-join-city" aria-hidden="true"><img src="/images/new-city/backgrounds/city-overview-normal.webp" alt="" /></div>
+        </aside>
+        <section className="game-join-card">
+          <div className="game-join-card__heading"><span aria-hidden="true">👤</span><div><small>ข้อมูลนักเรียน</small><h2>เข้าร่วมห้องเรียน</h2><p>กรอกข้อมูลให้ครบถ้วนก่อนเข้าสู่เมือง</p></div></div>
+          <form aria-busy={saving} onSubmit={(event) => void submit(event)}>
+            {roomFromUrl ? <div className="game-join-room"><span>รหัสห้องจาก QR</span><strong>{roomId}</strong><i>✓ พบห้องแล้ว</i></div> : <label><span>รหัสห้อง</span><input autoCapitalize="characters" inputMode="text" maxLength={6} onChange={(event) => setRoomId(event.target.value.toUpperCase())} placeholder="เช่น A1B2C3" required value={roomId} /></label>}
+            <label><span>ชื่อ–สกุล</span><input autoComplete="name" autoFocus={Boolean(roomFromUrl)} maxLength={30} onChange={(event) => setNickname(event.target.value)} placeholder="กรอกชื่อและนามสกุล" required value={nickname} /></label>
+            <div className="game-join-fields">
+              <label><span>ชั้น</span><input autoComplete="off" maxLength={20} onChange={(event) => setClassSection(event.target.value)} placeholder="เช่น ม.1/1" required value={classSection} /></label>
+              <label><span>เลขที่</span><input inputMode="numeric" min={1} onChange={(event) => setStudentNumber(event.target.value)} placeholder="เลขที่" required step={1} type="number" value={studentNumber} /></label>
             </div>
-          ) : (
-            <label className="block">
-              <span className="mb-2 block font-bold">รหัสห้อง</span>
-              <input
-                autoCapitalize="characters"
-                className="w-full rounded-2xl border border-white/15 bg-white/8 px-4 py-4 text-xl font-black tracking-[.16em] uppercase outline-none focus:border-[#f4c96d]"
-                inputMode="text"
-                maxLength={6}
-                onChange={(event) => setRoomId(event.target.value.toUpperCase())}
-                required
-                value={roomId}
-              />
-            </label>
-          )}
-          <label className="block">
-            <span className="mb-2 block font-bold">ชื่อของคุณ</span>
-            <input
-              className="w-full rounded-2xl border border-white/15 bg-white/8 px-4 py-4 text-lg outline-none focus:border-[#f4c96d]"
-              maxLength={30}
-              autoComplete="nickname"
-              autoFocus={Boolean(roomFromUrl)}
-              onChange={(event) => setNickname(event.target.value)}
-              required
-              value={nickname}
-            />
-          </label>
-          {error ? <p className="rounded-xl bg-red-400/12 px-4 py-3 text-red-200" role="alert">{error}</p> : null}
-          <button className="min-h-14 w-full rounded-2xl bg-[#f0c866] px-5 py-4 text-lg font-black text-[#102228] disabled:opacity-50" disabled={saving}>
-            {saving ? 'กำลังเข้าร่วม…' : 'เข้าร่วมเกม'}
-          </button>
-        </form>
+            {error ? <p className="game-form-error" role="alert"><span aria-hidden="true">!</span>{error}</p> : null}
+            <button className="game-join-submit" disabled={saving}><span aria-hidden="true">▶</span>{saving ? 'กำลังเข้าร่วม…' : 'เข้าสู่ห้องเรียน'}</button>
+            <p className="game-join-note">🔒 ใช้ข้อมูลเพื่อแสดงรายชื่อในกิจกรรมห้องนี้เท่านั้น</p>
+          </form>
+        </section>
       </section>
     </main>
   )

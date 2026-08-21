@@ -4,6 +4,7 @@ import {
   countAnswersForQuestion,
   getCityImagePath,
   getFinalAnswerTotals,
+  getLiveCityScore,
   getRoleQuestion,
   shouldCloseQuestion,
 } from './classroomGameLoop'
@@ -40,16 +41,38 @@ describe('playable classroom loop helpers', () => {
     expect(countAnswersForQuestion(answers, 1)).toBe(2)
   })
 
-  it('closes when everyone answered or the shared deadline elapsed', () => {
+  it('makes the teacher advance action ready when everyone answers or the deadline expires', () => {
     expect(shouldCloseQuestion(3, 3, Date.now() + 10_000)).toBe(true)
     expect(shouldCloseQuestion(1, 3, Date.now() - 1)).toBe(true)
     expect(shouldCloseQuestion(1, 3, Date.now() + 10_000)).toBe(false)
   })
 
-  it.each(['critical', 'declining', 'neutral', 'improving', 'prosperous'] as const)(
-    'maps %s to the confirmed city image',
-    (level) => expect(getCityImagePath(level)).toBe(`/images/city/city-${level}.png`),
-  )
+  it('previews only submitted answer impacts and leaves missing answers for final timeout scoring', () => {
+    const doctorQuestion = snapshot.trustedQuestions.find((question) => question.roleId === 'doctor' && question.questionNumber === 1)
+    const policeQuestion = snapshot.trustedQuestions.find((question) => question.roleId === 'police' && question.questionNumber === 1)
+    if (!doctorQuestion || !policeQuestion) throw new Error('missing test questions')
+    const answers = [
+      {
+        answerId: 'a1', roomId: 'ROOM01', playerId: 'p1', ownerUid: 'u1', gameCycle: 0,
+        questionNumber: 1, questionId: doctorQuestion.questionId, choiceId: doctorQuestion.integrityChoiceId, submittedAt: 1,
+      },
+      {
+        answerId: 'a2', roomId: 'ROOM01', playerId: 'p2', ownerUid: 'u2', gameCycle: 0,
+        questionNumber: 1, questionId: policeQuestion.questionId, choiceId: policeQuestion.corruptionChoiceId, submittedAt: 2,
+      },
+    ] as ClassroomAnswerRecord[]
+
+    expect(getLiveCityScore(500, 4, 1, 0, answers, snapshot)).toBe(487.5)
+    expect(getLiveCityScore(500, 4, 2, 0, answers, snapshot)).toBe(500)
+  })
+
+  it.each([
+    ['critical', '/images/new-city/backgrounds/city-overview-degraded.webp'],
+    ['declining', '/images/new-city/backgrounds/city-overview-degraded.webp'],
+    ['neutral', '/images/new-city/backgrounds/city-overview-normal.webp'],
+    ['improving', '/images/new-city/backgrounds/city-overview-developed.webp'],
+    ['prosperous', '/images/new-city/backgrounds/city-overview-developed.webp'],
+  ] as const)('maps %s to its city scene image', (level, expected) => expect(getCityImagePath(level)).toBe(expected))
 
   it('adds final integrity, corruption, and timeout totals without winner fields', () => {
     const rounds = [

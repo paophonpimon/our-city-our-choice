@@ -19,6 +19,11 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/rooms/$(roomId)/players/$(playerId)).data.ownerUid == request.auth.uid;
     }
 
+    function isPlayerOwnerAfter(roomId, playerId) {
+      return signedIn()
+        && getAfter(/databases/$(database)/documents/rooms/$(roomId)/players/$(playerId)).data.ownerUid == request.auth.uid;
+    }
+
     match /rooms/{roomId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -29,12 +34,15 @@ service cloud.firestore {
           'gameCycle',
           'completedGameCount',
           'currentQuestionNumber',
+          'currentCrisisEventIndex',
+          'currentCrisisEventId',
           'questionDurationSec',
           'questionStartedAt',
           'questionDeadlineAt',
           'lockedPlayerCount',
           'cityScore',
           'cityLevel',
+          'buildingLevels',
           'integrityTotal',
           'corruptionTotal',
           'timeoutTotal',
@@ -51,6 +59,11 @@ service cloud.firestore {
           && room(roomId).status == 'lobby'
           && request.resource.data.ownerUid == request.auth.uid
           && request.resource.data.playerId == playerId
+          && request.resource.data.classSection is string
+          && request.resource.data.classSection.size() > 0
+          && request.resource.data.classSection.size() <= 20
+          && request.resource.data.studentNumber is int
+          && request.resource.data.studentNumber > 0
           && request.resource.data.roleId == null
           && request.resource.data.roleHistory.size() == 0
           && request.resource.data.roleOffset == null;
@@ -71,6 +84,13 @@ service cloud.firestore {
         ) || (
           isPlayerOwner(roomId, playerId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt'])
+        ) || (
+          signedIn()
+          && room(roomId).status != 'finished'
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.playerId == resource.data.playerId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerUid', 'lastSeenAt'])
+          && request.resource.data.lastSeenAt == request.time
         );
         allow delete: if false;
       }
@@ -91,35 +111,78 @@ service cloud.firestore {
       }
 
       match /answers/{answerId} {
-        allow read: if isTeacher(roomId)
+        allow get: if isTeacher(roomId)
+          || (signedIn() && (
+            !exists(/databases/$(database)/documents/rooms/$(roomId)/answers/$(answerId))
+            || resource.data.ownerUid == request.auth.uid
+          ));
+        allow list: if isTeacher(roomId)
           || (signedIn() && resource.data.ownerUid == request.auth.uid);
         allow create: if signedIn()
-          && request.resource.data.keys().hasOnly([
-            'answerId',
-            'roomId',
-            'playerId',
-            'ownerUid',
-            'gameCycle',
-            'questionNumber',
-            'questionId',
-            'choiceId',
-            'submittedAt'
-          ])
           && request.resource.data.answerId == answerId
           && request.resource.data.roomId == roomId
           && request.resource.data.ownerUid == request.auth.uid
-          && isPlayerOwner(roomId, request.resource.data.playerId)
+          && isPlayerOwnerAfter(roomId, request.resource.data.playerId)
           && request.resource.data.gameCycle == room(roomId).gameCycle
-          && answerId == string(request.resource.data.gameCycle) + '::' + request.resource.data.playerId + '::' + request.resource.data.questionId
-          && room(roomId).status == 'playing'
-          && request.resource.data.questionNumber == room(roomId).currentQuestionNumber
           && request.resource.data.submittedAt == request.time
           && request.time <= room(roomId).questionDeadlineAt
           && (
-            request.resource.data.choiceId
-              == get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.choices[0].id
-            || request.resource.data.choiceId
-              == get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.choices[1].id
+            (
+              (
+                !request.resource.data.keys().hasAny(['recordType'])
+                || request.resource.data.recordType == 'question'
+              )
+              && request.resource.data.keys().hasOnly([
+                'recordType',
+                'answerId',
+                'roomId',
+                'playerId',
+                'ownerUid',
+                'gameCycle',
+                'questionNumber',
+                'questionId',
+                'choiceId',
+                'submittedAt'
+              ])
+              && answerId == string(request.resource.data.gameCycle) + '::' + request.resource.data.playerId + '::' + request.resource.data.questionId
+              && room(roomId).status == 'playing'
+              && request.resource.data.questionNumber == room(roomId).currentQuestionNumber
+              && get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.questionId == request.resource.data.questionId
+              && get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.questionNumber == room(roomId).currentQuestionNumber
+              && get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.roleId == get(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.resource.data.playerId)).data.roleId
+              && (
+                request.resource.data.choiceId
+                  == get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.choices[0].id
+                || request.resource.data.choiceId
+                  == get(/databases/$(database)/documents/rooms/$(roomId)/questions/$(request.resource.data.questionId)).data.choices[1].id
+              )
+            )
+            ||
+            (
+              request.resource.data.recordType == 'crisis'
+              && request.resource.data.keys().hasOnly([
+                'recordType',
+                'answerId',
+                'roomId',
+                'playerId',
+                'ownerUid',
+                'gameCycle',
+                'eventIndex',
+                'eventId',
+                'roleId',
+                'choiceId',
+                'submittedAt'
+              ])
+              && room(roomId).status == 'crisis-playing'
+              && request.resource.data.eventIndex == room(roomId).currentCrisisEventIndex
+              && request.resource.data.eventId == room(roomId).currentCrisisEventId
+              && request.resource.data.roleId == get(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.resource.data.playerId)).data.roleId
+              && answerId == string(request.resource.data.gameCycle) + '::' + request.resource.data.playerId + '::crisis::' + request.resource.data.eventId
+              && request.resource.data.choiceId in [
+                request.resource.data.eventId + ':' + request.resource.data.roleId + ':integrity',
+                request.resource.data.eventId + ':' + request.resource.data.roleId + ':corruption'
+              ]
+            )
           );
         allow update, delete: if false;
       }
@@ -127,6 +190,42 @@ service cloud.firestore {
       match /rounds/{questionNumber} {
         allow read: if signedIn();
         allow create, update: if isTeacher(roomId);
+        allow delete: if false;
+      }
+
+      match /crisisResults/{eventResultId} {
+        allow read: if signedIn();
+        allow create, update: if isTeacher(roomId);
+        allow delete: if false;
+      }
+
+      match /personalResults/{decisionId} {
+        allow read: if signedIn()
+          && resource.data.ownerUid == request.auth.uid
+          && isPlayerOwner(roomId, resource.data.playerId);
+        allow create, update: if isTeacher(roomId)
+          && request.resource.data.keys().hasOnly([
+            'decisionId',
+            'roomId',
+            'playerId',
+            'ownerUid',
+            'gameCycle',
+            'roleId',
+            'source',
+            'sequenceNumber',
+            'outcome',
+            'resolvedAt'
+          ])
+          && request.resource.data.decisionId == decisionId
+          && request.resource.data.roomId == roomId
+          && request.resource.data.ownerUid == get(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.resource.data.playerId)).data.ownerUid
+          && request.resource.data.gameCycle == room(roomId).gameCycle
+          && request.resource.data.source in ['question', 'crisis']
+          && request.resource.data.sequenceNumber is int
+          && request.resource.data.sequenceNumber > 0
+          && request.resource.data.outcome in ['integrity', 'corruption', 'timeout']
+          && request.resource.data.resolvedAt == request.time
+          && decisionId == string(request.resource.data.gameCycle) + '::' + request.resource.data.source + '::' + string(request.resource.data.sequenceNumber) + '::' + request.resource.data.playerId;
         allow delete: if false;
       }
     }

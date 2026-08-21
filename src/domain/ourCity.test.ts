@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_GAME_CYCLES,
   QUESTIONS_PER_PLAYER,
+  ROLE_CIVIC_GUIDANCE,
   ROLE_IDS,
   ROLES,
   assignBalancedRoles,
@@ -35,6 +36,16 @@ describe('Our City roles', () => {
       { id: 'student', label: 'นักเรียน', order: 7 },
       { id: 'journalist', label: 'นักข่าว', order: 8 },
     ])
+  })
+
+  it('provides civic influence and responsibility guidance for every role', () => {
+    expect(Object.keys(ROLE_CIVIC_GUIDANCE)).toEqual([...ROLE_IDS])
+    for (const roleId of ROLE_IDS) {
+      expect(ROLE_CIVIC_GUIDANCE[roleId].influence.length).toBeGreaterThan(20)
+      expect(ROLE_CIVIC_GUIDANCE[roleId].responsibility.length).toBeGreaterThan(40)
+    }
+    expect(ROLE_CIVIC_GUIDANCE.teacher.responsibility).toContain('เป็นแบบอย่างที่ดี')
+    expect(ROLE_CIVIC_GUIDANCE.teacher.responsibility).toContain('สอนให้นักเรียนซื่อสัตย์')
   })
 
   it('assigns only unassigned players and keeps role counts within one', () => {
@@ -115,6 +126,16 @@ describe('Our City role rotation', () => {
       for (const playerId of playerIds) counts[getRoleForCycle(ROLE_IDS, offsets[playerId], cycle)] += 1
       expect(Math.max(...Object.values(counts)) - Math.min(...Object.values(counts))).toBeLessThanOrEqual(1)
     }
+  })
+
+  it('supports a full 40-student classroom with five players in every role', () => {
+    const playerIds = Array.from({ length: 40 }, (_, index) => `student-${index + 1}`)
+    const offsets = createBalancedRoleOffsets(playerIds, () => 0)
+    const counts = Object.fromEntries(ROLE_IDS.map((roleId) => [roleId, 0])) as Record<(typeof ROLE_IDS)[number], number>
+    for (const playerId of playerIds) counts[getRoleForCycle(ROLE_IDS, offsets[playerId], 0)] += 1
+
+    expect(playerIds).toHaveLength(40)
+    expect(Object.values(counts)).toEqual(Array(8).fill(5))
   })
 
   it('gives every player all eight roles exactly once and persists history', () => {

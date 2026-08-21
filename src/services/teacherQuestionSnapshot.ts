@@ -1,6 +1,8 @@
 import { isRoomQuestionSnapshot, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 
 export interface StorageLike {
+  readonly length?: number
+  key?(index: number): string | null
   getItem(key: string): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
@@ -35,4 +37,13 @@ export const restoreTeacherSnapshot = (roomId: string, storage = browserStorage(
 
 export const clearTeacherSnapshot = (roomId: string, storage = browserStorage()): void => {
   storage.removeItem(getTeacherSnapshotStorageKey(roomId))
+}
+
+export const clearAllTeacherSnapshots = (storage = browserStorage()): void => {
+  const snapshotKeys: string[] = []
+  for (let index = 0; index < (storage.length ?? 0); index += 1) {
+    const key = storage.key?.(index)
+    if (key?.startsWith(SNAPSHOT_KEY_PREFIX)) snapshotKeys.push(key)
+  }
+  snapshotKeys.forEach((key) => storage.removeItem(key))
 }

@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { classroomFriendlyError, classroomGameServicePromise, type ClassroomGameService } from '../services'
+import { CityLoader } from '../components/CityLoader'
 
 interface GameContextValue {
   service: ClassroomGameService
   uid: string
+  refreshSession: () => Promise<string>
 }
 
 const GameContext = createContext<GameContextValue | null>(null)
@@ -33,7 +35,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [attempt])
 
-  const value = useMemo(() => (service && uid ? { service, uid } : null), [service, uid])
+  const refreshSession = useCallback(async (): Promise<string> => {
+    if (!service) throw new Error('ระบบกำลังเชื่อมต่อ กรุณาลองใหม่อีกครั้ง')
+    const nextUid = await service.ensureSession()
+    setUid(nextUid)
+    return nextUid
+  }, [service])
+
+  const value = useMemo(
+    () => (service && uid ? { service, uid, refreshSession } : null),
+    [refreshSession, service, uid],
+  )
 
   if (error) {
     return (
@@ -52,12 +64,10 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
   if (!value) {
     return (
-      <main className="grid min-h-dvh place-items-center bg-[#080b23] px-5 text-[#fff7df]" aria-live="polite">
-        <div className="text-center">
-          <div className="mystic-loader mx-auto" aria-hidden="true" />
-          <p className="mt-5 text-lg">กำลังเชื่อมต่อกับห้องกิจกรรม...</p>
-        </div>
-      </main>
+      <CityLoader
+        variant="full"
+        messages={['กำลังเชื่อมต่อกับห้องกิจกรรม...', 'กำลังเตรียมเมืองของคุณ...', 'กำลังอัปเดตสภาพเมือง...']}
+      />
     )
   }
 

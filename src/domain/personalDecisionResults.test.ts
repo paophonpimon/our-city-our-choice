@@ -1,0 +1,54 @@
+import { describe, expect, it } from 'vitest'
+import { createRoomQuestionSnapshot } from './classroomQuestions'
+import { CITY_CRISIS_EVENTS } from './cityCrisisEvents'
+import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from './personalDecisionResults'
+import { createTrustedQuestions } from '../test/classroomFixtures'
+
+const players = [
+  { playerId: 'student-1', ownerUid: 'owner-1', roleId: 'doctor' as const },
+  { playerId: 'student-2', ownerUid: 'owner-2', roleId: 'municipal' as const },
+  { playerId: 'student-3', ownerUid: 'owner-3', roleId: 'police' as const },
+]
+
+describe('trusted personal decision results', () => {
+  it('resolves normal-question outcomes without exposing answer keys or chosen ids', () => {
+    const snapshot = createRoomQuestionSnapshot('ROOM01', createTrustedQuestions(), 100)
+    const questionFor = (roleId: typeof players[number]['roleId']) => {
+      const question = snapshot.trustedQuestions.find((candidate) => candidate.roleId === roleId && candidate.questionNumber === 1)
+      if (!question) throw new Error(`missing fixture question for ${roleId}`)
+      return question
+    }
+    const integrityQuestion = questionFor(players[0].roleId)
+    const corruptionQuestion = questionFor(players[1].roleId)
+    const corruptionChoice = corruptionQuestion.choices.find((choice) => choice.id !== corruptionQuestion.integrityChoiceId)
+    if (!corruptionChoice) throw new Error('missing corruption choice')
+
+    const results = resolveQuestionPersonalResults('ROOM01', 0, 1, players, snapshot, [
+      { answerId: 'a1', roomId: 'ROOM01', playerId: players[0].playerId, ownerUid: players[0].ownerUid, gameCycle: 0, questionNumber: 1, questionId: integrityQuestion.questionId, choiceId: integrityQuestion.integrityChoiceId, submittedAt: 110 },
+      { answerId: 'a2', roomId: 'ROOM01', playerId: players[1].playerId, ownerUid: players[1].ownerUid, gameCycle: 0, questionNumber: 1, questionId: corruptionQuestion.questionId, choiceId: corruptionChoice.id, submittedAt: 111 },
+    ], 120)
+
+    expect(results.map((result) => result.outcome)).toEqual(['integrity', 'corruption', 'timeout'])
+    expect(results.every((result) => !('choiceId' in result) && !('integrityChoiceId' in result) && !('score' in result))).toBe(true)
+    assertPersonalOutcomeTotals(results, { integrityCount: 1, corruptionCount: 1, timeoutCount: 1 })
+  })
+
+  it('includes crisis decisions in the same private outcome model', () => {
+    const event = CITY_CRISIS_EVENTS[0]
+    const integrityChoice = event.dilemmas[players[0].roleId].integrityChoiceId
+    const corruptionChoice = event.dilemmas[players[1].roleId].choices.find((choice) => choice.id !== event.dilemmas[players[1].roleId].integrityChoiceId)
+    if (!corruptionChoice) throw new Error('missing crisis corruption choice')
+
+    const results = resolveCrisisPersonalResults('ROOM01', 0, event, players, [
+      { recordType: 'crisis', answerId: 'c1', roomId: 'ROOM01', playerId: players[0].playerId, ownerUid: players[0].ownerUid, gameCycle: 0, eventIndex: event.index, eventId: event.id, roleId: players[0].roleId, choiceId: integrityChoice, submittedAt: 130 },
+      { recordType: 'crisis', answerId: 'c2', roomId: 'ROOM01', playerId: players[1].playerId, ownerUid: players[1].ownerUid, gameCycle: 0, eventIndex: event.index, eventId: event.id, roleId: players[1].roleId, choiceId: corruptionChoice.id, submittedAt: 131 },
+    ], 140)
+
+    expect(results.map((result) => [result.source, result.outcome])).toEqual([
+      ['crisis', 'integrity'],
+      ['crisis', 'corruption'],
+      ['crisis', 'timeout'],
+    ])
+    assertPersonalOutcomeTotals(results, { integrityCount: 1, corruptionCount: 1, timeoutCount: 1 })
+  })
+})

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useGame } from '../context/GameContext'
+import { CityLoader } from '../components/CityLoader'
 import { LOCATION_BY_ROLE } from '../domain/cityScoring'
-import { ROLES, type RoleId } from '../domain/ourCity'
+import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
+import { ROLE_CARD_ASSETS, ROLE_CARD_BACK_ASSET } from '../domain/roleCards'
 import { usePlayer, usePlayers, useRoom } from '../hooks/useGameData'
 import { classroomFriendlyError } from '../services'
-import { getClassroomStudentSession, getClassroomTeacherSession } from '../services/sessionStorage'
+import { getClassroomStudentSession, getClassroomTeacherSession, getClassroomViewerRole } from '../services/sessionStorage'
 
 const LOCATION_LABELS: Record<(typeof LOCATION_BY_ROLE)[RoleId], string> = {
   hospital: 'โรงพยาบาล',
@@ -23,7 +25,9 @@ export const RoleDrawPage = () => {
   const navigate = useNavigate()
   const teacherSession = getClassroomTeacherSession()
   const studentSession = getClassroomStudentSession()
-  const isTeacher = teacherSession?.roomId === roomId
+  const viewerRole = getClassroomViewerRole()
+  const hasStudentSession = studentSession?.roomId === roomId
+  const isTeacher = teacherSession?.roomId === roomId && (viewerRole === 'teacher' || (viewerRole === null && !hasStudentSession))
   const roomState = useRoom(roomId)
   const playersState = usePlayers(roomId)
   const playerState = usePlayer(roomId, studentSession?.roomId === roomId ? studentSession.playerId : '')
@@ -38,7 +42,7 @@ export const RoleDrawPage = () => {
   }, [roomState.data?.gameCycle])
 
   useEffect(() => {
-    if (roomState.data?.status === 'playing' || roomState.data?.status === 'round-result') {
+    if (['playing', 'round-result', 'crisis-intro', 'crisis-playing', 'crisis-result'].includes(roomState.data?.status ?? '')) {
       navigate(isTeacher ? '/teacher' : `/game/${roomId}`, { replace: true })
     } else if (roomState.data?.status === 'game-result' || roomState.data?.status === 'finished') {
       navigate(`/result/${roomId}`, { replace: true })
@@ -53,7 +57,7 @@ export const RoleDrawPage = () => {
   if (!roomId) return <Navigate replace to="/" />
   if (!isTeacher && studentSession?.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
   if (roomState.loading || playersState.loading || (!isTeacher && playerState.loading)) {
-    return <main className="our-city-page grid min-h-dvh place-items-center text-xl">กำลังสุ่มอาชีพ...</main>
+    return <CityLoader variant="full" message="กำลังสุ่มอาชีพ..." />
   }
   if (!roomState.data || roomState.data.status === 'lobby') return <Navigate replace={isTeacher} to={isTeacher ? '/teacher' : `/lobby/${roomId}`} />
 
@@ -72,30 +76,54 @@ export const RoleDrawPage = () => {
   }
 
   return (
-    <main className="our-city-page grid min-h-dvh place-items-center px-5 py-8 text-center">
-      <section className="our-city-panel w-full max-w-4xl p-7 md:p-10">
-        <p className="text-sm font-bold tracking-[.18em] text-[#f4c96d] uppercase">ชุดที่ {room.gameCycle + 1}</p>
+    <main className="our-city-page role-draw-page grid min-h-dvh place-items-center px-5 py-8 text-center">
+      <header className="game-public-header role-draw-header">
+        <Link className="game-brand" to="/" aria-label="Our City, Our Choice หน้าหลัก"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b><small>เมืองนี้...อยู่ที่เรา</small></strong></Link>
+        <div className="role-draw-room"><span>ห้องเรียน</span><strong>{roomId}</strong></div>
+      </header>
+      <section className={`our-city-panel role-draw-panel w-full max-w-6xl p-7 md:p-10 ${!isTeacher && revealed && playerRole ? 'is-player-revealed' : ''}`}>
+        <p className="role-draw-kicker">ชุดที่ {room.gameCycle + 1}</p>
         <h1 className="mt-3 text-3xl font-black md:text-5xl">
-          {isTeacher ? `กำลังสุ่มอาชีพ รอบที่ ${room.gameCycle + 1}` : 'กำลังสุ่มอาชีพของคุณ'}
+          {isTeacher
+            ? `กำลังสุ่มอาชีพ รอบที่ ${room.gameCycle + 1}`
+            : revealed && playerRole
+              ? `อาชีพของคุณคือ ${playerRole.label}`
+              : 'กำลังสุ่มอาชีพของคุณ'}
         </h1>
-        <div className={`mt-8 grid grid-cols-2 gap-3 md:grid-cols-4 ${revealed ? '' : 'animate-pulse'}`}>
-          {ROLES.map((role) => (
-            <div className={`rounded-2xl border p-4 ${revealed && !isTeacher && role.id === playerState.data?.roleId ? 'border-[#f4c96d] bg-[#f4c96d]/15' : 'border-white/15 bg-white/6'}`} key={role.id}>
-              <span className="font-black">{role.label}</span>
-              {isTeacher ? <strong className="mt-2 block text-2xl text-[#8fc4c5]">{roleCounts[role.id]} คน</strong> : null}
-            </div>
-          ))}
-        </div>
+        {isTeacher || !revealed ? (
+          <div className={`role-draw-grid ${revealed ? 'is-revealed' : 'is-shuffling'}`}>
+            {ROLES.map((role) => (
+              <div
+                className={`role-draw-card ${revealed && !isTeacher && role.id === playerState.data?.roleId ? 'is-selected' : ''}`}
+                key={role.id}
+              >
+                <div className="role-draw-card__flip">
+                  <img className="role-draw-card__face role-draw-card__back" src={ROLE_CARD_BACK_ASSET} alt="หลังการ์ดอาชีพ" />
+                  <img className="role-draw-card__face role-draw-card__front" src={ROLE_CARD_ASSETS[role.id]} alt={`การ์ดอาชีพ${role.label}`} />
+                </div>
+                {isTeacher && revealed ? <strong className="role-draw-card__count">{roleCounts[role.id]} คน</strong> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {!isTeacher && revealed && playerRole ? (
-          <div className="mt-8 rounded-2xl bg-white/8 p-6">
-            <p className="text-lg">รอบนี้คุณคือ</p>
-            <strong className="mt-2 block text-4xl text-[#f4c96d]">{playerRole.label}</strong>
-            <p className="mt-3 text-[#c9d7d5]">สถานที่ประจำอาชีพ: {LOCATION_LABELS[LOCATION_BY_ROLE[playerRole.id]]}</p>
-            <p className="mt-5 font-bold">รอครูเริ่มคำถาม</p>
+          <div className="role-draw-player-result">
+            <img src={ROLE_CARD_ASSETS[playerRole.id]} alt={`การ์ดอาชีพ${playerRole.label}`} />
+            <div>
+              <p>อาชีพของคุณคือ</p>
+              <strong>{playerRole.label}</strong>
+              <p>สถานที่ประจำอาชีพ: {LOCATION_LABELS[LOCATION_BY_ROLE[playerRole.id]]}</p>
+              <div className="role-draw-player-result__guidance">
+                <p className="role-draw-player-result__guidance-title"><span aria-hidden="true">🏙️</span> บทบาทของคุณต่อเมือง</p>
+                <strong>{ROLE_CIVIC_GUIDANCE[playerRole.id].influence}</strong>
+                <p>{ROLE_CIVIC_GUIDANCE[playerRole.id].responsibility}</p>
+              </div>
+              <p className="role-draw-player-result__waiting">รอครูเริ่มคำถาม</p>
+            </div>
           </div>
         ) : null}
         {isTeacher ? (
-          <button className="mt-8 w-full rounded-2xl bg-[#f0c866] px-6 py-4 text-lg font-black text-[#102228] disabled:opacity-45" disabled={!revealed || busy || playersState.data.some((player) => !player.roleId)} onClick={() => void begin()}>
+          <button className="role-draw-start" disabled={!revealed || busy || playersState.data.some((player) => !player.roleId)} onClick={() => void begin()}>
             {room.gameCycle === 0 ? 'เริ่มคำถาม' : `เริ่มคำถามชุดที่ ${room.gameCycle + 1}`}
           </button>
         ) : null}

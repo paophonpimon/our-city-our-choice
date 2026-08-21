@@ -1,18 +1,29 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createRoomQuestionSnapshot } from '../domain/classroomQuestions'
+import type { BuildingLevels } from '../domain/cityBuildings'
 import { hasBalancedLockedRoles, shouldCloseQuestion } from '../domain/classroomGameLoop'
 import { MAX_GAME_CYCLES } from '../domain/ourCity'
 import { createTrustedQuestions } from '../test/classroomFixtures'
 import type {
+  ClassSection,
   ClassroomAnswerRecord,
   ClassroomPlayer,
   ClassroomRoom,
   ClassroomRoundResult,
+  ClassroomCrisisResult,
   PublicRoomQuestion,
 } from '../types/classroomGame'
-import { DemoClassroomGameService, resetDemoClassroomStateForTests } from './demoClassroomService'
+import { isQuestionAnswerRecord } from '../types/classroomGame'
+import { DemoClassroomGameService, resetDemoClassroomStateForTests, setRoomFieldsForTests } from './demoClassroomService'
 
 const teacherUid = 'teacher-uid'
+
+const joinInput = (roomId: string, nickname: string, studentNumber = 1, classSection: ClassSection = '1/1') => ({
+  roomId,
+  nickname,
+  classSection,
+  studentNumber,
+})
 
 const currentRoom = (service: DemoClassroomGameService, roomId: string): ClassroomRoom => {
   let value: ClassroomRoom | null = null
@@ -50,11 +61,18 @@ const currentRounds = (service: DemoClassroomGameService, roomId: string): Class
   return value
 }
 
+const currentCrisisResults = (service: DemoClassroomGameService, roomId: string): ClassroomCrisisResult[] => {
+  let value: ClassroomCrisisResult[] = []
+  const unsubscribe = service.subscribeCrisisResults(roomId, (results) => { value = results }, () => undefined)
+  unsubscribe()
+  return value
+}
+
 const setupRoleDraw = async (playerCount = 8, duration = 30) => {
   const service = new DemoClassroomGameService()
   const room = await service.createRoom(teacherUid, duration)
   for (let index = 0; index < playerCount; index += 1) {
-    await service.joinRoom({ roomId: room.roomId, nickname: `Player ${index + 1}` }, `owner-${index + 1}`)
+    await service.joinRoom(joinInput(room.roomId, `Player ${index + 1}`, index + 1), `owner-${index + 1}`)
   }
   const snapshot = createRoomQuestionSnapshot(room.roomId, createTrustedQuestions(), 100)
   await service.startGame(room.roomId, teacherUid, snapshot)
@@ -74,7 +92,14 @@ const completeCurrentCycle = async (
 ): Promise<void> => {
   for (let questionNumber = 1; questionNumber <= 10; questionNumber += 1) {
     await service.closeQuestion(roomId, teacherUid, snapshot)
-    if (questionNumber < 10) await service.openNextQuestion(roomId, teacherUid)
+    if (questionNumber < 10) {
+      const next = await service.openNextQuestion(roomId, teacherUid)
+      if (next.status === 'crisis-intro') {
+        await service.beginCrisisEvent(roomId, teacherUid)
+        await service.closeCrisisEvent(roomId, teacherUid)
+        await service.openNextQuestion(roomId, teacherUid)
+      }
+    }
   }
   await service.finishGame(roomId, teacherUid)
 }
@@ -85,20 +110,73 @@ describe('Continue City Progress setup and role draw', () => {
   it('creates a new room with fresh city progress and empty role history', async () => {
     const service = new DemoClassroomGameService()
     const room = await service.createRoom(teacherUid, 30)
-    const player = await service.joinRoom({ roomId: room.roomId, nickname: 'น้ำ' }, 'owner-1')
-    expect(room).toMatchObject({ status: 'lobby', gameCycle: 0, completedGameCount: 0, currentQuestionNumber: 0, cityScore: 500 })
+    const player = await service.joinRoom(joinInput(room.roomId, 'น้ำ', 12, '1/2'), 'owner-1')
+    expect(room).toMatchObject({
+      status: 'lobby',
+      gameCycle: 0,
+      completedGameCount: 0,
+      currentQuestionNumber: 0,
+      cityScore: 500,
+      buildingLevels: {
+        municipality: 0,
+        hospital: 0,
+        police: 0,
+        construction: 0,
+        market: 0,
+        school: 0,
+        newsAgency: 0,
+      },
+      buildingScores: {
+        municipality: 500,
+        hospital: 500,
+        police: 500,
+        construction: 500,
+        market: 500,
+        school: 500,
+        newsAgency: 500,
+      },
+    })
     expect(room).toMatchObject({ integrityTotal: 0, corruptionTotal: 0, timeoutTotal: 0 })
-    expect(player).toMatchObject({ roleId: null, roleHistory: [], roleOffset: null })
+    expect(player).toMatchObject({ classSection: '1/2', studentNumber: 12, roleId: null, roleHistory: [], roleOffset: null })
   })
 
   it('rejects duplicate names and blocks new joins after the first role draw', async () => {
     const service = new DemoClassroomGameService()
     const room = await service.createRoom(teacherUid, 30)
-    await service.joinRoom({ roomId: room.roomId, nickname: 'น้ำ' }, 'owner-1')
-    await expect(service.joinRoom({ roomId: room.roomId, nickname: 'น้ำ' }, 'owner-2')).rejects.toThrow('ชื่อนี้ถูกใช้แล้ว')
+    await service.joinRoom(joinInput(room.roomId, 'น้ำ'), 'owner-1')
+    await expect(service.joinRoom(joinInput(room.roomId, 'น้ำ'), 'owner-2')).rejects.toThrow('ชื่อนี้ถูกใช้แล้ว')
     const snapshot = createRoomQuestionSnapshot(room.roomId, createTrustedQuestions(), 100)
     await service.startGame(room.roomId, teacherUid, snapshot)
-    await expect(service.joinRoom({ roomId: room.roomId, nickname: 'คนใหม่' }, 'owner-3')).rejects.toThrow('เกมเริ่มแล้ว')
+    await expect(service.joinRoom(joinInput(room.roomId, 'คนใหม่'), 'owner-3')).rejects.toThrow('เกมเริ่มแล้ว')
+  })
+
+  it('lets the teacher terminate a lobby and blocks the old room from being reused', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    await service.joinRoom(joinInput(room.roomId, 'Player one'), 'owner-1')
+
+    await service.endActivity(room.roomId, teacherUid)
+
+    expect(currentRoom(service, room.roomId).status).toBe('finished')
+    await expect(service.joinRoom(joinInput(room.roomId, 'Player two', 2), 'owner-2')).rejects.toThrow('ห้องนี้ถูกยุติแล้ว')
+    await expect(service.endActivity(room.roomId, teacherUid)).rejects.toThrow('ห้องนี้ถูกยุติแล้ว')
+    const replacement = await service.createRoom(teacherUid, 30)
+    expect(replacement.roomId).not.toBe(room.roomId)
+    expect(replacement.status).toBe('lobby')
+  })
+
+  it('requires a positive student number and orders the teacher roster by student number', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    await expect(service.joinRoom(joinInput(room.roomId, 'เลขที่ไม่ถูกต้อง', 0), 'owner-0')).rejects.toThrow('จำนวนเต็มบวก')
+    await service.joinRoom(joinInput(room.roomId, 'คนเลขที่สิบสอง', 12, '1/1'), 'owner-12')
+    await service.joinRoom(joinInput(room.roomId, 'คนเลขที่สามห้องสาม', 3, '1/3'), 'owner-3-3')
+    await service.joinRoom(joinInput(room.roomId, 'คนเลขที่สามห้องหนึ่ง', 3, '1/1'), 'owner-3-1')
+    expect(currentPlayers(service, room.roomId).map((player) => [player.studentNumber, player.classSection, player.nickname])).toEqual([
+      [3, '1/1', 'คนเลขที่สามห้องหนึ่ง'],
+      [3, '1/3', 'คนเลขที่สามห้องสาม'],
+      [12, '1/1', 'คนเลขที่สิบสอง'],
+    ])
   })
 
   it('stores balanced role assignments and shows role-draw before question one', async () => {
@@ -135,6 +213,44 @@ describe('Continue City Progress setup and role draw', () => {
 })
 
 describe('cycle-aware answers, rounds, and scoring', () => {
+  it('does not let a question N answer disable question N+1', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(1)
+    const player = currentPlayers(service, roomId)[0]
+    if (!player?.roleId) throw new Error('missing role')
+    const question1 = snapshot.trustedQuestions.find((item) => item.roleId === player.roleId && item.questionNumber === 1)
+    const question2 = snapshot.trustedQuestions.find((item) => item.roleId === player.roleId && item.questionNumber === 2)
+    if (!question1 || !question2) throw new Error('missing question')
+
+    await service.submitAnswer(roomId, player.playerId, player.ownerUid, 1, question1.questionId, question1.integrityChoiceId)
+    await service.closeQuestion(roomId, teacherUid, snapshot)
+    await service.openNextQuestion(roomId, teacherUid)
+    await expect(service.submitAnswer(roomId, player.playerId, player.ownerUid, 1, question1.questionId, question1.integrityChoiceId)).rejects.toThrow('ปิดแล้ว')
+    await service.submitAnswer(roomId, player.playerId, player.ownerUid, 2, question2.questionId, question2.integrityChoiceId)
+
+    expect(currentAnswers(service, roomId).filter(isQuestionAnswerRecord).map((answer) => answer.questionNumber)).toEqual([1, 2])
+  })
+
+  it('keeps authoritatively open normal and crisis decisions answerable despite a skewed client clock', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(1, 1)
+    const player = currentPlayers(service, roomId)[0]
+    if (!player?.roleId) throw new Error('missing role')
+    const question = snapshot.trustedQuestions.find((item) => item.roleId === player.roleId && item.questionNumber === 1)
+    if (!question) throw new Error('missing question')
+    setRoomFieldsForTests(roomId, { questionDeadlineAt: Date.now() - 60_000 })
+    await service.submitAnswer(roomId, player.playerId, player.ownerUid, 1, question.questionId, question.integrityChoiceId)
+
+    for (let questionNumber = 1; questionNumber <= 4; questionNumber += 1) {
+      await service.closeQuestion(roomId, teacherUid, snapshot)
+      if (questionNumber < 4) await service.openNextQuestion(roomId, teacherUid)
+    }
+    await service.openNextQuestion(roomId, teacherUid)
+    await service.beginCrisisEvent(roomId, teacherUid)
+    setRoomFieldsForTests(roomId, { questionDeadlineAt: Date.now() - 60_000 })
+    await service.submitCrisisAnswer(roomId, player.playerId, player.ownerUid, `construction-audit:${player.roleId}:integrity`)
+
+    expect(currentAnswers(service, roomId).some((answer) => answer.recordType === 'crisis')).toBe(true)
+  })
+
   it('accepts one answer per cycle and uses cycle-aware answer IDs', async () => {
     const { service, roomId, snapshot } = await setupPlaying(1)
     const player = currentPlayers(service, roomId)[0]
@@ -178,6 +294,27 @@ describe('cycle-aware answers, rounds, and scoring', () => {
     const room = currentRoom(service, roomId)
     expect(round).toMatchObject({ timeoutCount: 8, roundTotal: -160, roundAverage: -20, newCityScore: 480 })
     expect(room).toMatchObject({ cityScore: 480, timeoutTotal: 8, integrityTotal: 0, corruptionTotal: 0 })
+    // Building score starts at 500 and moves by locationSummary.scoreAverage (-20 here), landing
+    // at 480 which is still within the 400-599 (Level 0) band, unlike the old always-step-one-level
+    // behavior. buildingScores are asserted separately below.
+    expect(room.buildingLevels).toEqual({
+      municipality: 0,
+      hospital: 0,
+      police: 0,
+      construction: 0,
+      market: 0,
+      school: 0,
+      newsAgency: 0,
+    })
+    expect(room.buildingScores).toEqual({
+      municipality: 480,
+      hospital: 480,
+      police: 480,
+      construction: 480,
+      market: 480,
+      school: 480,
+      newsAgency: 480,
+    })
     expect(round.locationSummaries.school).toMatchObject({ participantCount: 2, timeoutCount: 2 })
   })
 
@@ -187,6 +324,54 @@ describe('cycle-aware answers, rounds, and scoring', () => {
     expect(currentRoom(service, roomId)).toMatchObject({ status: 'round-result', currentQuestionNumber: 1 })
     await service.openNextQuestion(roomId, teacherUid)
     expect(currentRoom(service, roomId)).toMatchObject({ status: 'playing', currentQuestionNumber: 2 })
+  })
+
+  it('inserts a real crisis after question 4 and finalizes it exactly once', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(8)
+    for (let question = 1; question <= 4; question += 1) {
+      await service.closeQuestion(roomId, teacherUid, snapshot)
+      if (question < 4) await service.openNextQuestion(roomId, teacherUid)
+    }
+    const intro = await service.openNextQuestion(roomId, teacherUid)
+    expect(intro).toMatchObject({ status: 'crisis-intro', currentQuestionNumber: 4, currentCrisisEventIndex: 1, currentCrisisEventId: 'construction-audit' })
+    await service.beginCrisisEvent(roomId, teacherUid)
+    for (const player of currentPlayers(service, roomId)) {
+      if (!player.roleId) throw new Error('missing role')
+      await service.submitCrisisAnswer(roomId, player.playerId, player.ownerUid, `construction-audit:${player.roleId}:integrity`)
+    }
+    const first = await service.closeCrisisEvent(roomId, teacherUid)
+    const second = await service.closeCrisisEvent(roomId, teacherUid)
+    expect(first).toMatchObject({ integrityCount: 8, eventAverage: 100, previousCityScore: 420, newCityScore: 520 })
+    expect(second).toEqual(first)
+    expect(currentCrisisResults(service, roomId)).toHaveLength(1)
+    // 4 normal rounds of all-timeout (-20 each) bring every buildingScore to 420, then the crisis's
+    // doubled integrity impact (+100, already x2 — not doubled again) brings it to 520: still Level 0.
+    expect(currentRoom(service, roomId).buildingScores).toEqual({ municipality: 520, hospital: 520, police: 520, construction: 520, market: 520, school: 520, newsAgency: 520 })
+    expect(currentRoom(service, roomId).buildingLevels).toEqual({ municipality: 0, hospital: 0, police: 0, construction: 0, market: 0, school: 0, newsAgency: 0 })
+    await service.openNextQuestion(roomId, teacherUid)
+    expect(currentRoom(service, roomId)).toMatchObject({ status: 'playing', currentQuestionNumber: 5, currentCrisisEventIndex: 0, currentCrisisEventId: null })
+  })
+
+  it('restores an in-progress crisis after refresh without changing the normal question number', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(2)
+    for (let question = 1; question <= 4; question += 1) {
+      await service.closeQuestion(roomId, teacherUid, snapshot)
+      if (question < 4) await service.openNextQuestion(roomId, teacherUid)
+    }
+    await service.openNextQuestion(roomId, teacherUid)
+    await service.beginCrisisEvent(roomId, teacherUid)
+    const refreshed = new DemoClassroomGameService()
+    expect(currentRoom(refreshed, roomId)).toMatchObject({ status: 'crisis-playing', currentQuestionNumber: 4, currentCrisisEventIndex: 1 })
+    await refreshed.closeCrisisEvent(roomId, teacherUid)
+    expect(currentCrisisResults(refreshed, roomId)).toHaveLength(1)
+  })
+
+  it('runs 10 normal rounds plus both crisis events before the final result', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(3)
+    await completeCurrentCycle(service, roomId, snapshot)
+    expect(currentRounds(service, roomId)).toHaveLength(10)
+    expect(currentCrisisResults(service, roomId).map((result) => result.eventIndex)).toEqual([1, 2])
+    expect(currentRoom(service, roomId)).toMatchObject({ status: 'game-result', currentQuestionNumber: 10, completedGameCount: 1 })
   })
 })
 
@@ -200,7 +385,7 @@ describe('continue in the same room', () => {
     const continued = await service.continueCityProgress(roomId, teacherUid)
     expect(continued.roomId).toBe(roomId)
     expect(currentPlayers(service, roomId).map((player) => player.playerId)).toEqual(playerIds)
-    expect(continued).toMatchObject({ gameCycle: 1, completedGameCount: 1, status: 'role-draw', currentQuestionNumber: 0 })
+    expect(continued).toMatchObject({ gameCycle: 1, completedGameCount: 1, status: 'role-draw', currentQuestionNumber: 0, currentCrisisEventIndex: 0, currentCrisisEventId: null })
     expect(continued.cityScore).toBe(before.cityScore)
     expect(continued.cityLevel).toBe(before.cityLevel)
     expect(continued.timeoutTotal).toBe(before.timeoutTotal)
@@ -246,9 +431,114 @@ describe('continue in the same room', () => {
     const { service, roomId, snapshot } = await setupPlaying(1)
     await completeCurrentCycle(service, roomId, snapshot)
     const newRoom = await service.createRoom(teacherUid, 30)
-    const newPlayer = await service.joinRoom({ roomId: newRoom.roomId, nickname: 'ผู้เล่นใหม่' }, 'new-owner')
+    const newPlayer = await service.joinRoom(joinInput(newRoom.roomId, 'ผู้เล่นใหม่'), 'new-owner')
     expect(newRoom.roomId).not.toBe(roomId)
     expect(newRoom).toMatchObject({ cityScore: 500, gameCycle: 0, completedGameCount: 0, integrityTotal: 0, corruptionTotal: 0, timeoutTotal: 0 })
     expect(newPlayer).toMatchObject({ roleHistory: [], roleOffset: null, roleId: null })
+  })
+
+  it('does not restore finished room progress into a replacement room', async () => {
+    const service = new DemoClassroomGameService()
+    const oldRoom = await service.createRoom(teacherUid, 30)
+    setRoomFieldsForTests(oldRoom.roomId, {
+      cityScore: 100,
+      buildingLevels: { municipality: -2, hospital: -2, police: -2, construction: -2, market: -2, school: -2, newsAgency: -2 },
+      buildingScores: { municipality: 100, hospital: 100, police: 100, construction: 100, market: 100, school: 100, newsAgency: 100 },
+    })
+    await service.endActivity(oldRoom.roomId, teacherUid)
+
+    const reopened = new DemoClassroomGameService()
+    const replacement = await reopened.createRoom(teacherUid, 30)
+    expect(currentRoom(reopened, oldRoom.roomId).status).toBe('finished')
+    expect(replacement.roomId).not.toBe(oldRoom.roomId)
+    expect(replacement).toMatchObject({ cityScore: 500, gameCycle: 0, currentQuestionNumber: 0, status: 'lobby' })
+    expect(replacement.buildingLevels).toEqual({ municipality: 0, hospital: 0, police: 0, construction: 0, market: 0, school: 0, newsAgency: 0 })
+    expect(currentPlayers(reopened, replacement.roomId)).toEqual([])
+    expect(currentRounds(reopened, replacement.roomId)).toEqual([])
+  })
+
+  it('preserves buildingScores across continueCityProgress into the next cycle', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(8)
+    await completeCurrentCycle(service, roomId, snapshot)
+    const beforeScores = currentRoom(service, roomId).buildingScores
+    const continued = await service.continueCityProgress(roomId, teacherUid)
+    expect(continued.buildingScores).toEqual(beforeScores)
+    expect(currentRoom(service, roomId).buildingScores).toEqual(beforeScores)
+  })
+})
+
+describe('persistent building scores', () => {
+  it('cityScore and buildingScores move independently from the same round', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(8)
+    const round = await service.closeQuestion(roomId, teacherUid, snapshot)
+    const room = currentRoom(service, roomId)
+    // Same round, two independent tallies: cityScore uses roundAverage over all players,
+    // buildingScores use each location's own scoreAverage. Both happen to be -20 here because
+    // every player timed out uniformly, but they are computed and stored separately.
+    expect(round.roundAverage).toBe(-20)
+    expect(room.cityScore).toBe(480)
+    expect(room.buildingScores?.hospital).toBe(480)
+  })
+
+  it('averages teacher and student outcomes together under the shared school building score', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(8)
+    const players = currentPlayers(service, roomId)
+    const teacher = players.find((player) => player.roleId === 'teacher')
+    const student = players.find((player) => player.roleId === 'student')
+    if (!teacher || !student) throw new Error('missing teacher/student')
+    const teacherQuestion = snapshot.trustedQuestions.find((question) => question.roleId === 'teacher' && question.questionNumber === 1)
+    if (!teacherQuestion) throw new Error('missing question')
+    // Teacher answers with integrity (+50); student leaves it as a timeout (-20).
+    await service.submitAnswer(roomId, teacher.playerId, teacher.ownerUid, 1, teacherQuestion.questionId, teacherQuestion.integrityChoiceId)
+    const round = await service.closeQuestion(roomId, teacherUid, snapshot)
+    expect(round.locationSummaries.school).toMatchObject({ participantCount: 2, integrityCount: 1, timeoutCount: 1, scoreAverage: 15 })
+    const room = currentRoom(service, roomId)
+    expect(room.buildingScores?.school).toBe(515)
+    // Every other building only had a single timeout participant, so its score differs from school's.
+    expect(room.buildingScores?.hospital).toBe(480)
+  })
+
+  it('applies the crisis impact to buildingScores exactly once (already x2, never doubled again)', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(8)
+    for (let question = 1; question <= 4; question += 1) {
+      await service.closeQuestion(roomId, teacherUid, snapshot)
+      if (question < 4) await service.openNextQuestion(roomId, teacherUid)
+    }
+    const beforeCrisis = currentRoom(service, roomId).buildingScores
+    await service.openNextQuestion(roomId, teacherUid)
+    await service.beginCrisisEvent(roomId, teacherUid)
+    for (const player of currentPlayers(service, roomId)) {
+      if (!player.roleId) throw new Error('missing role')
+      await service.submitCrisisAnswer(roomId, player.playerId, player.ownerUid, `construction-audit:${player.roleId}:integrity`)
+    }
+    const result = await service.closeCrisisEvent(roomId, teacherUid)
+    // CRISIS_SCORE_POLICY.integrity is already SCORE_POLICY.integrity * 2 (100); this must be
+    // applied to buildingScores as-is, not multiplied by 2 again.
+    expect(result.locationSummaries.hospital.scoreAverage).toBe(100)
+    const after = currentRoom(service, roomId).buildingScores
+    expect(after?.hospital).toBe((beforeCrisis?.hospital ?? 0) + 100)
+  })
+})
+
+describe('backward compatibility with rooms created before buildingScores existed', () => {
+  it('derives buildingScores from a legacy buildingLevels-only room the first time it is scored', async () => {
+    const { service, roomId, snapshot } = await setupPlaying(8)
+    // Simulate a room persisted before buildingScores existed: only buildingLevels is present,
+    // as if the old level-stepping system had already nudged every building up once.
+    const legacyLevels: BuildingLevels = { municipality: 1, hospital: 1, police: 1, construction: 1, market: 1, school: 1, newsAgency: 1 }
+    setRoomFieldsForTests(roomId, { buildingLevels: legacyLevels, buildingScores: undefined })
+
+    expect(currentRoom(service, roomId).buildingScores).toBeUndefined()
+
+    await service.closeQuestion(roomId, teacherUid, snapshot)
+    const room = currentRoom(service, roomId)
+    // Legacy Level 1 derives an initial score of 700; this round's uniform timeout (-20) brings
+    // it to 680, which is still within the Level 1 band (600-799).
+    expect(room.buildingScores).toEqual({
+      municipality: 680, hospital: 680, police: 680, construction: 680, market: 680, school: 680, newsAgency: 680,
+    })
+    expect(room.buildingLevels).toEqual({
+      municipality: 1, hospital: 1, police: 1, construction: 1, market: 1, school: 1, newsAgency: 1,
+    })
   })
 })

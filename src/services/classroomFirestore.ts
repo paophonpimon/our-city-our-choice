@@ -42,6 +42,8 @@ export const classroomPaths = {
   question: (roomId: string, questionId: string) => `rooms/${roomId}/questions/${questionId}`,
   answer: (roomId: string, answerId: string) => `rooms/${roomId}/answers/${answerId}`,
   round: (roomId: string, gameCycle: number, questionNumber: number) => `rooms/${roomId}/rounds/${gameCycle}::${questionNumber}`,
+  crisisResult: (roomId: string, gameCycle: number, eventIndex: number) => `rooms/${roomId}/crisisResults/${gameCycle}::${eventIndex}`,
+  personalDecisionResult: (roomId: string, decisionId: string) => `rooms/${roomId}/personalResults/${decisionId}`,
 } as const
 
 export const createClassroomAnswerId = (gameCycle: number, playerId: string, questionId: string): string => {
@@ -56,6 +58,30 @@ export const createClassroomRoundId = (gameCycle: number, questionNumber: number
     throw new Error('gameCycle and questionNumber must be valid')
   }
   return `${gameCycle}::${questionNumber}`
+}
+
+export const createCrisisAnswerId = (gameCycle: number, playerId: string, eventId: string): string => {
+  if (!Number.isInteger(gameCycle) || gameCycle < 0 || !playerId.trim() || !eventId.trim() || playerId.includes('/') || eventId.includes('/')) {
+    throw new Error('gameCycle and Firestore-safe playerId/eventId are required')
+  }
+  return `${gameCycle}::${playerId}::crisis::${eventId}`
+}
+
+export const createCrisisResultId = (gameCycle: number, eventIndex: number): string => {
+  if (!Number.isInteger(gameCycle) || gameCycle < 0 || ![1, 2].includes(eventIndex)) throw new Error('invalid crisis result id')
+  return `${gameCycle}::${eventIndex}`
+}
+
+export const createPersonalDecisionId = (
+  gameCycle: number,
+  source: 'question' | 'crisis',
+  sequenceNumber: number,
+  playerId: string,
+): string => {
+  if (!Number.isInteger(gameCycle) || gameCycle < 0 || !Number.isInteger(sequenceNumber) || sequenceNumber < 1 || !playerId.trim() || playerId.includes('/')) {
+    throw new Error('personal decision id requires safe cycle, sequence, and player id')
+  }
+  return `${gameCycle}::${source}::${sequenceNumber}::${playerId}`
 }
 
 export const toPublicQuestionDocument = (question: PublicRoomQuestion): PublicRoomQuestion => ({

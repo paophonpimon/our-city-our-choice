@@ -1,46 +1,97 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { CityLoader } from '../components/CityLoader'
+import { CityScene } from '../components/CityScene'
 import { useGame } from '../context/GameContext'
-import { getCityImagePath, getFinalAnswerTotals } from '../domain/classroomGameLoop'
-import { MAX_GAME_CYCLES } from '../domain/ourCity'
-import { usePlayers, useRoom, useRounds } from '../hooks/useGameData'
+import { LOCATION_BUILDING, normalizeBuildingLevels, type BuildingId, type BuildingLevel } from '../domain/cityBuildings'
+import type { LocationId, LocationSummary } from '../domain/cityScoring'
+import { formatCityLevel, MAX_GAME_CYCLES, ROLES, type CityLevel } from '../domain/ourCity'
+import { useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
 import { classroomFriendlyError } from '../services'
 import {
   clearClassroomStudentSession,
   clearClassroomTeacherSession,
   getClassroomStudentSession,
   getClassroomTeacherSession,
+  getClassroomViewerRole,
 } from '../services/sessionStorage'
 import { clearTeacherSnapshot } from '../services/teacherQuestionSnapshot'
+import type { ClassroomPersonalDecisionResult, PersonalDecisionOutcome } from '../types/classroomGame'
 
-const CITY_LABELS = {
-  critical: 'เมืองวิกฤตจากการทุจริต',
-  declining: 'เมืองกำลังเสื่อมโทรม',
-  neutral: 'เมืองยังอยู่ในภาวะปกติ',
-  improving: 'เมืองกำลังเจริญขึ้น',
-  prosperous: 'เมืองเจริญอย่างยั่งยืน',
-} as const
-
-export const CITY_REFLECTIONS = {
-  critical: 'เมืองได้รับผลกระทบรุนแรงจากการตัดสินใจที่ไม่โปร่งใส',
+// eslint-disable-next-line react-refresh/only-export-components
+export const CITY_REFLECTIONS: Record<CityLevel, string> = {
+  critical: 'เมืองได้รับผลกระทบรุนแรงจากการตัดสินใจที่ไม่โปร่งใส และต้องเร่งฟื้นฟูร่วมกัน',
   declining: 'เมืองกำลังเสื่อมถอยและต้องการความร่วมมือจากทุกคน',
-  neutral: 'เมืองยังดำเนินต่อไปได้ แต่ยังพัฒนาได้อีกมาก',
+  neutral: 'เมืองยังอยู่ในภาวะปกติ ทุกการตัดสินใจต่อจากนี้จะกำหนดทิศทางของเมือง',
   improving: 'เมืองกำลังพัฒนาเพราะประชาชนร่วมกันตัดสินใจอย่างรับผิดชอบ',
-  prosperous: 'เมืองเจริญรุ่งเรืองจากความซื่อสัตย์และความร่วมมือของทุกคน',
-} as const
+  prosperous: 'เมืองพัฒนาอย่างมั่นคงจากความซื่อสัตย์และความร่วมมือของทุกคน',
+}
+
+const CITY_LEVEL_STEPS: readonly { id: CityLevel; range: string }[] = [
+  { id: 'critical', range: '0–199' },
+  { id: 'declining', range: '200–299' },
+  { id: 'neutral', range: '300–599' },
+  { id: 'improving', range: '600–799' },
+  { id: 'prosperous', range: '800–1,000' },
+]
+
+const CITY_RESULT_EMOJI: Record<CityLevel, string> = {
+  critical: '😰', declining: '😟', neutral: '🏙️', improving: '🙂', prosperous: '🌟',
+}
+
+const BUILDING_LEVEL_LABELS: Record<BuildingLevel, string> = {
+  [-2]: 'ทรุดโทรมมาก', [-1]: 'เริ่มทรุดโทรม', 0: 'ปกติ', 1: 'กำลังพัฒนา', 2: 'พัฒนาเต็มที่',
+}
+
+const RESULT_BUILDINGS: readonly { id: LocationId; buildingId: BuildingId; icon: string; label: string }[] = [
+  { id: 'school', buildingId: 'school', icon: '🏫', label: 'โรงเรียน' },
+  { id: 'construction', buildingId: 'construction', icon: '🏗️', label: 'ไซต์ก่อสร้าง' },
+  { id: 'market', buildingId: 'market', icon: '🏪', label: 'ตลาด' },
+  { id: 'hospital', buildingId: 'hospital', icon: '🏥', label: 'โรงพยาบาล' },
+  { id: 'police-station', buildingId: 'police', icon: '👮', label: 'สถานีตำรวจ' },
+  { id: 'municipal-office', buildingId: 'municipality', icon: '🏛️', label: 'สำนักงานเทศบาล' },
+  { id: 'news-office', buildingId: 'newsAgency', icon: '🛰️', label: 'สำนักข่าว' },
+]
+
+const signed = (value: number): string => `${value > 0 ? '+' : ''}${Math.round(value)}`
+const emptyLocationSummary = (): LocationSummary => ({ integrityCount: 0, corruptionCount: 0, timeoutCount: 0, participantCount: 0, scoreTotal: 0, scoreAverage: 0 })
+const addLocationSummary = (target: LocationSummary, source: LocationSummary): LocationSummary => {
+  const participantCount = target.participantCount + source.participantCount
+  const scoreTotal = target.scoreTotal + source.scoreTotal
+  return {
+    integrityCount: target.integrityCount + source.integrityCount,
+    corruptionCount: target.corruptionCount + source.corruptionCount,
+    timeoutCount: target.timeoutCount + source.timeoutCount,
+    participantCount,
+    scoreTotal,
+    scoreAverage: participantCount > 0 ? scoreTotal / participantCount : 0,
+  }
+}
+const countPersonalResults = (results: readonly ClassroomPersonalDecisionResult[]) => results.reduce(
+  (totals, result) => ({ ...totals, [result.outcome]: totals[result.outcome] + 1 }),
+  { integrity: 0, corruption: 0, timeout: 0 } satisfies Record<PersonalDecisionOutcome, number>,
+)
 
 export const ResultPage = () => {
   const roomId = (useParams().roomCode ?? '').toUpperCase()
   const navigate = useNavigate()
   const { service, uid } = useGame()
-  const roomState = useRoom(roomId)
-  const roundsState = useRounds(roomId)
-  const playersState = usePlayers(roomId)
   const teacherSession = getClassroomTeacherSession()
   const studentSession = getClassroomStudentSession()
-  const isTeacher = teacherSession?.roomId === roomId
+  const viewerRole = getClassroomViewerRole()
+  const hasStudentSession = studentSession?.roomId === roomId
+  const isTeacher = teacherSession?.roomId === roomId && (viewerRole === 'teacher' || (viewerRole === null && !hasStudentSession))
+  const studentPlayerId = hasStudentSession ? studentSession.playerId : ''
+  const roomState = useRoom(roomId)
+  const roundsState = useRounds(isTeacher ? roomId : '')
+  const crisisResultsState = useCrisisResults(isTeacher ? roomId : '')
+  const playersState = usePlayers(isTeacher ? roomId : '')
+  const playerState = usePlayer(hasStudentSession ? roomId : '', studentPlayerId)
+  const personalResultsState = usePersonalDecisionResults(hasStudentSession ? roomId : '', studentPlayerId, hasStudentSession ? uid : '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [detailsExpanded, setDetailsExpanded] = useState(false)
+  const [activeBuildingId, setActiveBuildingId] = useState<LocationId | null>(null)
 
   useEffect(() => {
     const status = roomState.data?.status
@@ -49,91 +100,114 @@ export const ResultPage = () => {
     if (status === 'lobby') navigate(isTeacher ? '/teacher' : `/lobby/${roomId}`, { replace: true })
   }, [isTeacher, navigate, roomId, roomState.data?.status])
 
-  if (!roomId) return <Navigate replace to="/" />
-  if (roomState.loading || roundsState.loading || playersState.loading) {
-    return <main className="our-city-page grid min-h-dvh place-items-center text-xl">กำลังสรุปผลเมือง...</main>
-  }
-  if (!roomState.data) return <Navigate replace to="/" />
+  useEffect(() => {
+    if (roomState.data?.status !== 'finished' || isTeacher || !hasStudentSession) return
+    clearClassroomStudentSession()
+    navigate('/', { replace: true })
+  }, [hasStudentSession, isTeacher, navigate, roomState.data?.status])
+
+  useEffect(() => {
+    if (!activeBuildingId) return undefined
+    const closeOnEscape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setActiveBuildingId(null) }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [activeBuildingId])
 
   const room = roomState.data
-  const latestTotals = getFinalAnswerTotals(roundsState.data, room.gameCycle)
+  const cycleRounds = useMemo(() => room ? roundsState.data.filter((round) => round.gameCycle === room.gameCycle).sort((a, b) => a.questionNumber - b.questionNumber) : [], [room, roundsState.data])
+  const cycleCrises = useMemo(() => room ? crisisResultsState.data.filter((result) => result.gameCycle === room.gameCycle).sort((a, b) => a.eventIndex - b.eventIndex) : [], [crisisResultsState.data, room])
+
+  if (!roomId) return <Navigate replace to="/" />
+  const loadingTeacher = isTeacher && (roundsState.loading || crisisResultsState.loading || playersState.loading)
+  const loadingStudent = hasStudentSession && (playerState.loading || personalResultsState.loading)
+  if (roomState.loading || loadingTeacher || loadingStudent) return <CityLoader variant="full" message="กำลังสรุปผลเมือง..." />
+  if (!room) return <Navigate replace to="/" />
+
+  const cycleResults = [...cycleRounds, ...cycleCrises]
+  const latestTotals = cycleResults.reduce((totals, result) => ({ integrityCount: totals.integrityCount + result.integrityCount, corruptionCount: totals.corruptionCount + result.corruptionCount, timeoutCount: totals.timeoutCount + result.timeoutCount }), { integrityCount: 0, corruptionCount: 0, timeoutCount: 0 })
+  const latestAnswerTotal = latestTotals.integrityCount + latestTotals.corruptionCount + latestTotals.timeoutCount
+  const percentage = (count: number): number => latestAnswerTotal > 0 ? Math.round(count / latestAnswerTotal * 100) : 0
+  const cycleStartScore = cycleRounds[0]?.previousCityScore ?? cycleCrises[0]?.previousCityScore ?? room.cityScore
+  const cycleScoreDelta = room.cityScore - cycleStartScore
   const roleProgress = playersState.data.length === 0 ? room.completedGameCount : Math.min(...playersState.data.map((player) => player.roleHistory.length))
   const canContinue = room.status === 'game-result' && room.gameCycle < MAX_GAME_CYCLES - 1
+  const buildingLevels = normalizeBuildingLevels(room.buildingLevels)
+  const buildingResults = RESULT_BUILDINGS.map((building) => {
+    const summary = cycleResults.reduce((total, result) => addLocationSummary(total, result.locationSummaries[building.id]), emptyLocationSummary())
+    const average = summary.participantCount > 0 ? summary.scoreTotal / summary.participantCount : 0
+    const level = buildingLevels[LOCATION_BUILDING[building.id]]
+    return { ...building, summary, average, level, direction: average > 0 ? 'กำลังดีขึ้น' : average < 0 ? 'กำลังถดถอย' : 'ทรงตัว' }
+  })
+  const activeBuilding = activeBuildingId ? buildingResults.find((building) => building.id === activeBuildingId) ?? null : null
 
   const continueCity = async (): Promise<void> => {
-    setBusy(true)
-    setError('')
-    try {
-      await service.continueCityProgress(roomId, uid)
-    } catch (reason) {
-      setError(classroomFriendlyError(reason))
-    } finally {
-      setBusy(false)
-    }
+    setBusy(true); setError('')
+    try { await service.continueCityProgress(roomId, uid) } catch (reason) { setError(classroomFriendlyError(reason)) } finally { setBusy(false) }
   }
-
   const endActivity = async (createNew = false): Promise<void> => {
-    setBusy(true)
-    setError('')
+    setBusy(true); setError('')
     try {
       if (room.status === 'game-result') await service.endActivity(roomId, uid)
-      if (createNew) {
-        clearTeacherSnapshot(roomId)
-        clearClassroomTeacherSession()
-        navigate('/teacher')
-      }
-    } catch (reason) {
-      setError(classroomFriendlyError(reason))
-    } finally {
-      setBusy(false)
-    }
+      if (createNew) { clearTeacherSnapshot(roomId); clearClassroomTeacherSession(); navigate('/teacher') }
+    } catch (reason) { setError(classroomFriendlyError(reason)) } finally { setBusy(false) }
   }
-
   const goHome = (): void => {
-    if (isTeacher) {
-      clearTeacherSnapshot(roomId)
-      clearClassroomTeacherSession()
-    }
+    if (isTeacher) { clearTeacherSnapshot(roomId); clearClassroomTeacherSession() }
     if (studentSession?.roomId === roomId) clearClassroomStudentSession()
     navigate('/')
   }
+  const teacherError = error || roomState.error || roundsState.error || crisisResultsState.error || playersState.error
+
+  if (!isTeacher && hasStudentSession) {
+    const personalCurrent = personalResultsState.data.filter((result) => result.gameCycle === room.gameCycle)
+    const personalCumulative = personalResultsState.data.filter((result) => result.gameCycle <= room.gameCycle)
+    const currentTotals = countPersonalResults(personalCurrent)
+    const cumulativeTotals = countPersonalResults(personalCumulative)
+    const currentTotal = currentTotals.integrity + currentTotals.corruption + currentTotals.timeout
+    const cumulativeTotal = cumulativeTotals.integrity + cumulativeTotals.corruption + cumulativeTotals.timeout
+    const role = ROLES.find((candidate) => candidate.id === playerState.data?.roleId)
+    const hasPrivateResults = personalCurrent.length > 0
+    return (
+      <main className={`student-cycle-result is-${room.cityLevel}`}>
+        <div className="result-city-art" aria-hidden="true"><CityScene buildingLevels={room.buildingLevels} cityLevel={room.cityLevel} /></div><div className="result-city-veil" aria-hidden="true" />
+        <section className="student-cycle-result__card">
+          <header className="student-cycle-result__header"><p>ผลลัพธ์ส่วนตัว • ชุดที่ {room.gameCycle + 1}</p><h1>ผลการตัดสินใจของฉัน</h1><span>ข้อมูลนี้แสดงเฉพาะการตัดสินใจของคุณเท่านั้น</span></header>
+          <section className="student-decision-counters" aria-label="การตัดสินใจของฉันในชุดนี้">
+            <article className="is-integrity"><span aria-hidden="true">✓</span><p>เลือกทางสุจริต<strong>{hasPrivateResults ? currentTotals.integrity : '—'}</strong></p></article>
+            <article className="is-corruption"><span aria-hidden="true">!</span><p>เลือกทางทุจริต<strong>{hasPrivateResults ? currentTotals.corruption : '—'}</strong></p></article>
+            <article className="is-timeout"><span aria-hidden="true">?</span><p>ไม่ได้ตอบ<strong>{hasPrivateResults ? currentTotals.timeout : '—'}</strong></p></article>
+          </section>
+          <div className="student-cycle-result__total"><span>ชุดนี้</span><strong>{hasPrivateResults ? `${currentTotal} การตัดสินใจ` : 'ยังไม่มีข้อมูลผลส่วนตัวสำหรับชุดนี้'}</strong><small>รวมคำถามปกติและเหตุการณ์วิกฤตที่สรุปผลแล้ว</small></div>
+          <section className="student-cycle-result__secondary"><article><span>อาชีพของฉัน</span><strong>{role?.label ?? 'รอข้อมูลอาชีพ'}</strong></article><article><span>ผลเมืองร่วมกัน</span><strong>{formatCityLevel(room.cityLevel)}</strong><small>{Math.round(room.cityScore).toLocaleString('th-TH')} / 1,000 คะแนน</small></article></section>
+          <details className="student-cycle-result__cumulative"><summary>ดูผลสะสมทั้งหมด</summary><div><span>เลือกทางสุจริต <strong>{cumulativeTotals.integrity}</strong></span><span>เลือกทางทุจริต <strong>{cumulativeTotals.corruption}</strong></span><span>ไม่ได้ตอบ <strong>{cumulativeTotals.timeout}</strong></span><span>รวม <strong>{cumulativeTotal} การตัดสินใจ</strong></span></div></details>
+          <p className="student-cycle-result__reflection">{CITY_REFLECTIONS[room.cityLevel]}</p>
+          {room.status === 'game-result' ? <strong className="student-cycle-result__waiting">รอครูเลือกว่าจะเล่นต่อหรือจบกิจกรรม</strong> : <button className="student-cycle-result__home" onClick={goHome} type="button">กลับหน้าหลัก</button>}
+          {personalResultsState.error ? <output className="student-cycle-result__error">{personalResultsState.error}</output> : null}
+        </section>
+      </main>
+    )
+  }
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-[#051017] text-white">
-      <img className="absolute inset-0 h-full w-full object-cover" src={getCityImagePath(room.cityLevel)} alt={CITY_LABELS[room.cityLevel]} />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,10,15,.25),rgba(2,10,15,.92))]" />
-      <section className="relative z-10 flex min-h-dvh items-end justify-center px-5 py-8 md:py-12">
-        <div className="final-city-panel our-city-panel w-full max-w-6xl p-7 text-center md:p-10">
-          <p className="text-sm font-bold tracking-[.2em] text-[#f4c96d] uppercase">ผลการพัฒนาเมือง • ชุดที่ {room.gameCycle + 1}</p>
-          <h1 className="mt-3 text-3xl font-black md:text-5xl">{CITY_LABELS[room.cityLevel]}</h1>
-          <p className="mx-auto mt-3 max-w-3xl text-lg text-[#d2dfdd]">{CITY_REFLECTIONS[room.cityLevel]}</p>
-          <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">คะแนนเมืองปัจจุบัน</span><strong className="mt-2 block text-3xl">{Math.round(room.cityScore)} / 1,000</strong></div>
-            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">สุจริตชุดล่าสุด</span><strong className="mt-2 block text-3xl text-emerald-200">{latestTotals.integrityCount}</strong></div>
-            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">ทุจริตชุดล่าสุด</span><strong className="mt-2 block text-3xl text-red-200">{latestTotals.corruptionCount}</strong></div>
-            <div className="rounded-2xl bg-white/7 p-5"><span className="text-sm text-[#b7c9c7]">ไม่ตอบชุดล่าสุด</span><strong className="mt-2 block text-3xl text-[#d7d3c8]">{latestTotals.timeoutCount}</strong></div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="rounded-xl bg-black/25 p-4">สุจริตสะสม <strong className="block text-2xl">{room.integrityTotal}</strong></div>
-            <div className="rounded-xl bg-black/25 p-4">ทุจริตสะสม <strong className="block text-2xl">{room.corruptionTotal}</strong></div>
-            <div className="rounded-xl bg-black/25 p-4">ไม่ตอบสะสม <strong className="block text-2xl">{room.timeoutTotal}</strong></div>
-            <div className="rounded-xl bg-black/25 p-4">อาชีพที่ผ่านแล้ว <strong className="block text-2xl">{roleProgress} / 8</strong></div>
-          </div>
-          <p className="mt-5 font-bold text-[#f4c96d]">ระดับเมือง: {room.cityLevel}</p>
-          {roleProgress >= MAX_GAME_CYCLES ? <p className="mt-4 text-lg font-black">นักเรียนได้ทดลองครบทั้ง 8 อาชีพแล้ว</p> : null}
-          {isTeacher ? (
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              {canContinue ? <button className="rounded-2xl bg-[#f0c866] px-6 py-4 text-lg font-black text-[#102228] disabled:opacity-50" disabled={busy} onClick={() => void continueCity()}>เล่นต่อเพื่อพัฒนาเมือง</button> : null}
-              <button className="rounded-2xl border border-white/25 bg-white/8 px-6 py-4 text-lg font-black disabled:opacity-50" disabled={busy} onClick={() => void endActivity(false)}>จบกิจกรรม</button>
-              {!canContinue ? <button className="rounded-2xl bg-[#f0c866] px-6 py-4 text-lg font-black text-[#102228] disabled:opacity-50" disabled={busy} onClick={() => void endActivity(true)}>สร้างห้องใหม่</button> : null}
-            </div>
-          ) : (
-            <p className="mt-8 font-bold">{room.status === 'game-result' ? 'รอครูเลือกว่าจะเล่นต่อหรือจบกิจกรรม' : 'กิจกรรมสิ้นสุดแล้ว'}</p>
-          )}
-          {room.status === 'finished' ? <button className="mt-5 rounded-xl border border-white/20 px-5 py-3 font-bold" onClick={goHome}>กลับหน้าหลัก</button> : null}
-          {error || roomState.error || roundsState.error || playersState.error ? <p className="mt-4 text-red-200">{error || roomState.error || roundsState.error || playersState.error}</p> : null}
-        </div>
+    <main className={`teacher-result-page is-${room.cityLevel}`}>
+      <div className="result-city-art" aria-hidden="true"><CityScene buildingLevels={room.buildingLevels} cityLevel={room.cityLevel} /></div><div className="result-city-veil" aria-hidden="true" />
+      <header className="teacher-result-topbar"><div><span>🚩</span><p>ชุดที่<strong>{room.gameCycle + 1} / {MAX_GAME_CYCLES}</strong></p></div><div><span>⭐</span><p>คะแนนเมือง<strong>{Math.round(room.cityScore).toLocaleString('th-TH')}</strong></p></div><div><span>🏆</span><p>อาชีพที่ผ่านแล้ว<strong>{roleProgress} / {MAX_GAME_CYCLES}</strong></p></div><div><span>👥</span><p>ห้องเรียน<strong>{room.roomId}</strong></p></div></header>
+      <section className="teacher-result-shell">
+        <article className="teacher-result-summary">
+          <header className="teacher-result-hero"><div className="teacher-result-hero__level"><span>{CITY_RESULT_EMOJI[room.cityLevel]}</span><div><small>ผลเมืองชุดที่ {room.gameCycle + 1}</small><h1>{formatCityLevel(room.cityLevel)}</h1></div></div><div className="teacher-result-hero__score"><span>คะแนนเมือง</span><strong>{Math.round(room.cityScore).toLocaleString('th-TH')} <small>/ 1,000</small></strong></div><div className={`teacher-result-hero__delta ${cycleScoreDelta >= 0 ? 'is-positive' : 'is-negative'}`}><span>ผลสุทธิชุดนี้</span><strong>{signed(cycleScoreDelta)} คะแนน</strong></div><p>{CITY_REFLECTIONS[room.cityLevel]}</p></header>
+          <section className="teacher-answer-summary" aria-labelledby="answer-summary-title"><h2 id="answer-summary-title">สรุปคำตอบชุดนี้</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{latestTotals.integrityCount}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{latestTotals.corruptionCount}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{latestTotals.timeoutCount}</strong></p></article></div></section>
+          <section className="teacher-building-summary" aria-labelledby="building-summary-title"><div className="teacher-section-heading"><div><h2 id="building-summary-title">ภาพรวมอาคารทั้ง 7 แห่ง</h2><p>ผลกระทบเฉลี่ยจากคำตอบในชุดนี้</p></div></div><div className="teacher-building-summary__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>Lv.{building.level > 0 ? '+' : ''}{building.level} • {building.direction}</small></p><strong>{signed(building.average)}</strong></article>)}</div></section>
+          <button className="teacher-result-expand" aria-expanded={detailsExpanded} onClick={() => setDetailsExpanded((current) => !current)} type="button"><span>{detailsExpanded ? 'ซ่อนรายละเอียดผลลัพธ์' : 'ดูรายละเอียดผลลัพธ์'}</span><b>{detailsExpanded ? '⌃' : '⌄'}</b></button>
+          <footer className="teacher-result-actions">{canContinue ? <button className="is-primary" disabled={busy} onClick={() => void continueCity()} type="button">▶ เล่นต่อเพื่อพัฒนาเมือง</button> : null}{room.status === 'game-result' ? <button disabled={busy} onClick={() => void endActivity(false)} type="button">จบกิจกรรม</button> : null}{!canContinue ? <button className="is-primary" disabled={busy} onClick={() => void endActivity(true)} type="button">สร้างห้องใหม่</button> : null}</footer>
+          {roleProgress >= MAX_GAME_CYCLES ? <strong className="teacher-result-complete">✓ นักเรียนได้ทดลองครบทั้ง 8 อาชีพแล้ว</strong> : null}{teacherError ? <output className="teacher-result-error">{teacherError}</output> : null}
+        </article>
+        {detailsExpanded ? <section className="teacher-result-details" aria-label="รายละเอียดผลลัพธ์">
+          <section className="teacher-result-levels"><div className="teacher-section-heading"><div><h2>ระดับเมือง</h2><p>เกณฑ์คะแนนรวมของเมือง</p></div></div><div className="teacher-result-levels__grid">{CITY_LEVEL_STEPS.map((step) => <article className={step.id === room.cityLevel ? 'is-current' : ''} key={step.id}><span>{CITY_RESULT_EMOJI[step.id]}</span><strong>{formatCityLevel(step.id)}</strong><small>{step.range} คะแนน</small></article>)}</div></section>
+          <section className="teacher-result-answer-details"><div className="teacher-section-heading"><div><h2>สรุปคำตอบ</h2><p>ข้อมูลรวมของห้องเรียน ไม่แสดงผลรายบุคคล</p></div></div><div className="teacher-result-answer-table" role="table"><div className="is-heading" role="row"><span role="columnheader">ประเภทการตัดสินใจ</span><span role="columnheader">ชุดล่าสุด</span><span role="columnheader">สัดส่วน</span><span role="columnheader">สะสมทั้งหมด</span></div><div role="row"><strong role="cell">สุจริตชุดล่าสุด</strong><span role="cell">{latestTotals.integrityCount}</span><span role="cell">{percentage(latestTotals.integrityCount)}%</span><span role="cell">สุจริตสะสม {room.integrityTotal}</span></div><div role="row"><strong role="cell">ทุจริตชุดล่าสุด</strong><span role="cell">{latestTotals.corruptionCount}</span><span role="cell">{percentage(latestTotals.corruptionCount)}%</span><span role="cell">ทุจริตสะสม {room.corruptionTotal}</span></div><div role="row"><strong role="cell">ไม่ตอบชุดล่าสุด</strong><span role="cell">{latestTotals.timeoutCount}</span><span role="cell">{percentage(latestTotals.timeoutCount)}%</span><span role="cell">ไม่ตอบสะสม {room.timeoutTotal}</span></div></div></section>
+          <section className="teacher-result-building-details"><div className="teacher-section-heading"><div><h2>ผลลัพธ์อาคาร</h2><p>รายละเอียดจากข้อมูลจริงที่สรุปแล้วในชุดนี้</p></div></div><div className="teacher-result-building-details__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><header><span>{building.icon}</span><div><h3>{building.label}</h3><p>Lv.{building.level > 0 ? '+' : ''}{building.level} • {BUILDING_LEVEL_LABELS[building.level]}</p></div><strong>{signed(building.average)}</strong></header><dl><div><dt>สุจริต</dt><dd>{building.summary.integrityCount}</dd></div><div><dt>ทุจริต</dt><dd>{building.summary.corruptionCount}</dd></div><div><dt>ไม่ตอบ</dt><dd>{building.summary.timeoutCount}</dd></div></dl><button onClick={() => setActiveBuildingId(building.id)} type="button">ดูรายละเอียด</button></article>)}</div></section>
+        </section> : null}
       </section>
+      {activeBuilding ? <div className="teacher-building-modal" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setActiveBuildingId(null) }}><section aria-labelledby="building-detail-title" aria-modal="true" role="dialog"><button aria-label="ปิดรายละเอียดอาคาร" className="teacher-building-modal__close" onClick={() => setActiveBuildingId(null)} type="button">×</button><header><span>{activeBuilding.icon}</span><div><small>รายละเอียดอาคาร</small><h2 id="building-detail-title">{activeBuilding.label}</h2></div></header><div className="teacher-building-modal__state"><span>สถานะปัจจุบัน</span><strong>Lv.{activeBuilding.level > 0 ? '+' : ''}{activeBuilding.level} • {BUILDING_LEVEL_LABELS[activeBuilding.level]}</strong><small>{activeBuilding.direction}</small></div><div className="teacher-building-modal__metrics"><article><span>ผลกระทบเฉลี่ยชุดนี้</span><strong>{signed(activeBuilding.average)}</strong></article><article><span>จำนวนคำตอบ</span><strong>{activeBuilding.summary.participantCount}</strong></article></div><dl><div><dt>เลือกทางสุจริต</dt><dd>{activeBuilding.summary.integrityCount}</dd></div><div><dt>เลือกทางทุจริต</dt><dd>{activeBuilding.summary.corruptionCount}</dd></div><div><dt>ไม่ได้ตอบ</dt><dd>{activeBuilding.summary.timeoutCount}</dd></div></dl><button className="teacher-building-modal__done" onClick={() => setActiveBuildingId(null)} type="button">ปิดรายละเอียด</button></section></div> : null}
     </main>
   )
 }

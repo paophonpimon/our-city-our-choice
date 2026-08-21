@@ -6,11 +6,11 @@ export const createClassroomJoinUrl = (origin: string, roomId: string): string =
 export const normalizeJoinRoomId = (value: string | null): string => (value ?? '').trim().toUpperCase()
 
 export const LOCATION_POSITIONS = {
-  hospital: { x: 36, y: 49 },
-  'municipal-office': { x: 16, y: 50 },
-  'police-station': { x: 62, y: 49 },
-  school: { x: 48, y: 79 },
-  market: { x: 84, y: 49 },
-  construction: { x: 17, y: 79 },
-  'news-office': { x: 83, y: 79 },
+  hospital: { x: 31, y: 53 },
+  'municipal-office': { x: 54, y: 75 },
+  'police-station': { x: 68, y: 53 },
+  school: { x: 31, y: 23 },
+  market: { x: 86, y: 34 },
+  construction: { x: 61, y: 20 },
+  'news-office': { x: 82, y: 76 },
 } as const satisfies Record<LocationId, { x: number; y: number }>
