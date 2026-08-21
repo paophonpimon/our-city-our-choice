@@ -6,11 +6,15 @@ const readProjectFile = (relativePath: string): string =>
 
 describe('Firebase project guard', () => {
   it('binds local Firebase configuration to the confirmed Our City project', () => {
-    const firebaseRc = JSON.parse(readProjectFile('.firebaserc')) as { projects: { default: string } }
+    const firebaseRc = JSON.parse(readProjectFile('.firebaserc')) as { projects: { default: string; staging?: string } }
     expect(firebaseRc.projects.default).toBe('our-city-our-choice')
     expect(readProjectFile('.env.example')).toContain('VITE_FIREBASE_PROJECT_ID=our-city-our-choice')
+    // Production id now lives in firebaseEnvironment.ts (shared with the
+    // staging allow-list) — verify it's still exactly the confirmed project,
+    // and that firebaseClassroomService.ts actually enforces it at startup.
+    expect(readProjectFile('src/domain/firebaseEnvironment.ts')).toContain("production: 'our-city-our-choice'")
     expect(readFileSync(new URL('./firebaseClassroomService.ts', import.meta.url), 'utf8')).toContain(
-      "EXPECTED_FIREBASE_PROJECT_ID = 'our-city-our-choice'",
+      'resolveFirebaseEnvironmentName(firebaseConfig.projectId)',
     )
   })
 

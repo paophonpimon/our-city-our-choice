@@ -8,6 +8,7 @@ import { chromium } from 'playwright'
 import { Recorder } from './lib/evidence.mjs'
 import { TeacherActor, StudentActor } from './lib/actors.mjs'
 import { playFullCycle } from './lib/cycle.mjs'
+import { assertProductionNeverAllowed, resolveBaseUrl } from './lib/target.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ARTIFACTS_DIR = path.join(__dirname, '.artifacts')
@@ -18,7 +19,11 @@ const arg = (name, fallback) => {
 }
 
 const STUDENT_COUNT = Number(arg('students', 3))
-const BASE_URL = arg('base-url', 'https://our-city-our-choice.web.app')
+const BASE_URL = resolveBaseUrl(process.argv)
+// A full 10-question + 2-crisis cycle plus a second role-draw is a
+// stress/full-QA scenario, not a smoke check — no --smoke bypass;
+// production is refused unconditionally. Use --target staging for this.
+assertProductionNeverAllowed({ baseUrl: BASE_URL, context: 'continue-city-flow (full-cycle role-rotation scenario)' })
 const QUESTION_SECONDS = Number(arg('question-seconds', 5))
 const LABEL = arg('label', 'continue-city')
 const CLASS_SECTIONS = ['1/1', '1/2', '1/3']

@@ -12,6 +12,7 @@ import {
   setDoc,
   writeBatch,
 } from 'firebase/firestore'
+import { assertNotProductionProject } from './lib/productionSafetyGuard.mjs'
 
 const STUDENT_COUNT = 40
 const TIMEOUT_MS = 30_000
@@ -32,6 +33,9 @@ const firebaseConfig = {
 }
 
 if (Object.values(firebaseConfig).some((value) => !value)) throw new Error('Firebase configuration is incomplete')
+// This script floods Firestore with 40 simulated clients — always refuse
+// the production project, regardless of what .env.local points at.
+assertNotProductionProject(firebaseConfig.projectId, 'load-test-40')
 
 const roomCode = `L${Date.now().toString(36).slice(-5)}`.toUpperCase()
 const questionIds = Array.from({ length: 10 }, (_, index) => `load-q${index + 1}`)

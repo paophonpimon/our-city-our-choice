@@ -9,6 +9,7 @@ import { chromium } from 'playwright'
 import { Recorder } from './lib/evidence.mjs'
 import { TeacherActor, StudentActor } from './lib/actors.mjs'
 import { playFullCycle } from './lib/cycle.mjs'
+import { assertProductionNeverAllowed, resolveBaseUrl } from './lib/target.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ARTIFACTS_DIR = path.join(__dirname, '.artifacts')
@@ -19,7 +20,10 @@ const arg = (name, fallback) => {
 }
 
 const STUDENTS_PER_ROOM = Number(arg('students-per-room', 2))
-const BASE_URL = arg('base-url', 'https://our-city-our-choice.web.app')
+const BASE_URL = resolveBaseUrl(process.argv)
+// Two concurrent rooms is a multi-client scenario — no --smoke bypass;
+// production is refused unconditionally. Use --target staging for this.
+assertProductionNeverAllowed({ baseUrl: BASE_URL, context: 'two-rooms-flow (multi-room isolation scenario)' })
 const QUESTION_SECONDS = Number(arg('question-seconds', 5))
 const LABEL = arg('label', 'two-rooms-isolation')
 

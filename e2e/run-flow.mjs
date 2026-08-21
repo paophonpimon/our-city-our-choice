@@ -5,14 +5,16 @@
 // Q5-8 -> crisis 2 -> Q9-10 -> result -> end activity -> new room.
 //
 // Usage:
-//   node e2e/run-flow.mjs --students 6
-//   node e2e/run-flow.mjs --students 20 --mixed-latency --question-seconds 12
+//   node e2e/run-flow.mjs --students 6 --target staging
+//   node e2e/run-flow.mjs --students 20 --mixed-latency --question-seconds 12 --target staging
+//   node e2e/run-flow.mjs --students 3 --target production --smoke   # only way to reach prod; max 3 students
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { Recorder } from './lib/evidence.mjs'
 import { TeacherActor, StudentActor } from './lib/actors.mjs'
 import { playFullCycle } from './lib/cycle.mjs'
+import { assertProductionUsageAllowed, resolveBaseUrl } from './lib/target.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ARTIFACTS_DIR = path.join(__dirname, '.artifacts')
@@ -23,7 +25,9 @@ const arg = (name, fallback) => {
 }
 
 const STUDENT_COUNT = Number(arg('students', 6))
-const BASE_URL = arg('base-url', 'https://our-city-our-choice.web.app')
+const BASE_URL = resolveBaseUrl(process.argv)
+const SMOKE = process.argv.includes('--smoke')
+assertProductionUsageAllowed({ baseUrl: BASE_URL, smoke: SMOKE, studentCount: STUDENT_COUNT, context: 'run-flow (classroom scenario)' })
 const MIXED_LATENCY = process.argv.includes('--mixed-latency')
 const QUESTION_SECONDS = Number(arg('question-seconds', MIXED_LATENCY ? 15 : 8))
 const LABEL = arg('label', `flow-${STUDENT_COUNT}students${MIXED_LATENCY ? '-mixed-latency' : ''}`)
@@ -48,7 +52,7 @@ async function main() {
   }
   const finding = (f) => recorder.finding(f)
 
-  console.log(`\n=== Run "${LABEL}" — ${STUDENT_COUNT} students, base=${BASE_URL}, qSec=${QUESTION_SECONDS}, mixedLatency=${MIXED_LATENCY} ===`)
+  console.log(`\n=== Run "${LABEL}" — ${STUDENT_COUNT} students, base=${BASE_URL}, qSec=${QUESTION_SECONDS}, mixedLatency=${MIXED_LATENCY}, smoke=${SMOKE} ===`)
   console.log(`Evidence dir: ${recorder.runDir}\n`)
 
   const browser = await chromium.launch()

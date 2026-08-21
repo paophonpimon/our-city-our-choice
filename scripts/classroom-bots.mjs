@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { deleteApp, initializeApp } from 'firebase/app'
-import { getAuth, signInAnonymously } from 'firebase/auth'
+import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth'
 import {
   collection,
+  connectFirestoreEmulator,
   doc,
   getDoc,
   getDocs,
@@ -11,8 +12,8 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore'
+import { assertNotProductionProject } from './lib/productionSafetyGuard.mjs'
 
-const EXPECTED_PROJECT_ID = 'our-city-our-choice'
 const DEFAULT_COUNT = 32
 const MAX_COUNT = 40
 const QUESTION_CSV_URL =
@@ -32,6 +33,10 @@ const maxQuestion = Number(argumentValue('--max-question', 10))
 const earlyCorruptThrough = Number(argumentValue('--early-corrupt-through', 0))
 const lateCorruptFrom = Number(argumentValue('--late-corrupt-from', 0))
 const cycleFlip = process.argv.includes('--cycle-flip')
+const target = String(argumentValue('--target', 'firebase')).trim().toLowerCase()
+const useEmulator = target === 'emulator'
+
+if (!['firebase', 'emulator'].includes(target)) throw new Error(`--target ต้องเป็น firebase หรือ emulator (ได้ "${target}")`)
 
 if (!/^[A-HJ-NP-Z2-9]{4}$/.test(roomId)) throw new Error('ใช้ --room ตามด้วยรหัสห้อง 4 ตัว เช่น --room Y2XK')
 if (!Number.isInteger(botCount) || botCount < 1 || botCount > MAX_COUNT) {
@@ -147,9 +152,10 @@ const firebaseConfig = {
 }
 
 if (Object.values(firebaseConfig).some((value) => !value)) throw new Error('Firebase configuration is incomplete')
-if (firebaseConfig.projectId !== EXPECTED_PROJECT_ID) {
-  throw new Error(`Refusing to use Firebase project ${firebaseConfig.projectId}; expected ${EXPECTED_PROJECT_ID}`)
-}
+// This script floods Firestore with bulk simulated writes, bypassing the
+// UI — always refuse the production project, even when --target firebase
+// is pointed at a real project (e.g. staging) rather than the emulator.
+assertNotProductionProject(firebaseConfig.projectId, 'classroom-bots load test')
 
 const fnvHash = (value) => {
   let hash = 0x811c9dc5
@@ -174,8 +180,12 @@ let keepAliveTimer = null
 const createClient = async (index) => {
   const app = initializeApp(firebaseConfig, `classroom-bot-${roomId}-${runId}-${index}`)
   const auth = getAuth(app)
-  const credential = await signInAnonymously(auth)
   const db = getFirestore(app)
+  if (useEmulator) {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+    connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  }
+  const credential = await signInAnonymously(auth)
   const nickname = `${nicknamePrefix} ${String(index + 1).padStart(2, '0')}`
   const nicknameKey = nickname.toLocaleLowerCase('th')
   const playerId = `player-${fnvHash(nicknameKey)}`

@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "our-city-our-choice"
+    "default": "our-city-our-choice",
+    "staging": "our-city-our-choice-staging"
   }
 }

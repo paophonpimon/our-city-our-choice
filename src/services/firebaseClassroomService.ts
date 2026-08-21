@@ -1,7 +1,8 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
-import { getAuth, signInAnonymously } from 'firebase/auth'
+import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth'
 import {
   collection,
+  connectFirestoreEmulator,
   doc,
   getDoc,
   getDocs,
@@ -21,6 +22,7 @@ import {
 import { getCityLevel, scoreClassroomRound } from '../domain/cityScoring'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
+import { assertStagingBuildNotUsingProduction, resolveFirebaseEnvironmentName } from '../domain/firebaseEnvironment'
 import { randomRoomId } from '../domain/roomCode'
 import {
   assignRolesForCycle,
@@ -57,18 +59,41 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-const EXPECTED_FIREBASE_PROJECT_ID = 'our-city-our-choice'
 const missingFirebaseConfig = Object.entries(firebaseConfig)
   .filter(([, value]) => typeof value !== 'string' || value.length === 0)
   .map(([key]) => key)
 if (missingFirebaseConfig.length > 0) throw new Error(`ผู้ใช้:Firebase config ไม่ครบ: ${missingFirebaseConfig.join(', ')}`)
-if (firebaseConfig.projectId !== EXPECTED_FIREBASE_PROJECT_ID) {
-  throw new Error(`ผู้ใช้:Firebase Project ID ต้องเป็น ${EXPECTED_FIREBASE_PROJECT_ID} เท่านั้น`)
+// Production behavior is unchanged: 'our-city-our-choice' is still the only
+// project id that has ever worked. This now also accepts the reserved
+// staging id once that project exists — nothing else.
+const firebaseEnvironmentName = resolveFirebaseEnvironmentName(firebaseConfig.projectId)
+if (!firebaseEnvironmentName) {
+  throw new Error(
+    `ผู้ใช้:Firebase Project ID ต้องเป็นหนึ่งใน our-city-our-choice, our-city-our-choice-staging เท่านั้น`,
+  )
+}
+try {
+  assertStagingBuildNotUsingProduction(import.meta.env.MODE, firebaseEnvironmentName)
+} catch (error) {
+  throw new Error(`ผู้ใช้:${error instanceof Error ? error.message : String(error)}`)
+}
+// Production stays silent (unchanged); non-production connections get a
+// visible marker so nobody mistakes a staging session for the real thing.
+if (firebaseEnvironmentName !== 'production') {
+  console.info(`[firebase] connected to "${firebaseEnvironmentName}" (${firebaseConfig.projectId})`)
 }
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
 const auth = getAuth(app)
 const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
+
+// Opt-in only, off by default — never changes behavior unless a developer
+// explicitly sets this for local QA against `firebase emulators:start`.
+if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+  connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+}
+
 let firebaseSessionPromise: Promise<string> | null = null
 
 const toMillis = (value: unknown): number | null => {
