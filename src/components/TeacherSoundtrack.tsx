@@ -13,8 +13,8 @@ interface TeacherSoundtrackProps {
 }
 
 const TRACKS: Record<Exclude<TeacherSoundtrackMode, 'off'>, string> = {
-  lobby: '/audio/teacher-lobby.mp3',
-  game: '/audio/teacher-game.mp3',
+  lobby: '/audio/bgm-teacher-lobby.mp3',
+  game: '/audio/bgm-teacher-gameplay.mp3',
 }
 
 const VOLUME_KEY = 'our_city_teacher_audio_volume_v1'
