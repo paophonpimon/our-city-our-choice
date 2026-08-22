@@ -1,0 +1,1052 @@
+[
+  {
+    "scene": "degraded",
+    "building": "municipality",
+    "level": -2,
+    "x": 1.49,
+    "y": -35.46,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "municipality",
+    "level": -1,
+    "x": 1.49,
+    "y": -35.46,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "municipality",
+    "level": 0,
+    "x": 1.49,
+    "y": 3.8200000000000003,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "municipality",
+    "level": 1,
+    "x": 26.19,
+    "y": 29.7,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "municipality",
+    "level": 2,
+    "x": 1.49,
+    "y": -35.46,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "hospital",
+    "level": -2,
+    "x": -20.82,
+    "y": -33.25,
+    "scaleX": 1.061,
+    "scaleY": 1.001,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "hospital",
+    "level": -1,
+    "x": -20.82,
+    "y": -33.25,
+    "scaleX": 1.061,
+    "scaleY": 1.001,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "hospital",
+    "level": 0,
+    "x": -22.32,
+    "y": 6.030000000000001,
+    "scaleX": 1.061,
+    "scaleY": 1.001,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "hospital",
+    "level": 1,
+    "x": -6.6,
+    "y": 22.32,
+    "scaleX": 1.061,
+    "scaleY": 1.001,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "hospital",
+    "level": 2,
+    "x": -29.8,
+    "y": -34.21,
+    "scaleX": 1.061,
+    "scaleY": 1.001,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "police",
+    "level": -2,
+    "x": -43.25,
+    "y": -34.21,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "police",
+    "level": -1,
+    "x": -43.25,
+    "y": -34.21,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "police",
+    "level": 0,
+    "x": -44,
+    "y": 5.07,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "police",
+    "level": 1,
+    "x": -19.3,
+    "y": 13.7,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "police",
+    "level": 2,
+    "x": -43.25,
+    "y": -34.21,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "construction",
+    "level": -2,
+    "x": -0.76,
+    "y": -34.5,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "construction",
+    "level": -1,
+    "x": -0.76,
+    "y": -34.5,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "construction",
+    "level": 0,
+    "x": 0.74,
+    "y": 2.8699999999999974,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "construction",
+    "level": 1,
+    "x": 23.19,
+    "y": 7.66,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "construction",
+    "level": 2,
+    "x": -0.76,
+    "y": -34.5,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "market",
+    "level": -2,
+    "x": -1.49,
+    "y": -32.58,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "market",
+    "level": -1,
+    "x": -1.49,
+    "y": -32.58,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "market",
+    "level": 0,
+    "x": -4.48,
+    "y": 2.8700000000000045,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "market",
+    "level": 1,
+    "x": 35.93,
+    "y": 15.33,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "market",
+    "level": 2,
+    "x": -1.49,
+    "y": -32.58,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "school",
+    "level": -2,
+    "x": -14.83,
+    "y": -32.54,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "school",
+    "level": -1,
+    "x": -14.83,
+    "y": -32.54,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "school",
+    "level": 0,
+    "x": -14.08,
+    "y": 5.789999999999999,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "school",
+    "level": 1,
+    "x": 0.89,
+    "y": 16.33,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "school",
+    "level": 2,
+    "x": -14.83,
+    "y": -32.54,
+    "scaleX": 1.0542244640605296,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "newsAgency",
+    "level": -2,
+    "x": 0,
+    "y": -39.29,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "newsAgency",
+    "level": -1,
+    "x": -1.5,
+    "y": -32.58,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "newsAgency",
+    "level": 0,
+    "x": -0.75,
+    "y": 4.789999999999999,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "degraded",
+    "building": "newsAgency",
+    "level": 1,
+    "x": 38.16,
+    "y": 25.87,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "degraded",
+    "building": "newsAgency",
+    "level": 2,
+    "x": -1.5,
+    "y": -32.58,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "municipality",
+    "level": -2,
+    "x": 0,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "municipality",
+    "level": -1,
+    "x": 0,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "municipality",
+    "level": 0,
+    "x": 0,
+    "y": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "municipality",
+    "level": 1,
+    "x": 24.7,
+    "y": 27.79,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "municipality",
+    "level": 2,
+    "x": 0,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "hospital",
+    "level": -2,
+    "x": 1.5,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "hospital",
+    "level": -1,
+    "x": 1.5,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "hospital",
+    "level": 0,
+    "x": 5.24,
+    "y": 1.92,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "hospital",
+    "level": 1,
+    "x": 16.47,
+    "y": 26.83,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "hospital",
+    "level": 2,
+    "x": 1.5,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "police",
+    "level": -2,
+    "x": 0.75,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "police",
+    "level": -1,
+    "x": 0.75,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "police",
+    "level": 0,
+    "x": 0,
+    "y": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "police",
+    "level": 1,
+    "x": 23.2,
+    "y": 18.21,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "police",
+    "level": 2,
+    "x": 0.75,
+    "y": -39.28,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "construction",
+    "level": -2,
+    "x": -1.5,
+    "y": -37.37,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "construction",
+    "level": -1,
+    "x": -1.5,
+    "y": -37.37,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "construction",
+    "level": 0,
+    "x": 0,
+    "y": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "construction",
+    "level": 1,
+    "x": 26.94,
+    "y": 8.62,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "construction",
+    "level": 2,
+    "x": -1.5,
+    "y": -37.37,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "market",
+    "level": -2,
+    "x": 2.99,
+    "y": -35.45,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "market",
+    "level": -1,
+    "x": 2.99,
+    "y": -35.45,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "market",
+    "level": 0,
+    "x": 0,
+    "y": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "market",
+    "level": 1,
+    "x": 32.93,
+    "y": 17.25,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "market",
+    "level": 2,
+    "x": 2.99,
+    "y": -35.45,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "school",
+    "level": -2,
+    "x": -0.75,
+    "y": -38.33,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "school",
+    "level": -1,
+    "x": -0.75,
+    "y": -38.33,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "school",
+    "level": 0,
+    "x": 0,
+    "y": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "school",
+    "level": 1,
+    "x": 7.48,
+    "y": 11.49,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "school",
+    "level": 2,
+    "x": -0.75,
+    "y": -38.33,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "newsAgency",
+    "level": -2,
+    "x": -0.75,
+    "y": -37.37,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "newsAgency",
+    "level": -1,
+    "x": -0.75,
+    "y": -37.37,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "newsAgency",
+    "level": 0,
+    "x": 0,
+    "y": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "normal",
+    "building": "newsAgency",
+    "level": 1,
+    "x": 37.42,
+    "y": 23,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "normal",
+    "building": "newsAgency",
+    "level": 2,
+    "x": -0.75,
+    "y": -37.37,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "municipality",
+    "level": -2,
+    "x": 1.5,
+    "y": -36.41,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "municipality",
+    "level": -1,
+    "x": 1.5,
+    "y": -36.41,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "municipality",
+    "level": 0,
+    "x": 1.5,
+    "y": 2.8700000000000045,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "municipality",
+    "level": 1,
+    "x": 20.21,
+    "y": 27.79,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "developed",
+    "building": "municipality",
+    "level": 2,
+    "x": 1.5,
+    "y": -36.41,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "hospital",
+    "level": -2,
+    "x": 0,
+    "y": -40.24,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "hospital",
+    "level": -1,
+    "x": 0,
+    "y": -40.24,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "hospital",
+    "level": 0,
+    "x": -1.5,
+    "y": -0.9600000000000009,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "hospital",
+    "level": 1,
+    "x": 16.46,
+    "y": 21.08,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "developed",
+    "building": "hospital",
+    "level": 2,
+    "x": 0,
+    "y": -40.24,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "police",
+    "level": -2,
+    "x": 0.75,
+    "y": -38.32,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "police",
+    "level": -1,
+    "x": 0.75,
+    "y": -38.32,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "police",
+    "level": 0,
+    "x": 0,
+    "y": 0.9600000000000009,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "police",
+    "level": 1,
+    "x": 26.94,
+    "y": 21.09,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "developed",
+    "building": "police",
+    "level": 2,
+    "x": 0.75,
+    "y": -38.32,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "construction",
+    "level": -2,
+    "x": 0,
+    "y": -40.24,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "construction",
+    "level": -1,
+    "x": 0,
+    "y": -40.24,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "construction",
+    "level": 0,
+    "x": 1.5,
+    "y": -2.8700000000000045,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "construction",
+    "level": 1,
+    "x": 24.7,
+    "y": 7.67,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "developed",
+    "building": "construction",
+    "level": 2,
+    "x": 0,
+    "y": -40.24,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "market",
+    "level": -2,
+    "x": -2.99,
+    "y": -34.49,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "market",
+    "level": -1,
+    "x": -2.99,
+    "y": -34.49,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "market",
+    "level": 0,
+    "x": -5.98,
+    "y": 0.9600000000000009,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "market",
+    "level": 1,
+    "x": 36.67,
+    "y": 16.29,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "developed",
+    "building": "market",
+    "level": 2,
+    "x": -2.99,
+    "y": -34.49,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "school",
+    "level": -2,
+    "x": -2.99,
+    "y": -38.33,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "school",
+    "level": -1,
+    "x": -2.99,
+    "y": -38.33,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "school",
+    "level": 0,
+    "x": -2.24,
+    "y": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "school",
+    "level": 1,
+    "x": 16.47,
+    "y": 12.45,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "developed",
+    "building": "school",
+    "level": 2,
+    "x": -2.99,
+    "y": -38.33,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "newsAgency",
+    "level": -2,
+    "x": 0.75,
+    "y": -34.49,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "newsAgency",
+    "level": -1,
+    "x": 0.75,
+    "y": -34.49,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "newsAgency",
+    "level": 0,
+    "x": 1.5,
+    "y": 2.8799999999999955,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  },
+  {
+    "scene": "developed",
+    "building": "newsAgency",
+    "level": 1,
+    "x": 38.92,
+    "y": 25.87,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "override"
+  },
+  {
+    "scene": "developed",
+    "building": "newsAgency",
+    "level": 2,
+    "x": 0.75,
+    "y": -34.49,
+    "scaleX": 1,
+    "scaleY": 1,
+    "source": "fallback"
+  }
+]

@@ -6,12 +6,15 @@ import {
   normalizeBuildingLevels,
   resolveBuildingAsset,
   resolveBuildingAssetPlacement,
+  resolveBuildingGroundAnchorY,
   resolveCitySceneProfile,
+  sortBuildingsByDepth,
+  type BuildingAssetPlacement,
   type BuildingId,
   type BuildingLevels,
-  type CitySceneBuildingPlacement,
   type CitySceneProfileId,
 } from '../domain/cityBuildings'
+import { resolveEffectivePlacement, type EffectivePlacementRecord, type SceneLayoutOverrides } from '../domain/cityLayoutOverrides'
 import type { CityLevel } from '../domain/ourCity'
 
 export type BuildingEffectTone = 'integrity' | 'corruption'
@@ -19,7 +22,7 @@ export type BuildingEffectTone = 'integrity' | 'corruption'
 interface CitySceneProps {
   buildingLevels?: BuildingLevels
   buildingEffects?: Partial<Record<BuildingId, BuildingEffectTone>>
-  buildingPlacementOverrides?: Partial<Record<BuildingId, CitySceneBuildingPlacement>>
+  buildingPlacementOverrides?: SceneLayoutOverrides
   cityLevel?: CityLevel
   sceneProfileId?: CitySceneProfileId
 }
@@ -33,6 +36,35 @@ export const CityScene = ({
 }: CitySceneProps) => {
   const levels = normalizeBuildingLevels(buildingLevels)
   const sceneProfile = sceneProfileId ? CITY_SCENE_PROFILES[sceneProfileId] : resolveCitySceneProfile(cityLevel)
+  // Resolve every building's scene placement AND its model-level asset
+  // offset once, then paint back-to-front by the real ground/contact anchor
+  // - the exact effective screen-space position CityScene renders the
+  // building's canvas at, including the asset offset's own contribution
+  // (scaled by the same group transform) - so a building spatially in front
+  // of another always draws over it. The fixed BUILDING_IDS order must never
+  // decide visual depth.
+  const buildingAssets = Object.fromEntries(
+    BUILDING_IDS.map((buildingId) => [buildingId, resolveBuildingAsset(buildingId, levels[buildingId])]),
+  ) as Record<BuildingId, ReturnType<typeof resolveBuildingAsset>>
+  const assetPlacements = Object.fromEntries(
+    BUILDING_IDS.map((buildingId) => {
+      const asset = buildingAssets[buildingId]
+      return [buildingId, asset ? resolveBuildingAssetPlacement(buildingId, asset.level) : { x: 0, y: 0 }]
+    }),
+  ) as Record<BuildingId, BuildingAssetPlacement>
+  const scenePlacements = Object.fromEntries(
+    BUILDING_IDS.map((buildingId) => [
+      buildingId,
+      resolveEffectivePlacement(buildingPlacementOverrides, sceneProfile.id, buildingId, levels[buildingId]),
+    ]),
+  ) as Record<BuildingId, EffectivePlacementRecord>
+  const groundAnchors = Object.fromEntries(
+    BUILDING_IDS.map((buildingId) => [
+      buildingId,
+      resolveBuildingGroundAnchorY(scenePlacements[buildingId], assetPlacements[buildingId]),
+    ]),
+  ) as Record<BuildingId, number>
+  const buildingRenderOrder = sortBuildingsByDepth(groundAnchors)
 
   return (
     <svg
@@ -61,27 +93,15 @@ export const CityScene = ({
         preserveAspectRatio={`xMidYMid ${sceneProfile.backgroundFit}`}
       />
       <g clipPath="url(#city-scene-model-clip)" data-city-model-layer="clipped-to-stage">
-        {BUILDING_IDS.map((buildingId) => {
+        {buildingRenderOrder.map((buildingId) => {
           const requestedLevel = levels[buildingId]
-          const asset = resolveBuildingAsset(buildingId, requestedLevel)
-          const placement = asset
-            ? resolveBuildingAssetPlacement(buildingId, asset.level)
-            : null
+          const asset = buildingAssets[buildingId]
+          const placement = asset ? assetPlacements[buildingId] : null
           const effectTone = buildingEffects?.[buildingId]
-          const calibratedScenePlacement = buildingPlacementOverrides?.[buildingId]
-            ?? sceneProfile.buildingPlacements[buildingId]
-          const normalScenePlacement = CITY_SCENE_PROFILES.normal.buildingPlacements[buildingId]
-          // Level 0/1 exports use the same full-canvas coordinate system as the
-          // overview. Use only the scene-to-scene delta; the older -2/-1/2
-          // exports still need the full calibrated placement.
-          const scenePlacement = asset?.fit === 'slice' && !buildingPlacementOverrides?.[buildingId]
-            ? {
-                x: calibratedScenePlacement.x - normalScenePlacement.x,
-                y: calibratedScenePlacement.y - normalScenePlacement.y,
-                scaleX: calibratedScenePlacement.scaleX / normalScenePlacement.scaleX,
-                scaleY: calibratedScenePlacement.scaleY / normalScenePlacement.scaleY,
-              }
-            : calibratedScenePlacement
+          // The single source of truth for "what does this scene/building/level
+          // actually render at" - also used by the calibration recovery export
+          // and the depth sort above, so all three are guaranteed to agree.
+          const scenePlacement = scenePlacements[buildingId]
           return (
             <g
               data-building-id={buildingId}

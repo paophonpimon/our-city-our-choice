@@ -186,11 +186,13 @@ describe('classroom UI contracts', () => {
   it('provides an opt-in scene calibration tool backed by the real renderer', () => {
     const cityStage = readSource('./CityStage.tsx')
     const cityScene = readSource('./CityScene.tsx')
+    const cityLayoutOverrides = readSource('../domain/cityLayoutOverrides.ts')
     expect(cityStage).toContain("get('layout') === '1'")
-    expect(cityStage).toContain('our_city_scene_layout_overrides_v1')
     expect(cityStage).toContain('navigator.clipboard.writeText')
     expect(cityStage).toContain('buildingPlacementOverrides={displayedPlacementOverrides}')
-    expect(cityScene).toContain('buildingPlacementOverrides?.[buildingId]')
+    expect(cityScene).toContain('resolveEffectivePlacement(buildingPlacementOverrides, sceneProfile.id, buildingId, levels[buildingId])')
+    expect(cityLayoutOverrides).toContain('our_city_scene_layout_overrides_v2')
+    expect(cityLayoutOverrides).toContain('our_city_scene_layout_overrides_v1')
   })
 
   it('keeps building stories centered above the dock and colors status by city level', () => {

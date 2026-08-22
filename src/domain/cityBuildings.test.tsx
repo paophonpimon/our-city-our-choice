@@ -21,10 +21,14 @@ import {
   LOCATION_BUILDING,
   normalizeBuildingScores,
   resolveBuildingAssetPlacement,
+  resolveBuildingGroundAnchorY,
   resolveCitySceneProfile,
+  resolveFrozenBuildingPlacement,
   setBuildingLevel,
+  sortBuildingsByDepth,
   updateBuildingScores,
   type BuildingLevels,
+  type CitySceneBuildingPlacement,
 } from './cityBuildings'
 
 const summary = (scoreAverage: number, participantCount = 1): LocationSummary => ({
@@ -166,7 +170,7 @@ describe('independent city building scene', () => {
     expect(markup).toContain('clip-path="url(#city-scene-model-clip)"')
     expect(markup).toContain('data-city-model-layer="clipped-to-stage"')
     for (const buildingId of BUILDING_IDS) {
-      const placement = CITY_SCENE_PROFILES.degraded.buildingPlacements[buildingId]
+      const placement = resolveFrozenBuildingPlacement('degraded', buildingId, 2)
       expect(markup).toContain(
         `data-building-id="${buildingId}" data-building-level="2" data-asset-level="2" data-scene-profile="degraded"`,
       )
@@ -182,7 +186,7 @@ describe('independent city building scene', () => {
       <CityScene
         buildingLevels={developed}
         buildingPlacementOverrides={{
-          market: { x: -44.25, y: 2.5, scaleX: 1.031, scaleY: .997 },
+          market: { 2: { x: -44.25, y: 2.5, scaleX: 1.031, scaleY: .997 } },
         }}
         cityLevel="declining"
         sceneProfileId="degraded"
@@ -191,6 +195,21 @@ describe('independent city building scene', () => {
 
     expect(markup).toContain('data-building-id="market" data-building-level="2"')
     expect(markup).toContain('transform="translate(-44.25 2.5) scale(1.031 0.997)"')
+  })
+
+  it('keeps a calibration override scoped to the model level it was saved for, leaving other levels on the scene default', () => {
+    const overrides = { market: { 2: { x: -44.25, y: 2.5, scaleX: 1.031, scaleY: .997 } } }
+
+    const atLevelZero = renderToStaticMarkup(
+      <CityScene buildingLevels={INITIAL_BUILDING_LEVELS} buildingPlacementOverrides={overrides} sceneProfileId="degraded" />,
+    )
+    expect(atLevelZero).not.toContain('translate(-44.25 2.5)')
+
+    const atLevelTwo = setBuildingLevel(INITIAL_BUILDING_LEVELS, 'market', 2)
+    const markupAtLevelTwo = renderToStaticMarkup(
+      <CityScene buildingLevels={atLevelTwo} buildingPlacementOverrides={overrides} sceneProfileId="degraded" />,
+    )
+    expect(markupAtLevelTwo).toContain('transform="translate(-44.25 2.5) scale(1.031 0.997)"')
   })
 
   it('maps every score location back to the model whose placement effects must follow', () => {
@@ -299,5 +318,209 @@ describe('independent city building scene', () => {
     it('falls back to the default initial score when neither buildingScores nor buildingLevels are present', () => {
       expect(normalizeBuildingScores(undefined, undefined)).toEqual(INITIAL_BUILDING_SCORES)
     })
+  })
+})
+
+describe('isometric building depth ordering', () => {
+  const placementAt = (y: number, scaleY = 1): CitySceneBuildingPlacement => ({ x: 0, y, scaleX: 1, scaleY })
+  // No asset offset (matches Lv.-1/0/1, where BUILDING_ASSET_PLACEMENTS is {x:0,y:0}).
+  const NO_ASSET_OFFSET = { x: 0, y: 0 }
+  const anchorAt = (y: number, scaleY = 1) => resolveBuildingGroundAnchorY(placementAt(y, scaleY), NO_ASSET_OFFSET)
+
+  it('sorts smaller ground Y behind and larger ground Y in front (later in render order)', () => {
+    // municipality=0, hospital=10, police=20, construction=30, market=40, school=50, newsAgency=60
+    const anchors = Object.fromEntries(
+      BUILDING_IDS.map((buildingId, index) => [buildingId, anchorAt(index * 10)]),
+    ) as Record<(typeof BUILDING_IDS)[number], number>
+
+    const order = sortBuildingsByDepth(anchors)
+
+    // Ascending Y in, ascending render order out - front (largest Y) is last.
+    expect(order).toEqual([...BUILDING_IDS])
+    for (let i = 1; i < order.length; i += 1) {
+      expect(anchors[order[i]]).toBeGreaterThan(anchors[order[i - 1]])
+    }
+    expect(order[order.length - 1]).toBe('newsAgency') // largest Y (60) -> furthest front -> renders last
+
+    // Reversing which building has which Y must reverse the render order too.
+    const reversedAnchors = Object.fromEntries(
+      [...BUILDING_IDS].map((buildingId, index) => [buildingId, anchorAt((BUILDING_IDS.length - 1 - index) * 10)]),
+    ) as Record<(typeof BUILDING_IDS)[number], number>
+    expect(sortBuildingsByDepth(reversedAnchors)).toEqual([...BUILDING_IDS].reverse())
+  })
+
+  it('does not sort by image height, transparent bounds, or roof position - only by the resolved ground anchor Y', () => {
+    // Two anchors with identical Y but very different scaleX (a proxy for
+    // "wider image") must not out-rank each other on scale alone unless it
+    // actually changes the anchor's effective screen position (scaleX plays
+    // no part in the ground anchor formula at all).
+    const anchors = {
+      municipality: anchorAt(10, 1),
+      hospital: resolveBuildingGroundAnchorY({ x: 0, y: 10, scaleX: 5, scaleY: 1 }, NO_ASSET_OFFSET), // much wider, same Y and scaleY
+      police: anchorAt(-5),
+      construction: anchorAt(-5),
+      market: anchorAt(-5),
+      school: anchorAt(-5),
+      newsAgency: anchorAt(-5),
+    } as Record<(typeof BUILDING_IDS)[number], number>
+    const order = sortBuildingsByDepth(anchors)
+    // municipality and hospital share the same ground anchor Y (scaleX does not
+    // factor into it) - a deterministic tie-breaker (declaration order) must
+    // decide between them, not scale/width.
+    expect(order.indexOf('municipality')).toBeLessThan(order.indexOf('hospital'))
+  })
+
+  it('uses a deterministic tie-breaker (BUILDING_IDS declaration order) only when anchors are exactly equal', () => {
+    const anchors = Object.fromEntries(
+      BUILDING_IDS.map((buildingId) => [buildingId, anchorAt(0)]),
+    ) as Record<(typeof BUILDING_IDS)[number], number>
+
+    expect(sortBuildingsByDepth(anchors)).toEqual([...BUILDING_IDS])
+  })
+
+  it('factors scaleY into the ground anchor (effective screen-space position), not just raw y', () => {
+    const shorter = resolveBuildingGroundAnchorY({ x: 0, y: 0, scaleX: 1, scaleY: 1 }, NO_ASSET_OFFSET)
+    const taller = resolveBuildingGroundAnchorY({ x: 0, y: 0, scaleX: 1, scaleY: 1.5 }, NO_ASSET_OFFSET)
+    expect(taller).toBeGreaterThan(shorter)
+  })
+
+  describe('model-level asset placement offset (BUILDING_ASSET_PLACEMENTS) contributes to ground depth', () => {
+    it('audit result: YES, asset-level Y changes the rendered ground/contact Y - it sits inside the scaled group', () => {
+      // CityScene renders: <g transform="translate(scene.x scene.y) scale(scene.scaleX scene.scaleY)">
+      //   <image x={asset.x} y={asset.y} width=STAGE_WIDTH height=STAGE_HEIGHT />
+      // </g>
+      // SVG scales a child's local coordinates before applying the group's
+      // translate, so the image's local bottom edge (asset.y + STAGE_HEIGHT)
+      // maps to screen Y = scene.y + (asset.y + STAGE_HEIGHT) * scene.scaleY.
+      // A non-zero asset.y must therefore shift the ground anchor by
+      // asset.y * scene.scaleY - proven directly against that formula here.
+      const scenePlacement = { x: 0, y: 100, scaleX: 1, scaleY: 2 }
+      const zeroOffsetAnchor = resolveBuildingGroundAnchorY(scenePlacement, { x: 0, y: 0 })
+      const nonZeroOffsetAnchor = resolveBuildingGroundAnchorY(scenePlacement, { x: 0, y: 18.75 })
+
+      expect(nonZeroOffsetAnchor).not.toBe(zeroOffsetAnchor)
+      expect(nonZeroOffsetAnchor - zeroOffsetAnchor).toBe(18.75 * scenePlacement.scaleY) // scaled, not added raw
+      expect(nonZeroOffsetAnchor).toBe(scenePlacement.y + (18.75 + CITY_STAGE_HEIGHT) * scenePlacement.scaleY)
+    })
+
+    it('two buildings with the identical scene placement but different asset offsets (Lv.-2/+2 vs Lv.-1/0/1) resolve to different ground anchors', () => {
+      const sharedScenePlacement = { x: 0, y: -33.25, scaleX: 1.061, scaleY: 1.001 } // e.g. degraded/hospital at Lv.-2 and Lv.-1 share this exact scene placement
+      const anchorAtMinus1 = resolveBuildingGroundAnchorY(sharedScenePlacement, resolveBuildingAssetPlacement('hospital', -1)) // asset y = 0
+      const anchorAtMinus2 = resolveBuildingGroundAnchorY(sharedScenePlacement, resolveBuildingAssetPlacement('hospital', -2)) // asset y = 18.75
+      expect(resolveBuildingAssetPlacement('hospital', -2).y).toBe(18.75)
+      expect(resolveBuildingAssetPlacement('hospital', -1).y).toBe(0)
+      expect(anchorAtMinus2).toBeGreaterThan(anchorAtMinus1)
+    })
+
+    it.each([-2, 2] as const)(
+      'at Lv.%i, the rendered depth order matches the ground anchor computed WITH the asset offset, not without it',
+      (level) => {
+        const hospitalScene = resolveFrozenBuildingPlacement('degraded', 'hospital', level)
+        const schoolScene = resolveFrozenBuildingPlacement('degraded', 'school', level)
+        const hospitalAsset = resolveBuildingAssetPlacement('hospital', level)
+        const schoolAsset = resolveBuildingAssetPlacement('school', level)
+        expect(hospitalAsset.y).toBe(18.75) // this is the non-zero offset under audit
+        expect(schoolAsset.y).toBe(18.75)
+
+        const correctlyOrdered = resolveBuildingGroundAnchorY(hospitalScene, hospitalAsset)
+          > resolveBuildingGroundAnchorY(schoolScene, schoolAsset)
+
+        const levels = Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, level])) as BuildingLevels
+        const markup = renderToStaticMarkup(<CityScene buildingLevels={levels} sceneProfileId="degraded" />)
+        const hospitalRendersAfterSchool = markup.indexOf('data-building-id="hospital"')
+          > markup.indexOf('data-building-id="school"')
+
+        expect(hospitalRendersAfterSchool).toBe(correctlyOrdered)
+      },
+    )
+
+    it('regression: at degraded Lv.-2 specifically, including the shared 18.75 asset offset flips Hospital from behind to in front of School', () => {
+      // hospital.scaleY (1.001) is fractionally larger than school.scaleY (1)
+      // in the degraded scene, so the identical 18.75 asset offset each
+      // receives gets scaled slightly more for hospital - a difference only
+      // large enough to matter once the asset offset is actually included.
+      const hospitalScene = resolveFrozenBuildingPlacement('degraded', 'hospital', -2)
+      const schoolScene = resolveFrozenBuildingPlacement('degraded', 'school', -2)
+
+      const withoutAssetOffsetDelta = resolveBuildingGroundAnchorY(hospitalScene, { x: 0, y: 0 })
+        - resolveBuildingGroundAnchorY(schoolScene, { x: 0, y: 0 })
+      const withAssetOffsetDelta = resolveBuildingGroundAnchorY(hospitalScene, resolveBuildingAssetPlacement('hospital', -2))
+        - resolveBuildingGroundAnchorY(schoolScene, resolveBuildingAssetPlacement('school', -2))
+
+      expect(withoutAssetOffsetDelta).toBeLessThan(0) // omitting the asset offset: School in front (the bug)
+      expect(withAssetOffsetDelta).toBeGreaterThan(0) // including it: Hospital in front (the fix)
+    })
+  })
+
+  describe('Hospital/School regression (confirmed bug: Hospital in front but School drew over it)', () => {
+    // Using the CORRECTED ground anchor (scene placement + asset offset,
+    // scaled together) against the real frozen 105-record data.
+    const hospitalInFrontCases: Array<{ scene: 'degraded' | 'normal' | 'developed'; level: -2 | -1 | 0 | 1 | 2 }> = [
+      { scene: 'degraded', level: -2 }, // only flips to "Hospital in front" once the Lv.-2 asset offset (18.75) is included
+      { scene: 'degraded', level: 0 },
+      { scene: 'degraded', level: 1 },
+      { scene: 'normal', level: 0 },
+      { scene: 'normal', level: 1 },
+      { scene: 'developed', level: 1 },
+    ]
+
+    it.each(hospitalInFrontCases)(
+      'in the $scene scene at level $level, Hospital has a larger real ground anchor than School and must render after it',
+      ({ scene, level }) => {
+        const hospitalAnchor = resolveBuildingGroundAnchorY(
+          resolveFrozenBuildingPlacement(scene, 'hospital', level), resolveBuildingAssetPlacement('hospital', level),
+        )
+        const schoolAnchor = resolveBuildingGroundAnchorY(
+          resolveFrozenBuildingPlacement(scene, 'school', level), resolveBuildingAssetPlacement('school', level),
+        )
+        // Confirms these are genuinely the "Hospital in front" cases before
+        // asserting the fix - if the frozen data ever changes, this test
+        // will fail loudly here rather than silently passing on the wrong premise.
+        expect(hospitalAnchor).toBeGreaterThan(schoolAnchor)
+
+        const levels = Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, level])) as BuildingLevels
+        const markup = renderToStaticMarkup(<CityScene buildingLevels={levels} sceneProfileId={scene} />)
+        const hospitalIndex = markup.indexOf('data-building-id="hospital"')
+        const schoolIndex = markup.indexOf('data-building-id="school"')
+        expect(hospitalIndex).toBeGreaterThan(-1)
+        expect(schoolIndex).toBeGreaterThan(-1)
+        // Later in the SVG document order paints on top - Hospital must come
+        // after School, no matter where 'hospital'/'school' sit in BUILDING_IDS.
+        expect(hospitalIndex).toBeGreaterThan(schoolIndex)
+      },
+    )
+
+    it('BUILDING_IDS declaration order alone (hospital before school) is not what decides this - the ground anchor is', () => {
+      expect(BUILDING_IDS.indexOf('hospital')).toBeLessThan(BUILDING_IDS.indexOf('school'))
+      const levels = Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, 0])) as BuildingLevels
+      const markup = renderToStaticMarkup(<CityScene buildingLevels={levels} sceneProfileId="normal" />)
+      // Despite hospital preceding school in BUILDING_IDS, hospital's larger
+      // ground anchor at Lv.0/normal must still put it after school in paint order.
+      expect(markup.indexOf('data-building-id="hospital"')).toBeGreaterThan(markup.indexOf('data-building-id="school"'))
+    })
+  })
+
+  it('reacts to manual calibration movement: pushing a building further down (larger Y) moves it later in render order', () => {
+    const levels = Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, 0])) as BuildingLevels
+    const startingOverrides = {
+      hospital: { 0: { x: 0, y: -20, scaleX: 1, scaleY: 1 } },
+      school: { 0: { x: 0, y: 20, scaleX: 1, scaleY: 1 } },
+    }
+
+    // To start, hospital is well behind school (smaller Y) - it must render first.
+    const before = renderToStaticMarkup(
+      <CityScene buildingLevels={levels} buildingPlacementOverrides={startingOverrides} sceneProfileId="normal" />,
+    )
+    expect(before.indexOf('data-building-id="hospital"')).toBeLessThan(before.indexOf('data-building-id="school"'))
+
+    // Manually calibrate hospital much further down than school - depth order must flip to match.
+    const movedOverrides = {
+      ...startingOverrides,
+      hospital: { 0: { x: 0, y: 999, scaleX: 1, scaleY: 1 } },
+    }
+    const after = renderToStaticMarkup(
+      <CityScene buildingLevels={levels} buildingPlacementOverrides={movedOverrides} sceneProfileId="normal" />,
+    )
+    expect(after.indexOf('data-building-id="hospital"')).toBeGreaterThan(after.indexOf('data-building-id="school"'))
   })
 })

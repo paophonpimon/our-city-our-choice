@@ -23,6 +23,17 @@ import {
 } from '../domain/cityBuildings'
 import { CityBirdsAnimation } from './CityBirdsAnimation'
 import { CityCloudsAnimation } from './CityCloudsAnimation'
+import {
+  clearLayoutPlacement,
+  clearLayoutScene,
+  exportAllEffectivePlacements,
+  getLayoutPlacement,
+  readCityLayoutOverrides,
+  resolveEffectivePlacement,
+  setLayoutPlacement,
+  writeCityLayoutOverrides,
+  type CityLayoutOverrides,
+} from '../domain/cityLayoutOverrides'
 
 const CITY_LEVEL_MESSAGES: Record<ClassroomRoom['cityLevel'], string> = {
   critical: 'เมืองอยู่ในระดับแย่มาก ต้องร่วมกันแก้ไขอย่างเร่งด่วน',
@@ -96,7 +107,6 @@ interface CityStageProps {
 const signed = (value: number): string => `${value > 0 ? '+' : ''}${Math.round(value)}`
 
 const CITY_ZOOM_STORAGE_KEY = 'our_city_teacher_scene_zoom_v1'
-const CITY_LAYOUT_STORAGE_KEY = 'our_city_scene_layout_overrides_v1'
 const CITY_ZOOM_MIN = 70
 const CITY_ZOOM_MAX = 160
 const CITY_ZOOM_STEP = 10
@@ -112,11 +122,6 @@ interface CityContentFrame {
   width: number
   height: number
 }
-
-type CityLayoutOverrides = Partial<Record<
-  CitySceneProfileId,
-  Partial<Record<BuildingId, CitySceneBuildingPlacement>>
->>
 
 interface LayoutDragState {
   buildingId: BuildingId
@@ -142,34 +147,9 @@ const LAYOUT_SCENE_LABELS: Record<CitySceneProfileId, string> = {
   developed: 'เมืองเจริญ',
 }
 
-const isFinitePlacement = (value: unknown): value is CitySceneBuildingPlacement => {
-  if (!value || typeof value !== 'object') return false
-  const placement = value as Partial<CitySceneBuildingPlacement>
-  return [placement.x, placement.y, placement.scaleX, placement.scaleY]
-    .every((entry) => typeof entry === 'number' && Number.isFinite(entry))
-}
-
 const readStoredCityLayout = (): CityLayoutOverrides => {
   if (typeof window === 'undefined') return {}
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(CITY_LAYOUT_STORAGE_KEY) ?? '{}') as unknown
-    if (!parsed || typeof parsed !== 'object') return {}
-    return Object.fromEntries(
-      (Object.keys(CITY_SCENE_PROFILES) as CitySceneProfileId[]).flatMap((sceneId) => {
-        const source = (parsed as Record<string, unknown>)[sceneId]
-        if (!source || typeof source !== 'object') return []
-        const placements = Object.fromEntries(
-          BUILDING_IDS.flatMap((buildingId) => {
-            const placement = (source as Record<string, unknown>)[buildingId]
-            return isFinitePlacement(placement) ? [[buildingId, placement]] : []
-          }),
-        )
-        return Object.keys(placements).length > 0 ? [[sceneId, placements]] : []
-      }),
-    ) as CityLayoutOverrides
-  } catch {
-    return {}
-  }
+  return readCityLayoutOverrides()
 }
 
 const EMPTY_CITY_CONTENT_FRAME: CityContentFrame = { left: 0, top: 0, width: 0, height: 0 }
@@ -212,18 +192,19 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
     ? CITY_SCENE_PROFILES[layoutSceneId]
     : resolveCitySceneProfile(displayedCityLevel)
   const displayedPlacementOverrides = layoutOverrides[displayedSceneProfile.id]
+  const displayedBuildingLevels = isLayoutMode
+    ? Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, layoutModelLevel])) as BuildingLevels
+    : normalizeBuildingLevels(visualBuildingLevels ?? room.buildingLevels)
   const alignPointToDisplayedScene = (locationId: LocationId, point: { x: number; y: number }) => {
     const buildingId = LOCATION_BUILDING[locationId]
-    const placement = displayedPlacementOverrides?.[buildingId]
-      ?? displayedSceneProfile.buildingPlacements[buildingId]
+    const placement = resolveEffectivePlacement(
+      displayedPlacementOverrides, displayedSceneProfile.id, buildingId, displayedBuildingLevels[buildingId],
+    )
     return {
       x: (placement.x + point.x / 100 * CITY_STAGE_WIDTH * placement.scaleX) / CITY_STAGE_WIDTH * 100,
       y: (placement.y + point.y / 100 * CITY_STAGE_HEIGHT * placement.scaleY) / CITY_STAGE_HEIGHT * 100,
     }
   }
-  const displayedBuildingLevels = isLayoutMode
-    ? Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, layoutModelLevel])) as BuildingLevels
-    : normalizeBuildingLevels(visualBuildingLevels ?? room.buildingLevels)
   const displayedBuildingEffects = Object.fromEntries(
     BUILDING_IMPACT_ITEMS.flatMap((building) => {
       const summary = locationImpacts?.[building.id]
@@ -253,55 +234,59 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
   }), { integrity: 0, corruption: 0, timeout: 0, score: 0, participants: 0 })
   const selectedAverage = selectedTotals.participants > 0 ? selectedTotals.score / selectedTotals.participants : 0
   const getEffectiveLayoutPlacement = (buildingId: BuildingId): CitySceneBuildingPlacement =>
-    layoutOverrides[layoutSceneId]?.[buildingId]
-      ?? CITY_SCENE_PROFILES[layoutSceneId].buildingPlacements[buildingId]
+    getLayoutPlacement(layoutOverrides, layoutSceneId, buildingId, layoutModelLevel)
 
   const updateLayoutPlacement = (
     buildingId: BuildingId,
     update: Partial<CitySceneBuildingPlacement> | ((current: CitySceneBuildingPlacement) => CitySceneBuildingPlacement),
   ): void => {
     setLayoutOverrides((currentOverrides) => {
-      const currentPlacement = currentOverrides[layoutSceneId]?.[buildingId]
-        ?? CITY_SCENE_PROFILES[layoutSceneId].buildingPlacements[buildingId]
+      const currentPlacement = getLayoutPlacement(currentOverrides, layoutSceneId, buildingId, layoutModelLevel)
       const nextPlacement = typeof update === 'function'
         ? update(currentPlacement)
         : { ...currentPlacement, ...update }
-      return {
-        ...currentOverrides,
-        [layoutSceneId]: {
-          ...currentOverrides[layoutSceneId],
-          [buildingId]: nextPlacement,
-        },
-      }
+      return setLayoutPlacement(currentOverrides, layoutSceneId, buildingId, layoutModelLevel, nextPlacement)
     })
     setLayoutFeedback('บันทึกอัตโนมัติแล้ว')
   }
 
+  // Only clears this scene + building + model level. Every other level (and
+  // every other scene) this building has been calibrated for is untouched.
   const resetLayoutBuilding = (buildingId: BuildingId): void => {
-    setLayoutOverrides((currentOverrides) => {
-      const currentScene = { ...currentOverrides[layoutSceneId] }
-      delete currentScene[buildingId]
-      const next = { ...currentOverrides }
-      if (Object.keys(currentScene).length > 0) next[layoutSceneId] = currentScene
-      else delete next[layoutSceneId]
-      return next
-    })
-    setLayoutFeedback(`คืนค่า ${LAYOUT_BUILDING_LABELS[buildingId]} แล้ว`)
+    setLayoutOverrides((currentOverrides) => clearLayoutPlacement(currentOverrides, layoutSceneId, buildingId, layoutModelLevel))
+    setLayoutFeedback(`คืนค่า ${LAYOUT_BUILDING_LABELS[buildingId]} Lv.${layoutModelLevel} แล้ว`)
   }
 
+  // Wide, explicit reset: clears every building AND every model level saved
+  // for this one scene. Requires confirmation since it can discard a lot of
+  // calibration work (up to 7 buildings x 5 levels) in one action.
   const resetLayoutScene = (): void => {
-    setLayoutOverrides((currentOverrides) => {
-      const next = { ...currentOverrides }
-      delete next[layoutSceneId]
-      return next
-    })
-    setLayoutFeedback(`คืนค่าฉาก${LAYOUT_SCENE_LABELS[layoutSceneId]}แล้ว`)
+    const confirmed = window.confirm(
+      `คืนค่าฉาก${LAYOUT_SCENE_LABELS[layoutSceneId]}ทั้งหมดใช่ไหม? การกระทำนี้จะล้างค่าที่ปรับไว้ของทุกอาคารและทุกโมเดล (Lv.-2 ถึง Lv.+2) ในฉากนี้ ฉากอื่นและอาคาร/โมเดลที่ปรับในฉากอื่นจะไม่ถูกแตะต้อง`,
+    )
+    if (!confirmed) return
+    setLayoutOverrides((currentOverrides) => clearLayoutScene(currentOverrides, layoutSceneId))
+    setLayoutFeedback(`คืนค่าฉาก${LAYOUT_SCENE_LABELS[layoutSceneId]}ทั้งหมดแล้ว`)
   }
 
   const copyLayoutJson = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(layoutOverrides, null, 2))
-      setLayoutFeedback('คัดลอก JSON แล้ว ส่งให้ Codex นำไปใส่ในโปรเจกต์ได้เลย')
+      setLayoutFeedback('คัดลอก JSON แล้ว (มีทุกฉาก/อาคาร/โมเดลที่ปรับไว้) ส่งให้ Codex นำไปใส่ในโปรเจกต์ได้เลย')
+    } catch {
+      setLayoutFeedback('คัดลอกไม่ได้ กรุณาอนุญาต Clipboard ในเบราว์เซอร์')
+    }
+  }
+
+  // Recovery/export only: reads the same effective-placement computation
+  // CityScene renders with (saved override, else scene/base + per-level
+  // fallback) for all 3 scenes x 7 buildings x 5 levels = 105 records. Never
+  // writes to storage, never migrates, never changes what is on screen.
+  const copyAllEffectivePlacements = async (): Promise<void> => {
+    try {
+      const records = exportAllEffectivePlacements(layoutOverrides)
+      await navigator.clipboard.writeText(JSON.stringify(records, null, 2))
+      setLayoutFeedback(`คัดลอกค่าตำแหน่งทั้งหมดแล้ว (${records.length} รายการ: 3 ฉาก x 7 อาคาร x 5 โมเดล)`)
     } catch {
       setLayoutFeedback('คัดลอกไม่ได้ กรุณาอนุญาต Clipboard ในเบราว์เซอร์')
     }
@@ -350,6 +335,11 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
   }
 
   const selectedLayoutPlacement = getEffectiveLayoutPlacement(layoutSelectedBuilding)
+  // Diagnostic only: does this exact scene/building/level have a saved v2
+  // override, or is it currently riding on the scene/base fallback?
+  const selectedLayoutSource = resolveEffectivePlacement(
+    layoutOverrides[layoutSceneId], layoutSceneId, layoutSelectedBuilding, layoutModelLevel,
+  ).source
 
   const canvasWidth = cityContentFrame.left * 2 + cityContentFrame.width
   const canvasHeight = cityContentFrame.top * 2 + cityContentFrame.height
@@ -403,7 +393,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(CITY_LAYOUT_STORAGE_KEY, JSON.stringify(layoutOverrides))
+      writeCityLayoutOverrides(layoutOverrides)
     } catch {
       setLayoutFeedback('เบราว์เซอร์ไม่อนุญาตให้บันทึกค่าพิกัด')
     }
@@ -816,6 +806,32 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
               </label>
             </div>
 
+            <dl
+              aria-label="สถานะการปรับตำแหน่งปัจจุบัน"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gap: '.2rem .5rem',
+                margin: 0,
+                padding: '.4rem .5rem',
+                borderRadius: '.5rem',
+                background: selectedLayoutSource === 'override' ? '#eafbf1' : '#fff7e8',
+                color: '#4a5a68',
+                fontSize: '.5rem',
+                lineHeight: 1.4,
+              }}
+            >
+              <div><dt style={{ display: 'inline', fontWeight: 700 }}>ฉาก: </dt><dd style={{ display: 'inline', margin: 0 }}>{LAYOUT_SCENE_LABELS[layoutSceneId]}</dd></div>
+              <div><dt style={{ display: 'inline', fontWeight: 700 }}>อาคาร: </dt><dd style={{ display: 'inline', margin: 0 }}>{LAYOUT_BUILDING_LABELS[layoutSelectedBuilding]}</dd></div>
+              <div><dt style={{ display: 'inline', fontWeight: 700 }}>โมเดล: </dt><dd style={{ display: 'inline', margin: 0 }}>Lv.{layoutModelLevel > 0 ? `+${layoutModelLevel}` : layoutModelLevel}</dd></div>
+              <div>
+                <dt style={{ display: 'inline', fontWeight: 700 }}>แหล่งค่า: </dt>
+                <dd style={{ display: 'inline', margin: 0, color: selectedLayoutSource === 'override' ? '#267651' : '#a5680f' }}>
+                  {selectedLayoutSource === 'override' ? 'ค่าที่ปรับเอง (บันทึกไว้)' : 'ค่าเริ่มต้น/สำรอง (ยังไม่ได้ปรับ)'}
+                </dd>
+              </div>
+            </dl>
+
             <div className="city-layout-panel__buildings" aria-label="เลือกอาคาร">
               {BUILDING_IDS.map((buildingId) => (
                 <button
@@ -855,9 +871,15 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
             </div>
 
             <div className="city-layout-panel__actions">
-              <button onClick={() => resetLayoutBuilding(layoutSelectedBuilding)} type="button">คืนค่าตึกนี้</button>
-              <button onClick={resetLayoutScene} type="button">คืนค่าทั้งฉาก</button>
+              <button onClick={() => resetLayoutBuilding(layoutSelectedBuilding)} type="button">คืนค่าตึกนี้ (Lv. ปัจจุบัน)</button>
+              <button onClick={resetLayoutScene} type="button">คืนค่าทั้งฉาก (ทุกตึก ทุกโมเดล)</button>
               <button className="is-primary" onClick={() => void copyLayoutJson()} type="button">คัดลอก JSON</button>
+              {/* Temporary recovery export: full 105-combination effective placement dump, read-only, no storage writes. */}
+              <button
+                onClick={() => void copyAllEffectivePlacements()}
+                style={{ gridColumn: '1 / -1' }}
+                type="button"
+              >คัดลอกค่าตำแหน่งทั้งหมด</button>
             </div>
             <output className="city-layout-panel__feedback" aria-live="polite">{layoutFeedback}</output>
           </aside>

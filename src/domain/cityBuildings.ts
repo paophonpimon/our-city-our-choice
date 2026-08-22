@@ -130,6 +130,237 @@ export const resolveBuildingAssetPlacement = (
 ): BuildingAssetPlacement => BUILDING_ASSET_PLACEMENTS[buildingId][level]
   ?? DEFAULT_BUILDING_ASSET_PLACEMENT
 
+/**
+ * Frozen production defaults for the scene-placement group transform (the
+ * `translate(x y) scale(scaleX scaleY)` each building's <g> renders with),
+ * one entry per scene x building x level (3 x 7 x 5 = 105). Generated
+ * verbatim from `city-layout-effective-105.json` - the exact effective
+ * placement the calibration tool's own renderer was already producing for
+ * every combination, whether that came from an explicit manual override or
+ * the old base-placement + slice/delta fallback formula. Do not recompute or
+ * re-derive these numbers: they ARE the final result, so nothing here should
+ * ever have a scene-delta, slice fallback, or BUILDING_ASSET_PLACEMENTS
+ * offset applied to it again - that math has already happened once, by the
+ * calibration tool, and is baked into these values.
+ */
+export const CITY_SCENE_BUILDING_PLACEMENTS: Record<
+  CitySceneProfileId,
+  Record<BuildingId, Record<BuildingLevel, CitySceneBuildingPlacement>>
+> = {
+  degraded: {
+    municipality: {
+      [-2]: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1 },
+      0: { x: 1.49, y: 3.8200000000000003, scaleX: 1, scaleY: 1 },
+      1: { x: 26.19, y: 29.7, scaleX: 1, scaleY: 1 },
+      2: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1 },
+    },
+    hospital: {
+      [-2]: { x: -20.82, y: -33.25, scaleX: 1.061, scaleY: 1.001 },
+      [-1]: { x: -20.82, y: -33.25, scaleX: 1.061, scaleY: 1.001 },
+      0: { x: -22.32, y: 6.030000000000001, scaleX: 1.061, scaleY: 1.001 },
+      1: { x: -6.6, y: 22.32, scaleX: 1.061, scaleY: 1.001 },
+      2: { x: -29.8, y: -34.21, scaleX: 1.061, scaleY: 1.001 },
+    },
+    police: {
+      [-2]: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1 },
+      [-1]: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1 },
+      0: { x: -44, y: 5.07, scaleX: 1.0542244640605296, scaleY: 1 },
+      1: { x: -19.3, y: 13.7, scaleX: 1.0542244640605296, scaleY: 1 },
+      2: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1 },
+    },
+    construction: {
+      [-2]: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1 },
+      0: { x: 0.74, y: 2.8699999999999974, scaleX: 1, scaleY: 1 },
+      1: { x: 23.19, y: 7.66, scaleX: 1, scaleY: 1 },
+      2: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1 },
+    },
+    market: {
+      [-2]: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1 },
+      0: { x: -4.48, y: 2.8700000000000045, scaleX: 1, scaleY: 1 },
+      1: { x: 35.93, y: 15.33, scaleX: 1, scaleY: 1 },
+      2: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1 },
+    },
+    school: {
+      [-2]: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1 },
+      [-1]: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1 },
+      0: { x: -14.08, y: 5.789999999999999, scaleX: 1.0542244640605296, scaleY: 1 },
+      1: { x: 0.89, y: 16.33, scaleX: 1.0542244640605296, scaleY: 1 },
+      2: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1 },
+    },
+    newsAgency: {
+      [-2]: { x: 0, y: -39.29, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -1.5, y: -32.58, scaleX: 1, scaleY: 1 },
+      0: { x: -0.75, y: 4.789999999999999, scaleX: 1, scaleY: 1 },
+      1: { x: 38.16, y: 25.87, scaleX: 1, scaleY: 1 },
+      2: { x: -1.5, y: -32.58, scaleX: 1, scaleY: 1 },
+    },
+  },
+  normal: {
+    municipality: {
+      [-2]: { x: 0, y: -39.28, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 0, y: -39.28, scaleX: 1, scaleY: 1 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      1: { x: 24.7, y: 27.79, scaleX: 1, scaleY: 1 },
+      2: { x: 0, y: -39.28, scaleX: 1, scaleY: 1 },
+    },
+    hospital: {
+      [-2]: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1 },
+      0: { x: 5.24, y: 1.92, scaleX: 1, scaleY: 1 },
+      1: { x: 16.47, y: 26.83, scaleX: 1, scaleY: 1 },
+      2: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1 },
+    },
+    police: {
+      [-2]: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      1: { x: 23.2, y: 18.21, scaleX: 1, scaleY: 1 },
+      2: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1 },
+    },
+    construction: {
+      [-2]: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      1: { x: 26.94, y: 8.62, scaleX: 1, scaleY: 1 },
+      2: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1 },
+    },
+    market: {
+      [-2]: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      1: { x: 32.93, y: 17.25, scaleX: 1, scaleY: 1 },
+      2: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1 },
+    },
+    school: {
+      [-2]: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      1: { x: 7.48, y: 11.49, scaleX: 1, scaleY: 1 },
+      2: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1 },
+    },
+    newsAgency: {
+      [-2]: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
+      1: { x: 37.42, y: 23, scaleX: 1, scaleY: 1 },
+      2: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1 },
+    },
+  },
+  developed: {
+    municipality: {
+      [-2]: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1 },
+      0: { x: 1.5, y: 2.8700000000000045, scaleX: 1, scaleY: 1 },
+      1: { x: 20.21, y: 27.79, scaleX: 1, scaleY: 1 },
+      2: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1 },
+    },
+    hospital: {
+      [-2]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+      0: { x: -1.5, y: -0.9600000000000009, scaleX: 1, scaleY: 1 },
+      1: { x: 16.46, y: 21.08, scaleX: 1, scaleY: 1 },
+      2: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+    },
+    police: {
+      [-2]: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1 },
+      0: { x: 0, y: 0.9600000000000009, scaleX: 1, scaleY: 1 },
+      1: { x: 26.94, y: 21.09, scaleX: 1, scaleY: 1 },
+      2: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1 },
+    },
+    construction: {
+      [-2]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+      0: { x: 1.5, y: -2.8700000000000045, scaleX: 1, scaleY: 1 },
+      1: { x: 24.7, y: 7.67, scaleX: 1, scaleY: 1 },
+      2: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+    },
+    market: {
+      [-2]: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1 },
+      0: { x: -5.98, y: 0.9600000000000009, scaleX: 1, scaleY: 1 },
+      1: { x: 36.67, y: 16.29, scaleX: 1, scaleY: 1 },
+      2: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1 },
+    },
+    school: {
+      [-2]: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1 },
+      [-1]: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1 },
+      0: { x: -2.24, y: 0, scaleX: 1, scaleY: 1 },
+      1: { x: 16.47, y: 12.45, scaleX: 1, scaleY: 1 },
+      2: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1 },
+    },
+    newsAgency: {
+      [-2]: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1 },
+      [-1]: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1 },
+      0: { x: 1.5, y: 2.8799999999999955, scaleX: 1, scaleY: 1 },
+      1: { x: 38.92, y: 25.87, scaleX: 1, scaleY: 1 },
+      2: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1 },
+    },
+  },
+}
+
+export const resolveFrozenBuildingPlacement = (
+  sceneId: CitySceneProfileId,
+  buildingId: BuildingId,
+  level: BuildingLevel,
+): CitySceneBuildingPlacement => CITY_SCENE_BUILDING_PLACEMENTS[sceneId][buildingId][level]
+
+/**
+ * Ground/contact depth anchor for isometric front-to-back sorting - the
+ * ACTUAL effective screen-space Y of the bottom edge of the building's
+ * canvas, derived from the real CityScene transform chain rather than an
+ * approximation:
+ *
+ *   <g transform="translate(scene.x scene.y) scale(scene.scaleX scene.scaleY)">
+ *     <image x={asset.x} y={asset.y} width=CITY_STAGE_WIDTH height=CITY_STAGE_HEIGHT />
+ *   </g>
+ *
+ * SVG applies a `<g>`'s transform to every coordinate inside it as
+ * translate(scale(point)) - the child's local (x, y) is scaled FIRST, then
+ * the group's translate is added. The <image>'s local bottom edge sits at
+ * (asset.y + CITY_STAGE_HEIGHT); mapping that through the group's transform
+ * gives:
+ *
+ *   groundAnchorY = scene.y + (asset.y + CITY_STAGE_HEIGHT) * scene.scaleY
+ *
+ * BUILDING_ASSET_PLACEMENTS.y is non-zero at Lv.-2/+2 (18.75, compensating
+ * for those two exports having a different canvas offset than Lv.-1/0/1) and
+ * zero everywhere else, so it genuinely shifts the rendered ground/contact
+ * position at those levels and must be included here - omitting it would
+ * silently misjudge depth whenever a -2/+2 model is being compared against a
+ * -1/0/1 model. Every building asset shares this same canvas and is
+ * calibrated against the same shared background, so once the asset offset is
+ * folded in, this value already IS the human-calibrated + asset-corrected
+ * signal for how far down - and therefore how far forward in the isometric
+ * view - a building's content sits relative to every other building. No
+ * separate geometry metadata (image bounds, transparent-pixel bounds, roof
+ * position) is needed: SVG Y increases downward, and a larger effective
+ * ground Y means the building is lower on screen and closer to the viewer.
+ */
+export const resolveBuildingGroundAnchorY = (
+  scenePlacement: CitySceneBuildingPlacement,
+  assetPlacement: BuildingAssetPlacement,
+): number => scenePlacement.y + (assetPlacement.y + CITY_STAGE_HEIGHT) * scenePlacement.scaleY
+
+/**
+ * Isometric depth order for the 7 buildings from their precomputed ground
+ * anchors (see `resolveBuildingGroundAnchorY`): a smaller anchor renders
+ * first (further back), a larger anchor renders later (further front,
+ * painted over anything behind it). BUILDING_IDS declaration order is used
+ * only as a deterministic tie-breaker when two anchors are exactly equal -
+ * it never decides ordering on its own otherwise.
+ */
+export const sortBuildingsByDepth = (
+  groundAnchors: Record<BuildingId, number>,
+): BuildingId[] =>
+  [...BUILDING_IDS].sort((a, b) => {
+    const delta = groundAnchors[a] - groundAnchors[b]
+    return delta !== 0 ? delta : BUILDING_IDS.indexOf(a) - BUILDING_IDS.indexOf(b)
+  })
+
 export const INITIAL_BUILDING_LEVELS: BuildingLevels = {
   municipality: 0,
   hospital: 0,
