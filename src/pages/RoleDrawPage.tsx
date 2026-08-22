@@ -82,7 +82,7 @@ export const RoleDrawPage = () => {
         <div className="role-draw-room"><span>ห้องเรียน</span><strong>{roomId}</strong></div>
       </header>
       <section className={`our-city-panel role-draw-panel w-full max-w-6xl p-7 md:p-10 ${!isTeacher && revealed && playerRole ? 'is-player-revealed' : ''}`}>
-        <p className="role-draw-kicker">ชุดที่ {room.gameCycle + 1}</p>
+        <p className="role-draw-kicker">รอบที่ {room.gameCycle + 1}</p>
         <h1 className="mt-3 text-3xl font-black md:text-5xl">
           {isTeacher
             ? `กำลังสุ่มอาชีพ รอบที่ ${room.gameCycle + 1}`
@@ -124,7 +124,7 @@ export const RoleDrawPage = () => {
         ) : null}
         {isTeacher ? (
           <button className="role-draw-start" disabled={!revealed || busy || playersState.data.some((player) => !player.roleId)} onClick={() => void begin()}>
-            {room.gameCycle === 0 ? 'เริ่มคำถาม' : `เริ่มคำถามชุดที่ ${room.gameCycle + 1}`}
+            {room.gameCycle === 0 ? 'เริ่มคำถาม' : `เริ่มคำถามรอบที่ ${room.gameCycle + 1}`}
           </button>
         ) : null}
         {error || roomState.error || playersState.error || playerState.error ? <p className="mt-4 text-red-200">{error || roomState.error || playersState.error || playerState.error}</p> : null}

@@ -4,6 +4,7 @@ import { CityStage } from '../components/CityStage'
 import { CityScene } from '../components/CityScene'
 import { CityBirdsAnimation } from '../components/CityBirdsAnimation'
 import { CityLoader } from '../components/CityLoader'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { createClassroomJoinUrl, LOCATION_POSITIONS } from '../components/classroomUi'
 import { JoinQrCode } from '../components/JoinQrCode'
 import { LiveAnswerImpacts } from '../components/LiveAnswerImpacts'
@@ -30,6 +31,8 @@ import type { ClassroomRoom } from '../types/classroomGame'
 import { isQuestionAnswerRecord } from '../types/classroomGame'
 import { getCrisisConclusion, getCrisisEvent } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord } from '../types/classroomGame'
+// TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
+import { debugLog, isDebugMode } from '../debug/useDebugLog'
 
 type SheetStatus = 'loading' | 'ready' | 'error'
 type YearCutscenePhase = 'entering' | 'holding' | 'text-leaving' | 'leaving'
@@ -107,10 +110,10 @@ const STANDALONE_LAYOUT_ROOM: ClassroomRoom = {
 
 const LOBBY_GAME_RULES = [
   'ระบบสุ่มให้นักเรียนคนละ 1 ใน 8 อาชีพอย่างสมดุล',
-  'แต่ละชุดมีคำถามปกติ 10 ข้อ และเหตุการณ์วิกฤตเมือง 2 ครั้งหลังข้อ 4 และข้อ 8',
+  'แต่ละรอบมีคำถามปกติ 10 ข้อ และเหตุการณ์วิกฤตเมือง 2 ครั้งหลังข้อ 4 และข้อ 8',
   'ทุกคำตอบส่งผลต่อคะแนนของอาคารที่เกี่ยวข้อง',
   'คะแนนอาคารและเมืองคำนวณจากค่าเฉลี่ยคำตอบของทั้งห้อง',
-  'เมื่อจบชุด นักเรียนสามารถเปลี่ยนอาชีพเพื่อเรียนรู้ครบทั้ง 8 บทบาท',
+  'เมื่อจบรอบ นักเรียนสามารถเปลี่ยนอาชีพเพื่อเรียนรู้ครบทั้ง 8 บทบาท',
 ] as const
 
 export const TeacherPage = () => {
@@ -137,6 +140,8 @@ export const TeacherPage = () => {
   const [buildingChangeStory, setBuildingChangeStory] = useState<BuildingChangeStory | null>(null)
   const [liveAnswerImpacts, setLiveAnswerImpacts] = useState<LiveAnswerImpact[]>([])
   const [restoringStoredRoom, setRestoringStoredRoom] = useState(Boolean(storedSession?.roomId))
+  const [isEndActivityDialogOpen, setIsEndActivityDialogOpen] = useState(false)
+  const [isHardRecoveryDialogOpen, setIsHardRecoveryDialogOpen] = useState(false)
   const closingRef = useRef(false)
   const roomBoundaryRef = useRef(0)
   const seenAnswerIdsRef = useRef(new Set<string>())
@@ -155,6 +160,8 @@ export const TeacherPage = () => {
     setActionError('')
     setActionMessage('')
     setIsLobbyRulesOpen(false)
+    setIsEndActivityDialogOpen(false)
+    setIsHardRecoveryDialogOpen(false)
     closingRef.current = false
     seenAnswerIdsRef.current.clear()
     liveImpactTrackingReadyRef.current = false
@@ -231,6 +238,22 @@ export const TeacherPage = () => {
       setVisualBuildingLevels((currentLevels) => sameBuildingLevels(currentLevels, nextLevels) ? currentLevels : nextLevels)
     }
   }, [room, visualBuildingLevels, visualCityLevel])
+
+  // TEMPORARY DIAGNOSTIC — track key Teacher-side derived values on each render
+  useEffect(() => {
+    if (!isDebugMode() || !room) return
+    debugLog('teacher', 'answerCount', `${answerCount}/${room.lockedPlayerCount}`)
+  }, [answerCount, room])
+
+  useEffect(() => {
+    if (!isDebugMode()) return
+    debugLog('teacher', 'canAdvance', String(canAdvanceQuestion))
+  }, [canAdvanceQuestion])
+
+  useEffect(() => {
+    if (!isDebugMode() || !room) return
+    debugLog('teacher', 'room render', `status=${room.status} q=${room.currentQuestionNumber} deadline=${room.questionDeadlineAt ?? 'null'}`)
+  }, [room?.status, room?.currentQuestionNumber, room?.questionDeadlineAt, room])
 
   useEffect(() => {
     resetRoomTransientState()
@@ -499,7 +522,7 @@ export const TeacherPage = () => {
   }
 
   const endCurrentActivity = async (): Promise<void> => {
-    if (!roomId || !window.confirm('ยุติห้องนี้ใช่ไหม? รหัสห้องเดิมจะใช้ต่อไม่ได้ และครูจะกลับไปสร้างห้องใหม่ทันที')) return
+    if (!roomId) return
     setBusy(true)
     setActionError('')
     try {
@@ -517,14 +540,14 @@ export const TeacherPage = () => {
       setActionMessage('ยุติห้องเดิมแล้ว สามารถสร้างห้องใหม่ได้ทันที')
       navigate('/teacher', { replace: true })
     } catch (reason) {
+      setIsEndActivityDialogOpen(false)
       setActionError(classroomFriendlyError(reason))
     } finally {
       setBusy(false)
     }
   }
 
-  const resetTeacherRoom = (): void => {
-    if (!window.confirm('รีเซ็ตห้องและล้างข้อมูลห้องเก่าที่ค้างบนเครื่องนี้ใช่ไหม? ห้องปัจจุบันจะถูกยุติและครูจะกลับไปสร้างห้องใหม่ทันที')) return
+  const hardRecoverStaleRoom = (): void => {
     const staleRoomId = roomId || getClassroomTeacherSession()?.roomId || ''
     setBusy(true)
     setActionError('')
@@ -544,6 +567,11 @@ export const TeacherPage = () => {
     teacherSoundtrackRef.current?.stop()
     setBusy(false)
     navigate('/teacher', { replace: true })
+  }
+
+  const confirmHardRecovery = (): void => {
+    setIsHardRecoveryDialogOpen(false)
+    hardRecoverStaleRoom()
   }
 
   const copyLink = async (): Promise<void> => {
@@ -620,10 +648,20 @@ export const TeacherPage = () => {
             {room.status === 'crisis-intro' ? <button disabled={busy} onClick={() => void beginEvent()}>เริ่มเหตุการณ์วิกฤต</button> : null}
             {room.status === 'crisis-playing' ? <button disabled={busy || closingRef.current} onClick={() => void closeCurrentCrisis()}>ปิดรับและสรุปผล</button> : null}
             {room.status === 'crisis-result' ? <button disabled={busy || !result} onClick={() => void continueAfterEvent()}>เข้าสู่คำถามข้อ {room.currentQuestionNumber + 1}</button> : null}
-            <button className="is-end" disabled={busy} onClick={() => void endCurrentActivity()}>จบกิจกรรม</button>
+            <button className="is-end" disabled={busy} onClick={() => setIsEndActivityDialogOpen(true)}>จบกิจกรรม</button>
           </div>
         </section>
       </main>
+      <ConfirmDialog
+        body="รหัสห้องเดิมจะใช้ต่อไม่ได้ และครูจะกลับไปสร้างห้องใหม่ทันที"
+        busy={busy}
+        confirmLabel="ยุติห้อง"
+        destructive
+        onCancel={() => setIsEndActivityDialogOpen(false)}
+        onConfirm={() => void endCurrentActivity()}
+        open={isEndActivityDialogOpen}
+        title="ยุติห้องนี้ใช่ไหม"
+      />
       </>
     )
   }
@@ -649,9 +687,9 @@ export const TeacherPage = () => {
               className="city-stage__action-button city-stage__action-button--close"
               disabled={room.status !== 'playing' || missingTrusted || closingRef.current}
               onClick={() => void closeCurrentQuestion()}
-              title={room.status === 'playing' ? 'ปิดรับคำตอบและสรุปผลรอบปัจจุบัน' : 'รอบปัจจุบันปิดแล้ว'}
+              title={room.status === 'playing' ? 'ปิดรับคำตอบและสรุปผลข้อปัจจุบัน' : 'ข้อปัจจุบันปิดแล้ว'}
             >
-              <span aria-hidden="true">■</span> จบรอบ
+              <span aria-hidden="true">■</span> ปิดรับคำตอบ
             </button>
             {canAdvanceQuestion ? (
               <button
@@ -660,7 +698,7 @@ export const TeacherPage = () => {
                 onClick={() => void nextOrFinish()}
               >
                 <span aria-hidden="true">{room.currentQuestionNumber === 10 ? '▣' : '▶'}</span>
-                {room.currentQuestionNumber === 10 ? ' ดูสรุปชุด' : ' ข้อถัดไป'}
+                {room.currentQuestionNumber === 10 ? ' ดูผลรอบนี้' : ' ไปข้อถัดไป'}
               </button>
             ) : null}
             <button
@@ -668,12 +706,12 @@ export const TeacherPage = () => {
               disabled
               title="ใช้ได้จากหน้าสรุปหลังเล่นครบ 10 ข้อ โดยคงคะแนนเมืองเดิม"
             >
-              <span aria-hidden="true">↻</span> เล่นต่อชุดใหม่
+              <span aria-hidden="true">↻</span> เล่นรอบต่อไป
             </button>
             <button
               className="city-stage__action-button city-stage__action-button--end"
               disabled={busy}
-              onClick={() => void endCurrentActivity()}
+              onClick={() => setIsEndActivityDialogOpen(true)}
               title="จบห้องปัจจุบันแล้วกลับไปสร้างห้องใหม่"
             >
               <span aria-hidden="true">■</span> จบกิจกรรม
@@ -683,7 +721,7 @@ export const TeacherPage = () => {
       >
         {missingTrusted ? (
           <div className="mx-auto max-w-2xl rounded-2xl border border-red-300/40 bg-red-950/90 p-5 text-center text-lg font-bold">
-            ไม่พบข้อมูลตรวจคำตอบที่บันทึกไว้ในเครื่องครู เครื่องนี้จึงไม่สามารถสรุปคำตอบต่อได้ กรุณากลับมาใช้เครื่องเดิม
+            ไม่สามารถเปิดห้องนี้ต่อจากเครื่องนี้ได้ กรุณากลับไปใช้เครื่องที่สร้างห้อง หรือเริ่มห้องใหม่
           </div>
         ) : null}
         {liveAnswerImpacts.length > 0 ? <LiveAnswerImpacts impacts={liveAnswerImpacts} /> : null}
@@ -706,6 +744,16 @@ export const TeacherPage = () => {
             </div>
           </div>
         ) : null}
+        <ConfirmDialog
+          body="รหัสห้องเดิมจะใช้ต่อไม่ได้ และครูจะกลับไปสร้างห้องใหม่ทันที"
+          busy={busy}
+          confirmLabel="ยุติห้อง"
+          destructive
+          onCancel={() => setIsEndActivityDialogOpen(false)}
+          onConfirm={() => void endCurrentActivity()}
+          open={isEndActivityDialogOpen}
+          title="ยุติห้องนี้ใช่ไหม"
+        />
         {cityRevealLocations.length > 0 ? (
           <div className="teacher-city-reveal" aria-hidden="true">
             {cityRevealLocations.map((locationId) => (
@@ -812,9 +860,12 @@ export const TeacherPage = () => {
               <button className="teacher-lobby-primary-button" disabled={busy || sheetStatus !== 'ready' || !Number.isInteger(questionDurationSec) || questionDurationSec <= 0} onClick={() => void createRoom()}>
                 <span aria-hidden="true">▶</span> สร้างห้อง
               </button>
-              <button className="teacher-lobby-reset-room-button" disabled={busy} onClick={resetTeacherRoom} type="button">
-                <span aria-hidden="true">↺</span> รีเซ็ตข้อมูลห้องเก่า
-              </button>
+              <details className="teacher-lobby-more-options">
+                <summary>ตัวเลือกเพิ่มเติม</summary>
+                <button className="teacher-lobby-reset-room-button" disabled={busy} onClick={() => setIsHardRecoveryDialogOpen(true)} type="button">
+                  <span aria-hidden="true">↺</span> แก้ปัญหาห้องค้าง
+                </button>
+              </details>
             </div>
           ) : (
             <>
@@ -858,10 +909,11 @@ export const TeacherPage = () => {
                 <span aria-hidden="true">▶</span> เริ่มเกม
                 <small>{participantCount === 0 ? 'รอให้นักเรียนเข้าห้องก่อน' : 'เริ่มสร้างเมืองของเรากันเลย!'}</small>
               </button>
-              <div className="teacher-lobby-secondary-actions">
-                <button aria-label="ยุติห้องและสร้างห้องใหม่" className="teacher-lobby-new-room-button" disabled={busy} onClick={() => void endCurrentActivity()} type="button"><span aria-hidden="true">⚙</span> สร้างห้องใหม่</button>
-                <button className="teacher-lobby-reset-room-button" disabled={busy} onClick={resetTeacherRoom} type="button"><span aria-hidden="true">↺</span> รีเซ็ตห้อง</button>
-              </div>
+              <button aria-label="ยุติห้องเดิมและเริ่มห้องใหม่" className="teacher-lobby-new-room-button" disabled={busy} onClick={() => setIsEndActivityDialogOpen(true)} type="button"><span aria-hidden="true">⚙</span> เริ่มห้องใหม่</button>
+              <details className="teacher-lobby-more-options">
+                <summary>ตัวเลือกเพิ่มเติม</summary>
+                <button className="teacher-lobby-reset-room-button" disabled={busy} onClick={() => setIsHardRecoveryDialogOpen(true)} type="button"><span aria-hidden="true">↺</span> แก้ปัญหาห้องค้าง</button>
+              </details>
             </>
           )}
           {actionError || roomState.error || playersState.error ? <p className="teacher-lobby-error">{actionError || roomState.error || playersState.error}</p> : null}
@@ -889,6 +941,26 @@ export const TeacherPage = () => {
           </section>
         </div>
       ) : null}
+      <ConfirmDialog
+        body="รหัสห้องเดิมจะใช้ต่อไม่ได้ และครูจะกลับไปสร้างห้องใหม่ทันที"
+        busy={busy}
+        confirmLabel="ยุติห้อง"
+        destructive
+        onCancel={() => setIsEndActivityDialogOpen(false)}
+        onConfirm={() => void endCurrentActivity()}
+        open={isEndActivityDialogOpen}
+        title="ยุติห้องนี้ใช่ไหม"
+      />
+      <ConfirmDialog
+        body="ใช้เมนูนี้เมื่อห้องเดิมค้างหรือไม่สามารถใช้งานต่อได้ ระบบจะล้างข้อมูลห้องที่ค้างอยู่บนเครื่องนี้และพากลับไปเริ่มห้องใหม่"
+        busy={busy}
+        confirmLabel="ล้างห้องที่ค้าง"
+        destructive
+        onCancel={() => setIsHardRecoveryDialogOpen(false)}
+        onConfirm={confirmHardRecovery}
+        open={isHardRecoveryDialogOpen}
+        title="แก้ปัญหาห้องค้าง"
+      />
     </main>
     </>
   )

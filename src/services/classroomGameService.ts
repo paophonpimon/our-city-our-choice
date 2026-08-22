@@ -94,7 +94,7 @@ export const classroomFriendlyError = (error: unknown): string => {
   if (error instanceof Error && error.message.startsWith('ผู้ใช้:')) return error.message.slice('ผู้ใช้:'.length)
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
   if (code.includes('permission-denied') || code.includes('unauthenticated')) {
-    return 'ส่งข้อมูลไม่สำเร็จ อาจหมดเวลาตอบหรือรอบถูกปิดแล้ว หากยังอยู่ในเวลาให้รีเฟรชและเข้าห้องใหม่'
+    return 'ส่งคำตอบไม่สำเร็จ อาจหมดเวลาหรือข้อนี้ปิดรับคำตอบแล้ว หากยังอยู่ในเวลาให้รีเฟรชหน้าแล้วลองใหม่'
   }
   if (code.includes('unavailable') || code.includes('network')) {
     return 'เชื่อมต่ออินเทอร์เน็ตไม่ได้ กรุณาตรวจสอบสัญญาณแล้วลองใหม่'

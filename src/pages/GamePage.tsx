@@ -11,6 +11,28 @@ import { classroomFriendlyError } from '../services'
 import { getClassroomStudentSession, saveClassroomViewerRole } from '../services/sessionStorage'
 import { getCrisisEvent, orderCrisisChoicesForPlayer } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord } from '../types/classroomGame'
+// TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
+import { debugLog, isDebugMode } from '../debug/useDebugLog'
+
+/**
+ * Full-coverage lock shown the instant a countdown hits zero. Not a dismiss-
+ * able notice: it sits over the answer area so an unanswered student cannot
+ * mistake a disabled button for a live one, and it disappears on its own the
+ * moment classroom state moves past this question.
+ */
+const TimeoutLockOverlay = () => (
+  <div
+    aria-live="assertive"
+    className="absolute inset-0 z-10 grid place-items-center rounded-2xl bg-[#050b14]/93 px-6 text-center backdrop-blur-sm"
+    role="status"
+  >
+    <div>
+      <p className="text-xl font-black text-[#f4c96d]">หมดเวลาสำหรับข้อนี้</p>
+      <p className="mt-2 text-base font-bold text-white">ระบบปิดรับคำตอบแล้ว</p>
+      <p className="mt-1 text-sm text-[#a9c5c3]">รอครูเข้าสู่ข้อถัดไป</p>
+    </div>
+  </div>
+)
 
 export const GamePage = () => {
   const roomId = (useParams().roomCode ?? '').toUpperCase()
@@ -43,6 +65,12 @@ export const GamePage = () => {
     if (roomState.data?.status === 'game-result' || roomState.data?.status === 'finished') navigate(`/result/${roomId}`, { replace: true })
   }, [navigate, roomId, roomState.data?.status])
 
+  // TEMPORARY DIAGNOSTIC — track Student-side room snapshot changes
+  useEffect(() => {
+    if (!isDebugMode() || !roomState.data) return
+    debugLog('student', 'room render', `status=${roomState.data.status} q=${roomState.data.currentQuestionNumber} deadline=${roomState.data.questionDeadlineAt ?? 'null'}`)
+  }, [roomState.data?.status, roomState.data?.currentQuestionNumber, roomState.data?.questionDeadlineAt, roomState.data])
+
   const question = useMemo(() => {
     const room = roomState.data
     const player = playerState.data
@@ -74,11 +102,16 @@ export const GamePage = () => {
   if (roomState.data?.status === 'role-draw') return <Navigate replace to={`/role-draw/${roomId}`} />
 
   const answer = async (choiceId: string): Promise<void> => {
-    if (!roomState.data || roomState.data.status !== 'playing' || !question || existingAnswer) return
+    // Defense in depth: the countdown disables the buttons, but a click
+    // queued in the same tick the deadline passes must still be rejected
+    // here rather than reaching the (authoritative, server-enforced) write.
+    if (!roomState.data || roomState.data.status !== 'playing' || !question || existingAnswer || remaining <= 0) return
     const submittedForIdentity = interactionIdentityRef.current
+    if (isDebugMode()) debugLog('student', 'answer tap', `q=${roomState.data.currentQuestionNumber}`)
     setSavingChoiceId(choiceId)
     setError('')
     try {
+      if (isDebugMode()) debugLog('student', 'submit START', `q=${roomState.data.currentQuestionNumber}`)
       await service.submitAnswer(
         roomId,
         session.playerId,
@@ -87,7 +120,9 @@ export const GamePage = () => {
         question.questionId,
         choiceId,
       )
+      if (isDebugMode()) debugLog('student', 'submit OK')
     } catch (reason) {
+      if (isDebugMode()) debugLog('student', 'submit ERR', String(reason))
       if (interactionIdentityRef.current === submittedForIdentity) setError(classroomFriendlyError(reason))
     } finally {
       if (interactionIdentityRef.current === submittedForIdentity) setSavingChoiceId('')
@@ -95,7 +130,7 @@ export const GamePage = () => {
   }
 
   const answerCrisis = async (choiceId: string): Promise<void> => {
-    if (!roomState.data || roomState.data.status !== 'crisis-playing' || !crisisDilemma || existingCrisisAnswer) return
+    if (!roomState.data || roomState.data.status !== 'crisis-playing' || !crisisDilemma || existingCrisisAnswer || remaining <= 0) return
     const submittedForIdentity = interactionIdentityRef.current
     setSavingChoiceId(choiceId); setError('')
     try { await service.submitCrisisAnswer(roomId, session.playerId, uid, choiceId) }
@@ -133,16 +168,16 @@ export const GamePage = () => {
                 <p className="crisis-student-summary">{crisisEvent.situation}</p>
                 <p className="crisis-student-kicker">สถานการณ์เฉพาะบทบาท</p>
                 <h2>{crisisDilemma.prompt}</h2>
-                <div className="crisis-student-choices">
+                <div className="crisis-student-choices relative">
                   {orderedCrisisChoices.map((choice, index) => (
-                    <button disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId)} key={choice.id} onClick={() => void answerCrisis(choice.id)}>
+                    <button disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId) || remaining <= 0} key={choice.id} onClick={() => void answerCrisis(choice.id)}>
                       <span>{index === 0 ? 'ก.' : 'ข.'}</span>{choice.text}
                     </button>
                   ))}
+                  {active && remaining === 0 && !existingCrisisAnswer ? <TimeoutLockOverlay /> : null}
                 </div>
                 <div className="crisis-student-feedback" aria-live="polite">
                   {existingCrisisAnswer ? <p>ส่งการตัดสินใจแล้ว<br /><small>รอเพื่อนและครูสรุปผลวิกฤต</small></p> : null}
-                  {active && remaining === 0 && !existingCrisisAnswer ? <p>กำลังตรวจสอบเวลาจากห้องเรียน…</p> : null}
                   {roomState.data.status === 'crisis-result' ? <p>วิกฤตนี้สิ้นสุดแล้ว<br /><small>รอครูพาเมืองเข้าสู่คำถามถัดไป</small></p> : null}
                   {error ? <p className="text-red-200">{error}</p> : null}
                 </div>
@@ -163,7 +198,7 @@ export const GamePage = () => {
         <div className="game-play-brandbar"><Link className="game-brand" to="/"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b></strong></Link><span>ห้อง {roomId}</span></div>
         <header className="our-city-panel game-play-header flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div>
-            <p className="text-sm font-bold text-[#f4c96d]">ชุดที่ {roomState.data.gameCycle + 1} • อาชีพ: {role?.label}</p>
+            <p className="text-sm font-bold text-[#f4c96d]">รอบที่ {roomState.data.gameCycle + 1} • อาชีพ: {role?.label}</p>
             <h1 className="text-2xl font-black">คำถามข้อที่ {roomState.data.currentQuestionNumber}/10</h1>
           </div>
           <div className={`rounded-2xl px-5 py-3 text-center ${remaining <= 5 ? 'bg-red-400/15 text-red-100' : 'bg-white/8'}`}>
@@ -177,7 +212,7 @@ export const GamePage = () => {
           <p className="text-sm font-bold tracking-[.14em] text-[#8fc4c5] uppercase">สถานการณ์ของคุณ</p>
           <h2 className="game-play-prompt mt-4 text-2xl leading-relaxed font-black md:text-4xl">{question.prompt}</h2>
 
-          <div className="game-play-choices mt-auto grid gap-4 pt-8 md:grid-cols-2">
+          <div className="game-play-choices relative mt-auto grid gap-4 pt-8 md:grid-cols-2">
             {orderedChoices.map((choice, index) => (
               <button
                 className={`game-play-choice min-h-32 rounded-2xl border p-5 text-left text-lg font-bold transition ${
@@ -185,7 +220,7 @@ export const GamePage = () => {
                     ? 'border-[#f4c96d] bg-[#f4c96d]/12'
                     : 'border-white/18 bg-white/7 hover:border-white/40 hover:bg-white/10'
                 } disabled:cursor-not-allowed disabled:opacity-55`}
-                disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing'}
+                disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing' || remaining <= 0}
                 key={choice.id}
                 onClick={() => void answer(choice.id)}
               >
@@ -195,6 +230,7 @@ export const GamePage = () => {
                 {choice.text}
               </button>
             ))}
+            {countdownEnded ? <TimeoutLockOverlay /> : null}
           </div>
 
           <div className="game-play-feedback mt-6 min-h-14 text-center" aria-live="polite">
@@ -203,7 +239,6 @@ export const GamePage = () => {
                 ส่งคำตอบแล้ว <span className="block text-sm font-medium text-[#a9c5c3]">รอผลจากเมือง</span>
               </p>
             ) : null}
-            {countdownEnded ? <p className="rounded-xl bg-white/8 px-4 py-3 font-bold text-[#d6d2c7]">กำลังตรวจสอบเวลาจากห้องเรียน…</p> : null}
             {roomState.data.status === 'round-result' ? <p className="rounded-xl bg-[#f4c96d]/12 px-4 py-3 font-bold text-[#f9dda0]">จบคำถามข้อนี้แล้ว • รอครูกดข้อถัดไป</p> : null}
             {error ? <p className="mt-2 text-red-200">{error}</p> : null}
           </div>

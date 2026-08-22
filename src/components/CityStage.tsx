@@ -524,7 +524,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
 
       <header className="city-stage__topbar">
         <div className="city-stage__metrics">
-          <div><i aria-hidden="true">🚩</i><span>รอบที่</span><strong>{room.currentQuestionNumber} / 10</strong></div>
+          <div><i aria-hidden="true">🚩</i><span>ข้อที่</span><strong>{room.currentQuestionNumber} / 10</strong></div>
           <div className="city-stage__score"><i aria-hidden="true">⭐</i><span>คะแนนเมือง</span><strong>{Math.round(displayScore).toLocaleString('th-TH')}</strong></div>
           <div><i aria-hidden="true">🏆</i><span>เป้าหมาย</span><strong>{answerCount} / {room.lockedPlayerCount}</strong></div>
           <div><i aria-hidden="true">⏱️</i><span>เวลาที่เหลือ</span><strong>{room.status === 'playing' ? remainingSeconds : 0} <small>วินาที</small></strong></div>
@@ -752,7 +752,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
         </div>
         {room.status === 'round-result' && roundImpact !== null && roundImpact !== undefined ? (
           <div className={`city-stage__round-impact ${roundImpact >= 0 ? 'is-positive' : 'is-negative'}`} aria-live="polite">
-            ผลกระทบรอบนี้ <strong>{signed(roundImpact)}</strong>
+            ผลกระทบข้อนี้ <strong>{signed(roundImpact)}</strong>
           </div>
         ) : null}
         <section className="city-stage__vote-overlay" aria-label="ผลโหวตล่าสุด">
@@ -868,7 +868,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
         </div>
       </div>
 
-      <aside className="city-stage__side-panel" aria-label="ข้อมูลและการควบคุมรอบคำถาม">
+      <aside className="city-stage__side-panel" aria-label="ข้อมูลและการควบคุมคำถาม">
         <section className="city-stage__right-card city-stage__status-card">
           <h2>สถานะเมือง</h2>
           <div className="city-stage__status-summary">
@@ -880,7 +880,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
         </section>
         <section className="city-stage__right-card city-stage__building-activity" aria-label="ผลกระทบล่าสุดของแต่ละอาคาร">
           <h2>ผลกระทบอาคารล่าสุด</h2>
-          <p>{locationImpacts ? `ผลจากรอบที่ ${Math.max(1, room.status === 'round-result' ? room.currentQuestionNumber : room.currentQuestionNumber - 1)}` : 'รอผลจากรอบแรก'}</p>
+          <p>{locationImpacts ? `ผลจากข้อที่ ${Math.max(1, room.status === 'round-result' ? room.currentQuestionNumber : room.currentQuestionNumber - 1)}` : 'รอผลจากข้อแรก'}</p>
           <div>
             {BUILDING_IMPACT_ITEMS.map((building) => {
               const score = locationImpacts?.[building.id].scoreAverage ?? 0

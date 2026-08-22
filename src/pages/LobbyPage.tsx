@@ -91,36 +91,46 @@ export const LobbyPage = () => {
       </section>
 
       <section className="student-wait-guide">
-        <nav aria-label="หัวข้อเตรียมตัว" role="tablist">
-          <button aria-controls="student-guide-panel-how" aria-selected={activeTab === 'how'} className={activeTab === 'how' ? 'is-active' : ''} id="student-guide-tab-how" onClick={() => setActiveTab('how')} role="tab" type="button">▣ วิธีเล่น</button>
-          <button aria-controls="student-guide-panel-roles" aria-selected={activeTab === 'roles'} className={activeTab === 'roles' ? 'is-active' : ''} id="student-guide-tab-roles" onClick={() => setActiveTab('roles')} role="tab" type="button">♙ 8 อาชีพ</button>
-          <button aria-controls="student-guide-panel-impact" aria-selected={activeTab === 'impact'} className={activeTab === 'impact' ? 'is-active' : ''} id="student-guide-tab-impact" onClick={() => setActiveTab('impact')} role="tab" type="button">♨ คะแนนและผลกระทบ</button>
-          <button aria-controls="student-guide-panel-checklist" aria-selected={activeTab === 'checklist'} className={activeTab === 'checklist' ? 'is-active' : ''} id="student-guide-tab-checklist" onClick={() => setActiveTab('checklist')} role="tab" type="button">☑ เช็กลิสต์ก่อนเริ่ม</button>
+        {/*
+          Below the "landscape tablet / desktop" breakpoint (see
+          .student-wait-guide__content in styles.css), every section renders
+          at once in a responsive grid and this nav becomes a same-page
+          jump/highlight control rather than an exclusive tab switcher — so
+          it uses toggle-button semantics (aria-pressed), not role="tab" with
+          aria-selected, which would incorrectly assert only one panel is
+          visible. On narrow/portrait viewports, CSS hides every section
+          except .is-active, reproducing the original single-panel behavior.
+        */}
+        <nav aria-label="หัวข้อเตรียมตัว">
+          <button aria-controls="student-guide-panel-how" aria-pressed={activeTab === 'how'} className={activeTab === 'how' ? 'is-active' : ''} id="student-guide-tab-how" onClick={() => setActiveTab('how')} type="button">▣ วิธีเล่น</button>
+          <button aria-controls="student-guide-panel-roles" aria-pressed={activeTab === 'roles'} className={activeTab === 'roles' ? 'is-active' : ''} id="student-guide-tab-roles" onClick={() => setActiveTab('roles')} type="button">♙ 8 อาชีพ</button>
+          <button aria-controls="student-guide-panel-impact" aria-pressed={activeTab === 'impact'} className={activeTab === 'impact' ? 'is-active' : ''} id="student-guide-tab-impact" onClick={() => setActiveTab('impact')} type="button">♨ คะแนนและผลกระทบ</button>
+          <button aria-controls="student-guide-panel-checklist" aria-pressed={activeTab === 'checklist'} className={activeTab === 'checklist' ? 'is-active' : ''} id="student-guide-tab-checklist" onClick={() => setActiveTab('checklist')} type="button">☑ เช็กลิสต์ก่อนเริ่ม</button>
         </nav>
         <div className="student-wait-guide__content">
-          {activeTab === 'how' ? <section aria-labelledby="student-guide-tab-how" className="student-wait-how" id="student-guide-panel-how" role="tabpanel">
+          <section aria-labelledby="student-guide-tab-how" className={`student-wait-how${activeTab === 'how' ? ' is-active' : ''}`} id="student-guide-panel-how">
             <h2 id="student-how-title">วิธีเล่นแบบสั้นๆ</h2>
             {HOW_TO_PLAY.map(([icon, title, detail]) => <article key={title}><span aria-hidden="true">{icon}</span><div><strong>{title}</strong><p>{detail}</p></div></article>)}
-          </section> : null}
+          </section>
 
-          {activeTab === 'roles' ? <section aria-labelledby="student-guide-tab-roles" className="student-wait-roles" id="student-guide-panel-roles" role="tabpanel">
+          <section aria-labelledby="student-guide-tab-roles" className={`student-wait-roles${activeTab === 'roles' ? ' is-active' : ''}`} id="student-guide-panel-roles">
             <h2 id="student-roles-title">8 อาชีพที่อาจได้รับ</h2>
             <div>{ROLES.map((role) => <button aria-label={`ดูข้อมูลอาชีพ${role.label}`} className={`student-wait-role student-wait-role--${role.id}`} key={role.id} onClick={() => setRoleModal(role.id)} type="button"><img alt="" src={ROLE_CARD_ASSETS[role.id]} /><strong>{role.label}</strong></button>)}</div>
-          </section> : null}
+          </section>
 
-          {activeTab === 'impact' ? <section aria-labelledby="student-guide-tab-impact" className="student-wait-impact" id="student-guide-panel-impact" role="tabpanel">
+          <section aria-labelledby="student-guide-tab-impact" className={`student-wait-impact${activeTab === 'impact' ? ' is-active' : ''}`} id="student-guide-panel-impact">
             <h2 id="student-impact-title">ทางเลือกของคุณ ส่งผลต่อเมือง</h2>
             <article className="is-good"><span>✓</span><div><strong>ทางเลือกที่รับผิดชอบ → เมืองดีขึ้น</strong><p>อาคารและคุณภาพชีวิตพัฒนา</p></div></article>
             <article className="is-bad"><span>↘</span><div><strong>ทางเลือกที่ทุจริต → เมืองเสื่อมลง</strong><p>คุณภาพชีวิตและตึกในเมืองลดลง</p></div></article>
             <article className="is-neutral"><span>?</span><div><strong>ไม่ตอบ → พลาดโอกาสช่วยเมือง</strong><p>ไม่ได้คะแนนและไม่เกิดการเปลี่ยนแปลง</p></div></article>
-          </section> : null}
+          </section>
 
-          {activeTab === 'checklist' ? <section aria-labelledby="student-guide-tab-checklist" className="student-wait-checklist" id="student-guide-panel-checklist" role="tabpanel">
+          <section aria-labelledby="student-guide-tab-checklist" className={`student-wait-checklist${activeTab === 'checklist' ? ' is-active' : ''}`} id="student-guide-panel-checklist">
             <h2 id="student-check-title">เช็กลิสต์ความพร้อม</h2>
             <article><span>✓</span><div><strong>อ่านกติกาแล้ว</strong><p>เข้าใจวิธีเล่นและการตัดสินใจ</p></div></article>
             <article><span>✓</span><div><strong>พร้อมรับอาชีพ</strong><p>รับบทบาทที่เหมาะกับคุณ</p></div></article>
             <article><span>✓</span><div><strong>พร้อมช่วยสร้างเมือง</strong><p>ทำหน้าที่ให้ดีที่สุดเพื่อเมืองของเรา</p></div></article>
-          </section> : null}
+          </section>
         </div>
       </section>
 

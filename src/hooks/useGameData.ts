@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useGame } from '../context/GameContext'
 import { subscribeWithIdentityGuard } from '../services/subscriptionLifecycle'
+// TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
+import { debugLog, isDebugMode } from '../debug/useDebugLog'
 import type {
   ClassroomAnswerRecord,
   ClassroomPlayer,
@@ -28,7 +30,10 @@ export const useRoom = (roomId: string): Loadable<ClassroomRoom | null> => {
     setState(initial(null, roomId))
     return subscribeWithIdentityGuard<ClassroomRoom | null>(
       (listener, onError) => service.subscribeRoom(roomId, listener, onError),
-      (data) => setState({ data, loading: false, error: '', identityKey: roomId }),
+      (data) => {
+        if (isDebugMode()) debugLog('hook', 'room snapshot', `status=${data?.status ?? 'null'} q=${data?.currentQuestionNumber ?? '-'} deadline=${data?.questionDeadlineAt ?? 'null'}`)
+        setState({ data, loading: false, error: '', identityKey: roomId })
+      },
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )
   }, [roomId, service])
@@ -43,7 +48,10 @@ export const usePlayers = (roomId: string): Loadable<ClassroomPlayer[]> => {
     setState(initial([], roomId))
     return subscribeWithIdentityGuard<ClassroomPlayer[]>(
       (listener, onError) => service.subscribePlayers(roomId, listener, onError),
-      (data) => setState({ data, loading: false, error: '', identityKey: roomId }),
+      (data) => {
+        if (isDebugMode()) debugLog('hook', 'players snapshot', `count=${data.length}`)
+        setState({ data, loading: false, error: '', identityKey: roomId })
+      },
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )
   }, [roomId, service])
@@ -89,7 +97,10 @@ export const useAnswers = (roomId: string): Loadable<ClassroomAnswerRecord[]> =>
     setState(initial([], roomId))
     return subscribeWithIdentityGuard<ClassroomAnswerRecord[]>(
       (listener, onError) => service.subscribeAnswers(roomId, listener, onError),
-      (data) => setState({ data, loading: false, error: '', identityKey: roomId }),
+      (data) => {
+        if (isDebugMode()) debugLog('hook', 'answers snapshot', `count=${data.length}`)
+        setState({ data, loading: false, error: '', identityKey: roomId })
+      },
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )
   }, [roomId, service])
@@ -109,7 +120,10 @@ export const usePlayerAnswers = (
     setState(initial([], identityKey))
     return subscribeWithIdentityGuard<ClassroomAnswerRecord[]>(
       (listener, onError) => service.subscribePlayerAnswers(roomId, playerId, ownerUid, listener, onError),
-      (data) => setState({ data, loading: false, error: '', identityKey }),
+      (data) => {
+        if (isDebugMode()) debugLog('student', 'answer snapshot rcvd', `count=${data.length}`)
+        setState({ data, loading: false, error: '', identityKey })
+      },
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )
   }, [ownerUid, playerId, roomId, service])

@@ -179,6 +179,56 @@ describe('answer submission still works against the new question shape', () => {
   })
 })
 
+describe('hard timeout lock is enforced server-side, not just by the client UI', () => {
+  it('rejects an answer submitted after questionDeadlineAt has passed, even with a correct choice and role', async () => {
+    const { docs } = buildRealQuestionDocs()
+    const question = docs.find((candidate) => candidate.roleId != null)
+    if (!question) throw new Error('no question built')
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'rooms/TEST'), minimalRoomDoc('TEST', {
+        status: 'playing',
+        currentQuestionNumber: question.questionNumber,
+        // The deadline is already in the past — this is the exact case a
+        // late client (clock skew, slow network, queued click) must never
+        // be able to bypass no matter what the disabled UI button did.
+        questionDeadlineAt: Timestamp.fromMillis(Date.now() - 1_000),
+      }))
+      await setDoc(doc(db, `rooms/TEST/questions/${question.questionId}`), question)
+      await setDoc(doc(db, `rooms/TEST/players/${STUDENT_UID}`), {
+        playerId: STUDENT_UID,
+        nickname: 'Test Student',
+        nicknameKey: 'test student',
+        classSection: '1/1',
+        studentNumber: 1,
+        ownerUid: STUDENT_UID,
+        roleId: question.roleId,
+        roleHistory: [question.roleId],
+        roleOffset: 0,
+        joinedAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+      })
+    })
+
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    const answerId = `0::${STUDENT_UID}::${question.questionId}`
+    await assertFails(
+      setDoc(doc(studentDb, `rooms/TEST/answers/${answerId}`), {
+        answerId,
+        roomId: 'TEST',
+        playerId: STUDENT_UID,
+        ownerUid: STUDENT_UID,
+        gameCycle: 0,
+        questionNumber: question.questionNumber,
+        questionId: question.questionId,
+        choiceId: question.choices[0].id,
+        submittedAt: serverTimestamp(),
+      }),
+    )
+  })
+})
+
 describe('room code creation race (collision safety)', () => {
   const raceRoomId = 'RACE'
 

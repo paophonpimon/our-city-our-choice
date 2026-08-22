@@ -9,6 +9,8 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { ResultPage } from './pages/ResultPage'
 import { RoleDrawPage } from './pages/RoleDrawPage'
 import { TeacherPage } from './pages/TeacherPage'
+// TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
+import { DebugOverlay } from './debug/DebugOverlay'
 
 const App = () => (
   <BrowserRouter>
@@ -24,6 +26,7 @@ const App = () => (
         <Route path="/closed/:roomCode" element={<ClosedPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      <DebugOverlay />
     </GameProvider>
   </BrowserRouter>
 )

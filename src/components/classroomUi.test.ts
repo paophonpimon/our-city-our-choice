@@ -56,7 +56,7 @@ describe('classroom UI contracts', () => {
   it('lets the teacher terminate a lobby before creating a fresh room', () => {
     const teacherPage = readSource('../pages/TeacherPage.tsx')
     const resultPage = readSource('../pages/ResultPage.tsx')
-    expect(teacherPage).toContain('ยุติห้องและสร้างห้องใหม่')
+    expect(teacherPage).toContain('ยุติห้องเดิมและเริ่มห้องใหม่')
     expect(teacherPage).toContain("room.status !== 'finished' && room.teacherSessionId === uid")
     expect(teacherPage).toContain('await service.endActivity(room.roomId, uid)')
     expect(teacherPage).toContain('clearTeacherSnapshot(roomId)')
@@ -87,6 +87,52 @@ describe('classroom UI contracts', () => {
     expect(teacherPage).toContain('resolveLiveAnswerImpact(answer, trustedSnapshot)')
     expect(teacherPage).toContain('<LiveAnswerImpacts impacts={liveAnswerImpacts} />')
     expect(teacherPage).not.toContain('<LocationResults summaries=')
+  })
+
+  it('hard-locks the student answer buttons and handlers the instant the countdown reaches zero', () => {
+    const gamePage = readSource('../pages/GamePage.tsx')
+    // UI disable: both the normal-question and crisis choice buttons must
+    // stop accepting clicks at remaining <= 0, not just when an answer already exists.
+    expect(gamePage).toContain("disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing' || remaining <= 0}")
+    expect(gamePage).toContain('disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId) || remaining <= 0}')
+    // Defense in depth: the submit handlers reject locally too, independent of the disabled button.
+    expect(gamePage).toContain("if (!roomState.data || roomState.data.status !== 'playing' || !question || existingAnswer || remaining <= 0) return")
+    expect(gamePage).toContain("if (!roomState.data || roomState.data.status !== 'crisis-playing' || !crisisDilemma || existingCrisisAnswer || remaining <= 0) return")
+    // Polished, non-dismissible overlay — no native alert/confirm anywhere in the flow.
+    expect(gamePage).toContain('หมดเวลาสำหรับข้อนี้')
+    expect(gamePage).toContain('ระบบปิดรับคำตอบแล้ว')
+    expect(gamePage).toContain('รอครูเข้าสู่ข้อถัดไป')
+    expect(gamePage).not.toContain('window.alert')
+    expect(gamePage).not.toContain('window.confirm')
+  })
+
+  it('never shows a native confirm/alert anywhere in the active teacher classroom flow', () => {
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    expect(teacherPage).not.toContain('window.confirm')
+    expect(teacherPage).not.toContain('window.alert')
+    expect(teacherPage).toContain('<ConfirmDialog')
+  })
+
+  it('shows all lobby guide sections together on landscape tablet/desktop, and only the active one on mobile/portrait', () => {
+    const lobbyPage = readSource('../pages/LobbyPage.tsx')
+    const styles = readSource('../styles.css')
+    // All four sections must always be in the DOM — CSS decides visibility
+    // per breakpoint, not a JS conditional that only ever renders one.
+    expect(lobbyPage).not.toMatch(/activeTab === '\w+' \? <section/)
+    expect(lobbyPage).toContain("className={`student-wait-how${activeTab === 'how' ? ' is-active' : ''}`}")
+    expect(lobbyPage).toContain("className={`student-wait-roles${activeTab === 'roles' ? ' is-active' : ''}`}")
+    expect(lobbyPage).toContain("className={`student-wait-impact${activeTab === 'impact' ? ' is-active' : ''}`}")
+    expect(lobbyPage).toContain("className={`student-wait-checklist${activeTab === 'checklist' ? ' is-active' : ''}`}")
+    // Desktop-first base rule lays every section out in one grid, not a
+    // single-child container with three empty columns.
+    expect(styles).toContain('.student-wait-guide__content { display: grid; grid-template-columns: 1.08fr 1.16fr 1fr 1fr;')
+    // Only inside the mobile/portrait-scoped query does a non-active section disappear.
+    expect(styles).toContain('@media (max-width: 767px), (orientation: portrait) {')
+    const mobileQueryBody = styles.slice(styles.indexOf('@media (max-width: 767px), (orientation: portrait) {'))
+    expect(mobileQueryBody).toContain('.student-wait-guide__content > section { display: none;')
+    expect(mobileQueryBody).toContain('.student-wait-guide__content > section.is-active { display: block;')
+    // Breakpoint is viewport-based (width/orientation), never device sniffing.
+    expect(lobbyPage).not.toMatch(/navigator\.(userAgent|platform)/)
   })
 
   it('provides role draw before questions without student role selection', () => {
@@ -202,10 +248,10 @@ describe('classroom UI contracts', () => {
   it('shows latest and cumulative city progress with continue controls', () => {
     const resultPage = readSource('../pages/ResultPage.tsx')
     expect(resultPage).toContain('CITY_REFLECTIONS')
-    expect(resultPage).toContain('สุจริตชุดล่าสุด')
+    expect(resultPage).toContain('สุจริตรอบล่าสุด')
     expect(resultPage).toContain('สุจริตสะสม')
     expect(resultPage).toContain('เล่นต่อเพื่อพัฒนาเมือง')
-    expect(resultPage).toContain('สร้างห้องใหม่')
+    expect(resultPage).toContain('เริ่มห้องใหม่')
     expect(resultPage).not.toMatch(/winner|leaderboard|อันดับ/i)
   })
 })

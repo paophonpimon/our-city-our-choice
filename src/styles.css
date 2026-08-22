@@ -1686,6 +1686,14 @@
 .teacher-lobby-create-card .teacher-lobby-primary-button { width: 100%; }
 .teacher-lobby-create-card .teacher-lobby-reset-room-button { width: 100%; margin-top: .65rem; }
 
+.teacher-lobby-more-options { width: 100%; border: 1px solid #dce7f2; border-radius: .85rem; background: rgb(255 255 255 / 70%); }
+.teacher-lobby-more-options summary { padding: .65rem .85rem; list-style: none; color: #52657d; font-size: .72rem; font-weight: 600; cursor: pointer; }
+.teacher-lobby-more-options summary::-webkit-details-marker { display: none; }
+.teacher-lobby-more-options summary::before { display: inline-block; margin-right: .4rem; content: '›'; transition: transform 160ms ease; }
+.teacher-lobby-more-options[open] summary::before { transform: rotate(90deg); }
+.teacher-lobby-more-options > .teacher-lobby-reset-room-button { width: calc(100% - 1.3rem); margin: 0 .65rem .65rem; }
+.teacher-lobby-create-card .teacher-lobby-more-options { margin-top: .65rem; }
+
 @media (max-width: 1180px) {
   .teacher-lobby-page { padding: .7rem; }
   .teacher-lobby-header { grid-template-columns: 12.5rem minmax(0, 1fr) auto auto; min-height: 4.6rem; padding-bottom: .7rem; }
@@ -3603,7 +3611,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .student-wait-guide > nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .student-wait-guide > nav button { min-height: 2.65rem; padding: .35rem; font-size: .66rem; text-align: center; }
   .student-wait-guide__content { grid-template-columns: 1fr; height: auto; padding: 0; }
-  .student-wait-guide__content > section { padding: .85rem; }
+  .student-wait-guide__content > section { display: none; padding: .85rem; }
+  .student-wait-guide__content > section.is-active { display: block; border-top: 0; }
   .student-wait-guide__content > section + section { border-top: 1px solid #d8e4ef; border-left: 0; }
   .student-wait-guide h2 { margin-bottom: .55rem; font-size: .78rem; }
   .student-wait-how,
@@ -4997,6 +5006,51 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-lobby-rules-dialog li p { color: #405d78; font-size: .72rem; line-height: 1.5; }
 .teacher-lobby-rules-dialog__close { width: 100%; min-height: 2.8rem; margin-top: 1rem; border: 0; border-radius: .75rem; background: linear-gradient(#2780ef, #1265d8); color: white; font: 600 .82rem/1 inherit; cursor: pointer; }
 
+.confirm-dialog-scrim {
+  position: fixed;
+  z-index: 2100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 1rem;
+  background: rgb(9 31 55 / 58%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.confirm-dialog {
+  width: min(26rem, calc(100vw - 2rem));
+  padding: clamp(1.1rem, 2.5vw, 1.6rem);
+  border: 1px solid rgb(255 255 255 / 82%);
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, #fff, #f0f8ff);
+  box-shadow: 0 1.5rem 4rem rgb(5 37 72 / 35%);
+  color: #173a5e;
+  text-align: left;
+}
+.confirm-dialog h2 { font-size: 1.15rem; font-weight: 700; }
+.confirm-dialog p { margin-top: .55rem; color: #4a6685; font-size: .82rem; line-height: 1.6; }
+.confirm-dialog__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin-top: 1.3rem; }
+.confirm-dialog__actions button {
+  min-height: 2.9rem;
+  border: 1px solid #cfddeb;
+  border-radius: .75rem;
+  background: white;
+  color: #3a5573;
+  font-size: .82rem;
+  font-weight: 600;
+}
+.confirm-dialog__actions button:not(:disabled):hover { background: #f0f6fc; }
+.confirm-dialog__actions button:disabled { cursor: not-allowed; opacity: .55; }
+.confirm-dialog__confirm { border-color: #9dc4f2; background: linear-gradient(#2780ef, #1265d8); color: white; }
+.confirm-dialog__confirm:not(:disabled):hover { background: linear-gradient(#2780ef, #1265d8); filter: brightness(1.05); }
+.confirm-dialog--destructive .confirm-dialog__confirm { border-color: #e79aa1; background: #d1414d; }
+.confirm-dialog--destructive .confirm-dialog__confirm:not(:disabled):hover { background: #b93540; filter: none; }
+
+@media (max-width: 640px) {
+  .confirm-dialog__actions { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1180px) {
   .teacher-lobby-roster-grid { gap: .35rem; max-height: 62vh; }
   .teacher-lobby-student-card { grid-template-columns: 1.25rem 2.2rem minmax(0, 1fr); gap: .4rem; min-height: 3.45rem; padding: .4rem; }
@@ -5410,7 +5464,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .student-wait-guide { overflow: visible; }
   .student-wait-guide > nav { grid-template-columns: repeat(2, 1fr); }
   .student-wait-guide__content { grid-template-columns: 1fr; height: auto; }
-  .student-wait-guide__content > section { padding: .8rem; }
+  .student-wait-guide__content > section { display: none; padding: .8rem; }
+  .student-wait-guide__content > section.is-active { display: block; border-top: 0; }
   .student-wait-guide__content > section + section { border-top: 1px solid #d8e4ef; border-left: 0; }
   .student-wait-footer { grid-template-columns: 1fr; }
   .student-wait-footer > p { border-top: 1px solid #dbe5ef; border-left: 0; padding: .7rem 0 0; }
@@ -5950,7 +6005,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .student-wait-guide > nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .student-wait-guide > nav button { min-height: 2.65rem; padding: .35rem; font-size: .66rem; text-align: center; }
   .student-wait-guide__content { grid-template-columns: 1fr; height: auto; padding: 0; }
-  .student-wait-guide__content > section { padding: .85rem; }
+  .student-wait-guide__content > section { display: none; padding: .85rem; }
+  .student-wait-guide__content > section.is-active { display: block; border-top: 0; }
   .student-wait-guide__content > section + section { border-top: 1px solid #d8e4ef; border-left: 0; }
   .student-wait-guide h2 { margin-bottom: .55rem; font-size: .78rem; }
   .student-wait-how,
