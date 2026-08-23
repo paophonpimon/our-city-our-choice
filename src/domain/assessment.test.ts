@@ -3,6 +3,7 @@ import {
   ASSESSMENT_ITEM_COUNT,
   ASSESSMENT_ITEMS,
   ASSESSMENT_SCALE,
+  calculateMatchedAssessmentEvidence,
   isValidAssessmentResponses,
   isValidObservationInput,
   isValidObservationScaleValue,
@@ -127,6 +128,159 @@ describe('pure scoring helpers (no aggregate persisted - for future use only)', 
   })
 })
 
+describe('pure matched PRE/POST evidence calculations (Phase B2b)', () => {
+  const record = (playerId: string, responses: unknown) => ({ playerId, responses })
+
+  it('calculates a normal matched cohort with improved, unchanged, and decreased students', () => {
+    const result = calculateMatchedAssessmentEvidence(
+      [
+        record('improved', Array(10).fill(2)),
+        record('unchanged', [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]),
+        record('decreased', Array(10).fill(5)),
+      ],
+      [
+        record('decreased', Array(10).fill(4)),
+        record('improved', Array(10).fill(3)),
+        record('unchanged', [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]),
+      ],
+    )
+
+    expect(result.students).toEqual([
+      {
+        playerId: 'decreased',
+        preTotal: 50,
+        postTotal: 40,
+        preMean: 5,
+        postMean: 4,
+        gain: -10,
+        change: 'decreased',
+      },
+      {
+        playerId: 'improved',
+        preTotal: 20,
+        postTotal: 30,
+        preMean: 2,
+        postMean: 3,
+        gain: 10,
+        change: 'improved',
+      },
+      {
+        playerId: 'unchanged',
+        preTotal: 30,
+        postTotal: 30,
+        preMean: 3,
+        postMean: 3,
+        gain: 0,
+        change: 'unchanged',
+      },
+    ])
+    expect(result.group).toEqual({
+      matchedCount: 3,
+      preMean: 10 / 3,
+      postMean: 10 / 3,
+      meanGain: 0,
+      improvedCount: 1,
+      unchangedCount: 1,
+      decreasedCount: 1,
+      improvedPercent: 1 / 3 * 100,
+    })
+  })
+
+  it('ignores unmatched PRE and unmatched POST records', () => {
+    const result = calculateMatchedAssessmentEvidence(
+      [record('matched', Array(10).fill(2)), record('pre-only', Array(10).fill(5))],
+      [record('matched', Array(10).fill(3)), record('post-only', Array(10).fill(1))],
+    )
+
+    expect(result.students.map((student) => student.playerId)).toEqual(['matched'])
+    expect(result.group.matchedCount).toBe(1)
+  })
+
+  it('ignores a player when either PRE or POST responses are invalid', () => {
+    const result = calculateMatchedAssessmentEvidence(
+      [
+        record('invalid-pre-length', Array(9).fill(3)),
+        record('invalid-pre-value', [1, 2, 3, 4, 5, 1, 2, 3, 4, 6]),
+        record('valid', Array(10).fill(1)),
+      ],
+      [
+        record('invalid-pre-length', Array(10).fill(3)),
+        record('invalid-pre-value', Array(10).fill(3)),
+        record('valid', [1, 2, 3, 4, 5, 1, 2, 3, 4, 1.5]),
+      ],
+    )
+
+    expect(result.students).toEqual([])
+    expect(result.group.matchedCount).toBe(0)
+  })
+
+  it('calculates exact totals, response means, group means, gain, and improved percent', () => {
+    const result = calculateMatchedAssessmentEvidence(
+      [
+        record('a', [1, 1, 1, 1, 1, 2, 2, 2, 2, 2]),
+        record('b', [2, 2, 2, 2, 2, 3, 3, 3, 3, 3]),
+      ],
+      [
+        record('a', [2, 2, 2, 2, 2, 3, 3, 3, 3, 3]),
+        record('b', [1, 1, 1, 1, 1, 2, 2, 2, 2, 2]),
+      ],
+    )
+
+    expect(result.students[0]).toMatchObject({ preTotal: 15, postTotal: 25, preMean: 1.5, postMean: 2.5, gain: 10 })
+    expect(result.students[1]).toMatchObject({ preTotal: 25, postTotal: 15, preMean: 2.5, postMean: 1.5, gain: -10 })
+    expect(result.group).toEqual({
+      matchedCount: 2,
+      preMean: 2,
+      postMean: 2,
+      meanGain: 0,
+      improvedCount: 1,
+      unchangedCount: 0,
+      decreasedCount: 1,
+      improvedPercent: 50,
+    })
+  })
+
+  it('returns safe zero group values when there are no matched players', () => {
+    expect(calculateMatchedAssessmentEvidence([], [])).toEqual({
+      students: [],
+      group: {
+        matchedCount: 0,
+        preMean: 0,
+        postMean: 0,
+        meanGain: 0,
+        improvedCount: 0,
+        unchangedCount: 0,
+        decreasedCount: 0,
+        improvedPercent: 0,
+      },
+    })
+  })
+
+  it('uses only the first valid record per player and phase when duplicates are present', () => {
+    const result = calculateMatchedAssessmentEvidence(
+      [
+        record('duplicate', Array(9).fill(1)),
+        record('duplicate', Array(10).fill(2)),
+        record('duplicate', Array(10).fill(5)),
+      ],
+      [record('duplicate', Array(10).fill(3)), record('duplicate', Array(10).fill(1))],
+    )
+
+    expect(result.students).toEqual([
+      {
+        playerId: 'duplicate',
+        preTotal: 20,
+        postTotal: 30,
+        preMean: 2,
+        postMean: 3,
+        gain: 10,
+        change: 'improved',
+      },
+    ])
+    expect(result.group.matchedCount).toBe(1)
+  })
+})
+
 describe('Teacher Observation (Phase B2a, 4 dimensions, 1-4 scale)', () => {
   it('has exactly 4 observation dimensions with expected codes and titles', () => {
     expect(OBSERVATION_DIMENSIONS).toHaveLength(4)
@@ -181,4 +335,3 @@ describe('Teacher Observation (Phase B2a, 4 dimensions, 1-4 scale)', () => {
     expect(isValidObservationInput({ o1: 1, o2: 2, o3: 3, o4: 4, notes: overMax })).toBe(false)
   })
 })
-

@@ -52,19 +52,149 @@ export const isValidAssessmentResponses = (value: unknown): value is AssessmentS
   && value.length === ASSESSMENT_ITEM_COUNT
   && value.every((entry) => Number.isInteger(entry) && entry >= 1 && entry <= 5)
 
-/**
- * Pure scoring helpers only - no derived aggregate (no preTotal/preMean/
- * postTotal/postMean/gain) is persisted in Firestore for PRE or POST. These
- * exist so a later phase can compute totals/means/gain from the raw
- * responses without duplicating this arithmetic, not to power any
- * aggregate UI yet (matched PRE/POST statistics are explicitly out of
- * scope for this phase).
- */
+/** Pure scoring helpers only. Derived evidence is never persisted. */
 export const sumAssessmentResponses = (responses: readonly number[]): number =>
   responses.reduce((total, value) => total + value, 0)
 
 export const meanAssessmentResponses = (responses: readonly number[]): number =>
   responses.length === 0 ? 0 : sumAssessmentResponses(responses) / responses.length
+
+// ── Matched PRE/POST evidence (Phase B2b) ──────────────────────────────────
+
+/**
+ * The minimal structural input needed from a PRE or POST record. Unknown
+ * fields keep validation at this pure domain boundary and allow malformed
+ * records to be ignored safely.
+ */
+export interface AssessmentEvidenceRecord {
+  playerId: unknown
+  responses: unknown
+}
+
+export type AssessmentChange = 'improved' | 'unchanged' | 'decreased'
+
+export interface MatchedStudentAssessmentEvidence {
+  playerId: string
+  preTotal: number
+  postTotal: number
+  preMean: number
+  postMean: number
+  gain: number
+  change: AssessmentChange
+}
+
+export interface MatchedGroupAssessmentEvidence {
+  matchedCount: number
+  preMean: number
+  postMean: number
+  meanGain: number
+  improvedCount: number
+  unchangedCount: number
+  decreasedCount: number
+  improvedPercent: number
+}
+
+export interface MatchedAssessmentEvidence {
+  students: MatchedStudentAssessmentEvidence[]
+  group: MatchedGroupAssessmentEvidence
+}
+
+const indexFirstValidAssessmentByPlayer = (
+  records: readonly AssessmentEvidenceRecord[],
+): Map<string, AssessmentScaleValue[]> => {
+  const indexed = new Map<string, AssessmentScaleValue[]>()
+  for (const record of records) {
+    if (
+      typeof record.playerId === 'string'
+      && record.playerId.length > 0
+      && !indexed.has(record.playerId)
+      && isValidAssessmentResponses(record.responses)
+    ) {
+      indexed.set(record.playerId, record.responses)
+    }
+  }
+  return indexed
+}
+
+/**
+ * Matches the first valid PRE and POST record for each player. Invalid and
+ * unmatched records are ignored, output order is stable by playerId, and no
+ * player can contribute more than once.
+ */
+export const calculateMatchedStudentAssessmentEvidence = (
+  preRecords: readonly AssessmentEvidenceRecord[],
+  postRecords: readonly AssessmentEvidenceRecord[],
+): MatchedStudentAssessmentEvidence[] => {
+  const preByPlayer = indexFirstValidAssessmentByPlayer(preRecords)
+  const postByPlayer = indexFirstValidAssessmentByPlayer(postRecords)
+
+  return [...preByPlayer.keys()]
+    .filter((playerId) => postByPlayer.has(playerId))
+    .sort((left, right) => left.localeCompare(right))
+    .map((playerId) => {
+      const preResponses = preByPlayer.get(playerId)!
+      const postResponses = postByPlayer.get(playerId)!
+      const preTotal = sumAssessmentResponses(preResponses)
+      const postTotal = sumAssessmentResponses(postResponses)
+      const gain = postTotal - preTotal
+      const change: AssessmentChange = gain > 0 ? 'improved' : gain < 0 ? 'decreased' : 'unchanged'
+
+      return {
+        playerId,
+        preTotal,
+        postTotal,
+        preMean: meanAssessmentResponses(preResponses),
+        postMean: meanAssessmentResponses(postResponses),
+        gain,
+        change,
+      }
+    })
+}
+
+/** Group PRE/POST means use the 1-5 student means; meanGain remains on the total-score scale. */
+export const calculateMatchedGroupAssessmentEvidence = (
+  students: readonly MatchedStudentAssessmentEvidence[],
+): MatchedGroupAssessmentEvidence => {
+  const matchedCount = students.length
+  if (matchedCount === 0) {
+    return {
+      matchedCount: 0,
+      preMean: 0,
+      postMean: 0,
+      meanGain: 0,
+      improvedCount: 0,
+      unchangedCount: 0,
+      decreasedCount: 0,
+      improvedPercent: 0,
+    }
+  }
+
+  const improvedCount = students.filter((student) => student.change === 'improved').length
+  const unchangedCount = students.filter((student) => student.change === 'unchanged').length
+  const decreasedCount = students.filter((student) => student.change === 'decreased').length
+
+  return {
+    matchedCount,
+    preMean: students.reduce((total, student) => total + student.preMean, 0) / matchedCount,
+    postMean: students.reduce((total, student) => total + student.postMean, 0) / matchedCount,
+    meanGain: students.reduce((total, student) => total + student.gain, 0) / matchedCount,
+    improvedCount,
+    unchangedCount,
+    decreasedCount,
+    improvedPercent: improvedCount / matchedCount * 100,
+  }
+}
+
+export const calculateMatchedAssessmentEvidence = (
+  preRecords: readonly AssessmentEvidenceRecord[],
+  postRecords: readonly AssessmentEvidenceRecord[],
+): MatchedAssessmentEvidence => {
+  const students = calculateMatchedStudentAssessmentEvidence(preRecords, postRecords)
+  return {
+    students,
+    group: calculateMatchedGroupAssessmentEvidence(students),
+  }
+}
 
 // ── Reflection (3 open-ended questions, Phase B1) ───────────────────────────
 
@@ -167,4 +297,3 @@ export const isValidObservationInput = (value: unknown): value is TeacherObserva
   }
   return true
 }
-
