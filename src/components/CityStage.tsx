@@ -5,6 +5,7 @@ import { formatCityLevel } from '../domain/ourCity'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
 import { SCORE_POSITIONS } from './locationScoreDisplay'
 import { CityScene, type BuildingEffectTone } from './CityScene'
+import type { BuildingTransitionDirection } from '../domain/cityPresentation'
 import {
   BUILDING_IDS,
   CITY_SCENE_PROFILES,
@@ -94,6 +95,7 @@ interface CityStageProps {
   room: ClassroomRoom
   visualCityLevel?: ClassroomRoom['cityLevel']
   visualBuildingLevels?: BuildingLevels
+  buildingTransitions?: Partial<Record<BuildingId, BuildingTransitionDirection>>
   remainingSeconds: number
   answerCount: number
   previewCityScore?: number | null
@@ -167,7 +169,7 @@ const readStoredCityZoom = (): number => {
   }
 }
 
-export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remainingSeconds, answerCount, previewCityScore, roundImpact, locationImpacts, roundHistory = [], controls, utilityControls, children }: CityStageProps) => {
+export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildingTransitions, remainingSeconds, answerCount, previewCityScore, roundImpact, locationImpacts, roundHistory = [], controls, utilityControls, children }: CityStageProps) => {
   const scoreTarget = previewCityScore ?? room.cityScore
   const previousScore = useRef(scoreTarget)
   const cityCanvasRef = useRef<HTMLElement | null>(null)
@@ -554,6 +556,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
           <CityScene
             buildingEffects={displayedBuildingEffects}
             buildingLevels={displayedBuildingLevels}
+            buildingTransitions={buildingTransitions}
             buildingPlacementOverrides={displayedPlacementOverrides}
             cityLevel={displayedCityLevel}
             sceneProfileId={displayedSceneProfile.id}

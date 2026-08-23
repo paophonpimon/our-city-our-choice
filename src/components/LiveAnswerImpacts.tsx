@@ -13,6 +13,7 @@ export const LiveAnswerImpacts = ({ impacts }: { impacts: readonly LiveAnswerImp
             '--location-x': `${position.x}%`,
             '--location-y': `${position.y}%`,
             '--impact-offset-x': `${((index % 3) - 1) * 0.9}rem`,
+            '--impact-offset-y': `${Math.floor(index / 3) % 2 * -1.1}rem`,
           } as React.CSSProperties}
         >
           {signedLocationScore(impact.score)}

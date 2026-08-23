@@ -15,6 +15,7 @@ import {
   type CitySceneProfileId,
 } from '../domain/cityBuildings'
 import { resolveEffectivePlacement, type EffectivePlacementRecord, type SceneLayoutOverrides } from '../domain/cityLayoutOverrides'
+import type { BuildingTransitionDirection } from '../domain/cityPresentation'
 import type { CityLevel } from '../domain/ourCity'
 
 export type BuildingEffectTone = 'integrity' | 'corruption'
@@ -22,6 +23,7 @@ export type BuildingEffectTone = 'integrity' | 'corruption'
 interface CitySceneProps {
   buildingLevels?: BuildingLevels
   buildingEffects?: Partial<Record<BuildingId, BuildingEffectTone>>
+  buildingTransitions?: Partial<Record<BuildingId, BuildingTransitionDirection>>
   buildingPlacementOverrides?: SceneLayoutOverrides
   cityLevel?: CityLevel
   sceneProfileId?: CitySceneProfileId
@@ -30,6 +32,7 @@ interface CitySceneProps {
 export const CityScene = ({
   buildingLevels,
   buildingEffects,
+  buildingTransitions,
   buildingPlacementOverrides,
   cityLevel = 'neutral',
   sceneProfileId,
@@ -98,6 +101,7 @@ export const CityScene = ({
           const asset = buildingAssets[buildingId]
           const placement = asset ? assetPlacements[buildingId] : null
           const effectTone = buildingEffects?.[buildingId]
+          const transitionDirection = buildingTransitions?.[buildingId]
           // The single source of truth for "what does this scene/building/level
           // actually render at" - also used by the calibration recovery export
           // and the depth sort above, so all three are guaranteed to agree.
@@ -123,9 +127,21 @@ export const CityScene = ({
                   preserveAspectRatio={`xMidYMid ${asset.fit ?? 'meet'}`}
                 />
               ) : null}
+              {asset && transitionDirection ? (
+                <image
+                  aria-hidden="true"
+                  className={`city-scene__building-transition-aura is-${transitionDirection}`}
+                  href={asset.src}
+                  x={placement?.x ?? 0}
+                  y={placement?.y ?? 0}
+                  width={CITY_STAGE_WIDTH}
+                  height={CITY_STAGE_HEIGHT}
+                  preserveAspectRatio={`xMidYMid ${asset.fit ?? 'meet'}`}
+                />
+              ) : null}
               {asset ? (
                 <image
-                  className={`city-scene__building${effectTone ? ` has-${effectTone}-effect` : ''}`}
+                  className={`city-scene__building${effectTone ? ` has-${effectTone}-effect` : ''}${transitionDirection ? ` is-transition-${transitionDirection}` : ''}`}
                   href={asset.src}
                   x={placement?.x ?? 0}
                   y={placement?.y ?? 0}

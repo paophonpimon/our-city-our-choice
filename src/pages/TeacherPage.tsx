@@ -13,6 +13,7 @@ import { useGame } from '../context/GameContext'
 import { countAnswersForQuestion, countCompletedPreAssessments, getLiveCityScore, shouldCloseQuestion } from '../domain/classroomGameLoop'
 import { createRoomQuestionSnapshot, type ParsedQuestionSheet, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import type { LocationId } from '../domain/cityScoring'
+import { deriveBuildingLevelTransitions, type BuildingTransitionDirection } from '../domain/cityPresentation'
 import { resolveLiveAnswerImpact, type LiveAnswerImpact } from '../domain/liveAnswerImpact'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { BUILDING_IDS, BUILDING_LOCATION, INITIAL_BUILDING_LEVELS, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
@@ -52,6 +53,7 @@ import {
 
 type SheetStatus = 'loading' | 'ready' | 'error'
 type YearCutscenePhase = 'entering' | 'holding' | 'text-leaving' | 'leaving'
+type CrisisRevealPhase = 'holding' | 'resolving' | 'revealing' | 'revealed'
 
 interface YearCutsceneState {
   cityYear: number
@@ -62,7 +64,7 @@ interface BuildingChangeStory {
   buildingId: BuildingId
   locationId: LocationId
   label: string
-  direction: 'improved' | 'declined'
+  direction: BuildingTransitionDirection
 }
 
 const BUILDING_STORY_LABELS: Record<BuildingId, string> = {
@@ -75,12 +77,49 @@ const BUILDING_STORY_LABELS: Record<BuildingId, string> = {
   newsAgency: 'สำนักข่าว',
 }
 
-const waitForCutscene = (durationMs: number): Promise<void> => new Promise((resolve) => {
-  window.setTimeout(resolve, durationMs)
-})
+const LIVE_ANSWER_IMPACT_DURATION_MS = 2_500
 
 const sameBuildingLevels = (left: BuildingLevels | null, right: BuildingLevels): boolean =>
   left !== null && BUILDING_IDS.every((buildingId) => left[buildingId] === right[buildingId])
+
+const toBuildingChangeStories = (
+  previousLevels: BuildingLevels,
+  nextLevels: BuildingLevels,
+): BuildingChangeStory[] => deriveBuildingLevelTransitions(previousLevels, nextLevels).map((transition) => ({
+  ...transition,
+  locationId: BUILDING_LOCATION[transition.buildingId],
+  label: BUILDING_STORY_LABELS[transition.buildingId],
+}))
+
+const toBuildingTransitionMap = (
+  stories: readonly BuildingChangeStory[],
+): Partial<Record<BuildingId, BuildingTransitionDirection>> => Object.fromEntries(
+  stories.map((story) => [story.buildingId, story.direction]),
+) as Partial<Record<BuildingId, BuildingTransitionDirection>>
+
+const BuildingChangeSummary = ({
+  stories,
+  crisis = false,
+}: {
+  stories: readonly BuildingChangeStory[]
+  crisis?: boolean
+}) => stories.length > 0 ? (
+  <aside
+    className={`teacher-building-story teacher-building-story--grouped${crisis ? ' teacher-building-story--crisis' : ''}`}
+    role="status"
+    aria-live="assertive"
+  >
+    <span aria-hidden="true">🏙️</span>
+    <ul>
+      {stories.map((story) => (
+        <li className={`is-${story.direction}`} key={story.buildingId}>
+          <strong>{story.label}</strong>
+          <small>{story.direction === 'improved' ? 'ได้รับการพัฒนา' : 'กำลังเสื่อมโทรม'}</small>
+        </li>
+      ))}
+    </ul>
+  </aside>
+) : null
 
 /* Icons used in the compact room summary; card artwork is used for full cards. */
 const ROLE_ICONS: Record<RoleId, string> = {
@@ -153,8 +192,9 @@ export const TeacherPage = () => {
   const [yearCutscene, setYearCutscene] = useState<YearCutsceneState | null>(null)
   const [visualCityLevel, setVisualCityLevel] = useState<ClassroomRoom['cityLevel'] | null>(null)
   const [visualBuildingLevels, setVisualBuildingLevels] = useState<BuildingLevels | null>(null)
-  const [cityRevealLocations, setCityRevealLocations] = useState<LocationId[]>([])
-  const [buildingChangeStory, setBuildingChangeStory] = useState<BuildingChangeStory | null>(null)
+  const [buildingTransitions, setBuildingTransitions] = useState<Partial<Record<BuildingId, BuildingTransitionDirection>>>({})
+  const [buildingChangeStories, setBuildingChangeStories] = useState<BuildingChangeStory[]>([])
+  const [crisisRevealPhase, setCrisisRevealPhase] = useState<CrisisRevealPhase | null>(null)
   const [liveAnswerImpacts, setLiveAnswerImpacts] = useState<LiveAnswerImpact[]>([])
   const [restoringStoredRoom, setRestoringStoredRoom] = useState(Boolean(storedSession?.roomId))
   const [isHardRecoveryDialogOpen, setIsHardRecoveryDialogOpen] = useState(false)
@@ -164,18 +204,44 @@ export const TeacherPage = () => {
   const seenAnswerIdsRef = useRef(new Set<string>())
   const liveImpactTrackingReadyRef = useRef(false)
   const liveImpactTimersRef = useRef(new Map<string, number>())
+  const presentationTimersRef = useRef(new Map<number, () => void>())
+  const presentationRunRef = useRef(0)
+  const roomRef = useRef<ClassroomRoom | null>(null)
+  const visualCityLevelRef = useRef<ClassroomRoom['cityLevel'] | null>(null)
+  const visualBuildingLevelsRef = useRef<BuildingLevels | null>(null)
   const teacherSoundtrackRef = useRef<TeacherSoundtrackHandle>(null)
   // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
   const progressionFingerprintRef = useRef('')
   const previousRemainingRef = useRef(0)
 
+  const cancelPresentationTimers = useCallback((): void => {
+    presentationRunRef.current += 1
+    for (const [timer, resolve] of presentationTimersRef.current) {
+      window.clearTimeout(timer)
+      resolve()
+    }
+    presentationTimersRef.current.clear()
+  }, [])
+
+  const waitForPresentation = useCallback((durationMs: number): Promise<void> => new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      presentationTimersRef.current.delete(timer)
+      resolve()
+    }, durationMs)
+    presentationTimersRef.current.set(timer, resolve)
+  }), [])
+
   const resetRoomTransientState = useCallback((): void => {
     roomBoundaryRef.current += 1
+    cancelPresentationTimers()
+    visualCityLevelRef.current = null
+    visualBuildingLevelsRef.current = null
     setVisualCityLevel(null)
     setVisualBuildingLevels(null)
     setYearCutscene(null)
-    setBuildingChangeStory(null)
-    setCityRevealLocations([])
+    setBuildingTransitions({})
+    setBuildingChangeStories([])
+    setCrisisRevealPhase(null)
     setLiveAnswerImpacts([])
     setActionError('')
     setActionMessage('')
@@ -187,7 +253,7 @@ export const TeacherPage = () => {
     liveImpactTrackingReadyRef.current = false
     for (const timer of liveImpactTimersRef.current.values()) window.clearTimeout(timer)
     liveImpactTimersRef.current.clear()
-  }, [])
+  }, [cancelPresentationTimers])
 
   // Calibration mode never subscribes to a real room, so it never touches Firebase/Demo state.
   const subscribedRoomId = isStandaloneLayoutMode ? '' : roomId
@@ -197,6 +263,9 @@ export const TeacherPage = () => {
   const roundsState = useRounds(subscribedRoomId)
   const crisisResultsState = useCrisisResults(subscribedRoomId)
   const room = roomState.data
+  roomRef.current = room
+  visualCityLevelRef.current = visualCityLevel
+  visualBuildingLevelsRef.current = visualBuildingLevels
   const preAssessmentListenerEnabled = room?.status === 'lobby' && room.preAssessmentOpened === true
   const preAssessmentsState = usePreAssessments(subscribedRoomId, preAssessmentListenerEnabled)
   const completedPreAssessmentCount = countCompletedPreAssessments(playersState.data, preAssessmentsState.data)
@@ -434,14 +503,15 @@ export const TeacherPage = () => {
   }, [resetRoomTransientState, roomId])
 
   useEffect(() => () => {
+    cancelPresentationTimers()
     for (const timer of liveImpactTimersRef.current.values()) window.clearTimeout(timer)
-  }, [])
+  }, [cancelPresentationTimers])
 
   useEffect(() => {
     if (answersState.loading || !room || !trustedSnapshot) return
     const currentAnswers = answersState.data.filter((answer) =>
       isQuestionAnswerRecord(answer) && answer.gameCycle === room.gameCycle && answer.questionNumber === room.currentQuestionNumber)
-    const showImpact = (answer: (typeof currentAnswers)[number], durationMs = 1_500): void => {
+    const showImpact = (answer: (typeof currentAnswers)[number], durationMs = LIVE_ANSWER_IMPACT_DURATION_MS): void => {
       if (room.status !== 'playing') return
       const impact = resolveLiveAnswerImpact(answer, trustedSnapshot)
       if (!impact) return
@@ -458,7 +528,7 @@ export const TeacherPage = () => {
       const now = Date.now()
       for (const answer of currentAnswers) {
         seenAnswerIdsRef.current.add(answer.answerId)
-        const remainingDisplayTime = 1_500 - Math.max(0, now - answer.submittedAt)
+        const remainingDisplayTime = LIVE_ANSWER_IMPACT_DURATION_MS - Math.max(0, now - answer.submittedAt)
         if (remainingDisplayTime > 0) showImpact(answer, remainingDisplayTime)
       }
       liveImpactTrackingReadyRef.current = true
@@ -542,6 +612,11 @@ export const TeacherPage = () => {
   const closeCurrentCrisis = useCallback(async (): Promise<void> => {
     if (!room || room.status !== 'crisis-playing' || closingRef.current) return
     closingRef.current = true; setActionError('')
+    const preCrisisLevels = normalizeBuildingLevels(room.buildingLevels)
+    visualCityLevelRef.current = room.cityLevel
+    visualBuildingLevelsRef.current = preCrisisLevels
+    setVisualCityLevel(room.cityLevel)
+    setVisualBuildingLevels(preCrisisLevels)
     try { await withActionTiming('closeCrisisEvent', room.roomId, () => service.closeCrisisEvent(room.roomId, uid)) }
     catch (reason) { setActionError(classroomFriendlyError(reason)) }
     finally { closingRef.current = false }
@@ -550,6 +625,69 @@ export const TeacherPage = () => {
   useEffect(() => {
     if (room?.status === 'crisis-playing' && shouldCloseQuestion(crisisAnswerCount, room.lockedPlayerCount, room.questionDeadlineAt)) void closeCurrentCrisis()
   }, [closeCurrentCrisis, crisisAnswerCount, remaining, room])
+
+  useEffect(() => {
+    const isCrisisResult = room?.status === 'crisis-result' && currentCrisisResult !== null
+    if (!isCrisisResult) {
+      setCrisisRevealPhase(null)
+      setBuildingTransitions({})
+      setBuildingChangeStories([])
+      return
+    }
+
+    const run = ++presentationRunRef.current
+    const boundary = roomBoundaryRef.current
+    const previousLevels = normalizeBuildingLevels(visualBuildingLevelsRef.current ?? room.buildingLevels)
+    const nextLevels = normalizeBuildingLevels(room.buildingLevels)
+    const stories = toBuildingChangeStories(previousLevels, nextLevels)
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const timing = reducedMotion
+      ? { preRevealHold: 900, resolutionCue: 100, settle: 1_800 }
+      : { preRevealHold: 1_200, resolutionCue: 700, settle: 2_400 }
+    const presentationIsCurrent = (): boolean =>
+      presentationRunRef.current === run
+      && roomBoundaryRef.current === boundary
+      && roomRef.current?.roomId === room.roomId
+      && roomRef.current.status === 'crisis-result'
+
+    setCrisisRevealPhase('holding')
+    setBuildingTransitions({})
+    setBuildingChangeStories([])
+
+    void (async () => {
+      await waitForPresentation(timing.preRevealHold)
+      if (!presentationIsCurrent()) return
+      setCrisisRevealPhase('resolving')
+      await waitForPresentation(timing.resolutionCue)
+      if (!presentationIsCurrent()) return
+
+      visualCityLevelRef.current = room.cityLevel
+      visualBuildingLevelsRef.current = nextLevels
+      setVisualCityLevel(room.cityLevel)
+      setVisualBuildingLevels(nextLevels)
+      setBuildingTransitions(toBuildingTransitionMap(stories))
+      setBuildingChangeStories(stories)
+      setCrisisRevealPhase('revealing')
+
+      await waitForPresentation(timing.settle)
+      if (!presentationIsCurrent()) return
+      setBuildingTransitions({})
+      setCrisisRevealPhase('revealed')
+    })()
+
+    return () => {
+      if (presentationRunRef.current === run) cancelPresentationTimers()
+    }
+  }, [
+    cancelPresentationTimers,
+    currentCrisisResult,
+    room?.buildingLevels,
+    room?.cityLevel,
+    room?.currentCrisisEventIndex,
+    room?.roomId,
+    room?.status,
+    waitForPresentation,
+  ])
 
   const joinLink = useMemo(
     () => (roomId ? createClassroomJoinUrl(window.location.origin, roomId) : ''),
@@ -629,91 +767,87 @@ export const TeacherPage = () => {
 
   const nextOrFinish = async (): Promise<void> => {
     if (!room || !canAdvanceQuestion) return
+    cancelPresentationTimers()
+    const run = ++presentationRunRef.current
     const boundary = roomBoundaryRef.current
     const roomAtStart = room.roomId
-    const boundaryIsCurrent = (): boolean => roomBoundaryRef.current === boundary && roomId === roomAtStart
+    const questionAtStart = room.currentQuestionNumber
+    const boundaryIsCurrent = (): boolean =>
+      presentationRunRef.current === run
+      && roomBoundaryRef.current === boundary
+      && roomId === roomAtStart
     setBusy(true)
     setActionError('')
     try {
-      let finalizedRound = currentRound
       if (room.status === 'playing') {
         if (!trustedSnapshot) throw new Error('ผู้ใช้:ไม่พบข้อมูลตรวจคำตอบในเครื่องครู')
-        finalizedRound = await withActionTiming('closeQuestion', room.roomId, () => service.closeQuestion(room.roomId, uid, trustedSnapshot))
+        await withActionTiming('closeQuestion', room.roomId, () => service.closeQuestion(room.roomId, uid, trustedSnapshot))
       }
-      if (room.currentQuestionNumber === 10) {
-        await withActionTiming('finishGame', room.roomId, () => service.finishGame(room.roomId, uid))
-        navigate(`/result/${room.roomId}`)
+
+      let finalizedRoom = room.status === 'round-result' ? room : null
+      for (let attempt = 0; !finalizedRoom && attempt < 60; attempt += 1) {
+        if (!boundaryIsCurrent()) return
+        const latestRoom = roomRef.current
+        if (
+          latestRoom?.roomId === roomAtStart
+          && latestRoom.status === 'round-result'
+          && latestRoom.currentQuestionNumber === questionAtStart
+        ) {
+          finalizedRoom = latestRoom
+          break
+        }
+        await waitForPresentation(50)
+      }
+      if (!finalizedRoom) throw new Error('ผู้ใช้:ยังไม่ได้รับสถานะสรุปรอบล่าสุด กรุณาลองอีกครั้ง')
+
+      const previousLevels = normalizeBuildingLevels(visualBuildingLevelsRef.current ?? room.buildingLevels)
+      const nextLevels = normalizeBuildingLevels(finalizedRoom.buildingLevels)
+      const stories = toBuildingChangeStories(previousLevels, nextLevels)
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const timing = reducedMotion
+        ? { darken: 50, title: 1_700, textFade: 50, reveal: 100, settle: stories.length > 0 ? 2_300 : 700 }
+        : { darken: 500, title: 1_400, textFade: 500, reveal: 600, settle: stories.length > 0 ? 1_900 : 0 }
+      const cutscene = {
+        cityYear: room.gameCycle * 10 + room.currentQuestionNumber,
+        phase: 'entering' as const,
+      }
+
+      setYearCutscene(cutscene)
+      await waitForPresentation(timing.darken)
+      if (!boundaryIsCurrent()) return
+      setYearCutscene({ ...cutscene, phase: 'holding' })
+      await waitForPresentation(timing.title)
+      if (!boundaryIsCurrent()) return
+
+      visualCityLevelRef.current = finalizedRoom.cityLevel
+      visualBuildingLevelsRef.current = nextLevels
+      setVisualCityLevel(finalizedRoom.cityLevel)
+      setVisualBuildingLevels(nextLevels)
+      setBuildingTransitions(toBuildingTransitionMap(stories))
+      setYearCutscene({ ...cutscene, phase: 'text-leaving' })
+      await waitForPresentation(timing.textFade)
+      if (!boundaryIsCurrent()) return
+      setYearCutscene({ ...cutscene, phase: 'leaving' })
+      await waitForPresentation(timing.reveal)
+      if (!boundaryIsCurrent()) return
+      setYearCutscene(null)
+      setBuildingChangeStories(stories)
+
+      if (timing.settle > 0) await waitForPresentation(timing.settle)
+      if (!boundaryIsCurrent()) return
+      setBuildingTransitions({})
+      setBuildingChangeStories([])
+
+      if (questionAtStart === 10) {
+        await withActionTiming('finishGame', roomAtStart, () => service.finishGame(roomAtStart, uid))
+        if (boundaryIsCurrent()) navigate(`/result/${roomAtStart}`)
       } else {
-        const cutscene = {
-          cityYear: room.gameCycle * 10 + room.currentQuestionNumber,
-          phase: 'entering' as const,
-        }
-        const changedLocations = finalizedRound
-          ? Object.entries(finalizedRound.locationSummaries)
-              .filter(([, summary]) => summary.scoreAverage !== 0)
-              .map(([locationId]) => locationId as LocationId)
-          : []
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        const timing = reducedMotion
-          ? { darken: 80, title: 300, textFade: 80, reveal: 80, highlight: 250 }
-          : { darken: 600, title: 1_700, textFade: 700, reveal: 700, highlight: 800 }
-        setYearCutscene(cutscene)
-        await waitForCutscene(timing.darken)
-        if (!boundaryIsCurrent()) return
-        setVisualCityLevel(room.cityLevel)
-        setYearCutscene({ ...cutscene, phase: 'holding' })
-        let nextQuestionError: unknown
-        let buildingStories: BuildingChangeStory[] = []
-        try {
-          const [nextRoom] = await Promise.all([
-            withActionTiming('openNextQuestion', room.roomId, () => service.openNextQuestion(room.roomId, uid)),
-            waitForCutscene(timing.title),
-          ])
-          if (!boundaryIsCurrent()) return
-          const previousLevels = normalizeBuildingLevels(visualBuildingLevels ?? room.buildingLevels)
-          const nextLevels = normalizeBuildingLevels(nextRoom.buildingLevels)
-          setVisualCityLevel(nextRoom.cityLevel)
-          setVisualBuildingLevels(nextLevels)
-          buildingStories = BUILDING_IDS.flatMap((buildingId) => {
-            const direction = nextLevels[buildingId] > previousLevels[buildingId]
-              ? 'improved'
-              : nextLevels[buildingId] < previousLevels[buildingId]
-                ? 'declined'
-                : null
-            return direction ? [{
-              buildingId,
-              locationId: BUILDING_LOCATION[buildingId],
-              label: BUILDING_STORY_LABELS[buildingId],
-              direction,
-            } satisfies BuildingChangeStory] : []
-          })
-        } catch (reason) {
-          nextQuestionError = reason
-        }
-        setYearCutscene({ ...cutscene, phase: 'text-leaving' })
-        await waitForCutscene(timing.textFade)
-        if (!boundaryIsCurrent()) return
-        setYearCutscene({ ...cutscene, phase: 'leaving' })
-        await waitForCutscene(timing.reveal)
-        if (!boundaryIsCurrent()) return
-        setYearCutscene(null)
-        if (nextQuestionError) throw nextQuestionError
-        for (const story of buildingStories) {
-          if (!boundaryIsCurrent()) return
-          setBuildingChangeStory(story)
-          await waitForCutscene(reducedMotion ? 250 : 850)
-        }
-        if (!boundaryIsCurrent()) return
-        setBuildingChangeStory(null)
-        setCityRevealLocations(changedLocations)
-        await waitForCutscene(timing.highlight)
-        if (!boundaryIsCurrent()) return
-        setCityRevealLocations([])
+        await withActionTiming('openNextQuestion', roomAtStart, () => service.openNextQuestion(roomAtStart, uid))
       }
     } catch (reason) {
       setActionError(classroomFriendlyError(reason))
     } finally {
-      setBusy(false)
+      if (roomBoundaryRef.current === boundary && roomId === roomAtStart) setBusy(false)
     }
   }
 
@@ -785,8 +919,29 @@ export const TeacherPage = () => {
     return (
       <>
       <TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />
-      <main className={`teacher-crisis-page teacher-crisis-page--${room.status}`}>
-        <div className="teacher-crisis-city" aria-hidden="true"><CityScene buildingLevels={room.buildingLevels} cityLevel={room.cityLevel} /></div>
+      <main className={`teacher-crisis-page teacher-crisis-page--${room.status}${crisisRevealPhase ? ` teacher-crisis-page--${crisisRevealPhase}` : ''}`}>
+        <div className="teacher-crisis-city" aria-hidden="true">
+          <CityScene
+            buildingLevels={visualBuildingLevels ?? room.buildingLevels}
+            buildingTransitions={buildingTransitions}
+            cityLevel={visualCityLevel ?? room.cityLevel}
+          />
+        </div>
+        {crisisRevealPhase === 'resolving' ? <div className="teacher-crisis-resolution-cue" aria-hidden="true"><span /></div> : null}
+        {buildingChangeStories.length > 0 ? (
+          <div className="teacher-city-reveal teacher-city-reveal--crisis" aria-hidden="true">
+            {buildingChangeStories.map((story) => (
+              <span
+                className={`teacher-city-reveal__glow is-${story.direction}`}
+                key={story.buildingId}
+                style={{
+                  '--location-x': `${LOCATION_POSITIONS[story.locationId].x}%`,
+                  '--location-y': `${LOCATION_POSITIONS[story.locationId].y}%`,
+                } as React.CSSProperties}
+              />
+            ))}
+          </div>
+        ) : null}
         <section className="teacher-crisis-panel">
           <p className="teacher-crisis-eyebrow">เหตุการณ์วิกฤตเมือง {event.index}/2</p>
           <h1>{event.title}</h1>
@@ -811,13 +966,14 @@ export const TeacherPage = () => {
               </div>
               <div className="teacher-crisis-score-flow"><span>ก่อนวิกฤต<strong>{Math.round(result.previousCityScore)}</strong></span><b>{result.eventAverage >= 0 ? '+' : ''}{Math.round(result.eventAverage)}</b><span>หลังวิกฤต<strong>{Math.round(result.newCityScore)}</strong></span></div>
               <p className="teacher-crisis-conclusion">{getCrisisConclusion(result.eventAverage)}</p>
+              <BuildingChangeSummary crisis stories={buildingChangeStories} />
             </div>
           ) : null}
           {actionError ? <p className="teacher-crisis-error">{actionError}</p> : null}
           <div className="teacher-crisis-actions">
             {room.status === 'crisis-intro' ? <button disabled={busy} onClick={() => void beginEvent()}>เริ่มเหตุการณ์วิกฤต</button> : null}
             {room.status === 'crisis-playing' ? <button disabled={busy || closingRef.current} onClick={() => void closeCurrentCrisis()}>ปิดรับและสรุปผล</button> : null}
-            {room.status === 'crisis-result' ? <button disabled={busy || !result} onClick={() => void continueAfterEvent()}>เข้าสู่คำถามข้อ {room.currentQuestionNumber + 1}</button> : null}
+            {room.status === 'crisis-result' ? <button disabled={busy || !result || crisisRevealPhase !== 'revealed'} onClick={() => void continueAfterEvent()}>เข้าสู่คำถามข้อ {room.currentQuestionNumber + 1}</button> : null}
           </div>
         </section>
       </main>
@@ -836,6 +992,7 @@ export const TeacherPage = () => {
         previewCityScore={liveCityScore}
         visualCityLevel={visualCityLevel ?? room.cityLevel}
         visualBuildingLevels={visualBuildingLevels ?? normalizeBuildingLevels(room.buildingLevels)}
+        buildingTransitions={buildingTransitions}
         roundImpact={currentRound?.roundAverage ?? null}
         locationImpacts={room.status === 'round-result' ? currentRound?.locationSummaries ?? null : null}
         roundHistory={roundsState.data}
@@ -895,37 +1052,21 @@ export const TeacherPage = () => {
             </div>
           </div>
         ) : null}
-        {cityRevealLocations.length > 0 ? (
+        {buildingChangeStories.length > 0 ? (
           <div className="teacher-city-reveal" aria-hidden="true">
-            {cityRevealLocations.map((locationId) => (
+            {buildingChangeStories.map((story) => (
               <span
-                className="teacher-city-reveal__glow"
-                key={locationId}
+                className={`teacher-city-reveal__glow is-${story.direction}`}
+                key={story.buildingId}
                 style={{
-                  '--location-x': `${LOCATION_POSITIONS[locationId].x}%`,
-                  '--location-y': `${LOCATION_POSITIONS[locationId].y}%`,
+                  '--location-x': `${LOCATION_POSITIONS[story.locationId].x}%`,
+                  '--location-y': `${LOCATION_POSITIONS[story.locationId].y}%`,
                 } as React.CSSProperties}
               />
             ))}
           </div>
         ) : null}
-        {buildingChangeStory ? (
-          <aside
-            className={`teacher-building-story teacher-building-story--${buildingChangeStory.direction}`}
-            role="status"
-            aria-live="assertive"
-          >
-            <span aria-hidden="true">{buildingChangeStory.direction === 'improved' ? '🌱' : '⚠️'}</span>
-            <div>
-              <strong>{buildingChangeStory.label}{buildingChangeStory.direction === 'improved' ? 'ได้รับการพัฒนา' : 'กำลังเสื่อมโทรม'}</strong>
-              <p>
-                {buildingChangeStory.direction === 'improved'
-                  ? 'ความสุจริตและความร่วมมือของคนในเมือง ทำให้อาคารได้รับการดูแล ปรับปรุง และพัฒนาให้ดีขึ้น'
-                  : 'การทุจริตที่เกิดขึ้นบ่อยครั้งทำให้งบประมาณและการดูแลสูญหาย อาคารจึงถูกปล่อยปละละเลยและทรุดโทรมตามกาลเวลา'}
-              </p>
-            </div>
-          </aside>
-        ) : null}
+        <BuildingChangeSummary stories={buildingChangeStories} />
       </>
     )
   }
