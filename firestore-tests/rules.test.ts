@@ -229,6 +229,181 @@ describe('hard timeout lock is enforced server-side, not just by the client UI',
   })
 })
 
+describe('PRE assessment — isolated collection, immutable, no room-status dependency', () => {
+  const setUpRoomAndPlayer = async (roomId: string, status = 'lobby'): Promise<void> => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, `rooms/${roomId}`), minimalRoomDoc(roomId, { status }))
+      await setDoc(doc(db, `rooms/${roomId}/players/${STUDENT_UID}`), {
+        playerId: STUDENT_UID,
+        nickname: 'Test Student',
+        nicknameKey: 'test student',
+        classSection: '1/1',
+        studentNumber: 1,
+        ownerUid: STUDENT_UID,
+        roleId: null,
+        roleHistory: [],
+        roleOffset: null,
+        joinedAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+      })
+    })
+  }
+
+  const validPreDoc = () => ({
+    schemaVersion: 1,
+    recordType: 'pre',
+    roomId: 'PRE1',
+    playerId: STUDENT_UID,
+    ownerUid: STUDENT_UID,
+    responses: [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+    submittedAt: serverTimestamp(),
+  })
+
+  // P0 regression: the student's own realtime listener is established BEFORE
+  // they submit, watching a document that does not exist yet. The old rule
+  // (`resource.data.ownerUid == request.auth.uid` with no !exists() guard)
+  // threw evaluating `resource.data` on a null resource, which Firestore
+  // treats as a permission denial - killing that listener before the
+  // student ever clicked submit. The write itself always succeeded; only
+  // the pre-established listener that was supposed to notice it died, which
+  // is exactly why "กำลังส่งคำตอบ..." never resolved but an F5 (a brand-new
+  // listener, created after the document already existed) worked instantly.
+  it('lets a student open a live read on their own not-yet-created PRE path without a permission error', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    const ref = doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)
+
+    const beforeSubmit = await assertSucceeds(getDoc(ref))
+    expect(beforeSubmit.exists()).toBe(false)
+
+    await assertSucceeds(setDoc(ref, validPreDoc()))
+
+    // The same read path (what a still-open listener re-evaluates against)
+    // must keep succeeding once the document exists, proving both halves of
+    // the student's session - before and after their own write - stay readable.
+    const afterSubmit = await assertSucceeds(getDoc(ref))
+    expect(afterSubmit.exists()).toBe(true)
+    expect(afterSubmit.data()?.responses).toEqual(validPreDoc().responses)
+  })
+
+  it('lets a fresh read (what an F5 reload performs) see an existing PRE record - proving refresh never showed PRE again even before this fix', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/PRE1/assessments/pre::${STUDENT_UID}`), validPreDoc())
+    })
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    const fresh = await assertSucceeds(getDoc(doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)))
+    expect(fresh.exists()).toBe(true)
+  })
+
+  it('accepts a valid PRE submission from the owning student', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertSucceeds(setDoc(doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`), validPreDoc()))
+  })
+
+  it('succeeds even when the room has already moved past lobby (no room-status dependency, unlike answers)', async () => {
+    await setUpRoomAndPlayer('PRE1', 'playing')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertSucceeds(setDoc(doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`), validPreDoc()))
+  })
+
+  it('rejects a submission where the document id does not match pre::{playerId}', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(setDoc(doc(studentDb, `rooms/PRE1/assessments/pre::someone-else`), validPreDoc()))
+  })
+
+  it('rejects a submission for a player the caller does not own', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'rooms/PRE1'), minimalRoomDoc('PRE1'))
+      await setDoc(doc(db, `rooms/PRE1/players/${STUDENT_UID}`), {
+        playerId: STUDENT_UID, nickname: 'Test Student', nicknameKey: 'test student',
+        classSection: '1/1', studentNumber: 1, ownerUid: STUDENT_UID,
+        roleId: null, roleHistory: [], roleOffset: null,
+        joinedAt: serverTimestamp(), lastSeenAt: serverTimestamp(),
+      })
+    })
+    const otherUid = 'someone-else'
+    const otherDb = testEnv.authenticatedContext(otherUid).firestore()
+    await assertFails(setDoc(doc(otherDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`), {
+      ...validPreDoc(),
+      ownerUid: otherUid,
+    }))
+  })
+
+  it.each([
+    ['too few responses', [1, 2, 3]],
+    ['too many responses', [1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1]],
+    ['an out-of-range value', [0, 2, 3, 4, 5, 1, 2, 3, 4, 5]],
+    ['a non-integer value', [1.5, 2, 3, 4, 5, 1, 2, 3, 4, 5]],
+  ])('rejects %s', async (_label, responses) => {
+    await setUpRoomAndPlayer('PRE1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(setDoc(doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`), { ...validPreDoc(), responses }))
+  })
+
+  it('rejects a document carrying extra fields such as preTotal/preMean/nickname', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(setDoc(doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`), {
+      ...validPreDoc(),
+      preTotal: 35,
+    }))
+    await assertFails(setDoc(doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`), {
+      ...validPreDoc(),
+      nickname: 'leaked nickname',
+    }))
+  })
+
+  it('is immutable: a second write to the same document is rejected, and the original responses survive', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    const ref = doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)
+    await assertSucceeds(setDoc(ref, validPreDoc()))
+    await assertFails(setDoc(ref, { ...validPreDoc(), responses: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5] }))
+
+    let storedResponses: unknown
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const stored = await getDoc(doc(context.firestore(), `rooms/PRE1/assessments/pre::${STUDENT_UID}`))
+      storedResponses = stored.data()?.responses
+    })
+    expect(storedResponses).toEqual([1, 2, 3, 4, 5, 1, 2, 3, 4, 5])
+  })
+
+  it('lets the owning student read their own PRE record, but not another student\'s', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/PRE1/assessments/pre::${STUDENT_UID}`), validPreDoc())
+    })
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertSucceeds(getDoc(doc(studentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)))
+
+    const otherStudentDb = testEnv.authenticatedContext('other-student').firestore()
+    await assertFails(getDoc(doc(otherStudentDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)))
+  })
+
+  it('lets the teacher read a student\'s PRE record in their own room', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/PRE1/assessments/pre::${STUDENT_UID}`), validPreDoc())
+    })
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    await assertSucceeds(getDoc(doc(teacherDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)))
+  })
+
+  it('rejects a read from a teacher of a different room (not this room\'s teacher)', async () => {
+    await setUpRoomAndPlayer('PRE1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/PRE1/assessments/pre::${STUDENT_UID}`), validPreDoc())
+    })
+    const otherTeacherDb = testEnv.authenticatedContext('other-teacher').firestore()
+    await assertFails(getDoc(doc(otherTeacherDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)))
+  })
+})
+
 describe('room code creation race (collision safety)', () => {
   const raceRoomId = 'RACE'
 

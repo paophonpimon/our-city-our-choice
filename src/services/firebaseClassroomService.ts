@@ -20,6 +20,7 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 import { getCityLevel, scoreClassroomRound } from '../domain/cityScoring'
+import { isValidAssessmentResponses } from '../domain/assessment'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { assertStagingBuildNotUsingProduction, resolveFirebaseEnvironmentName } from '../domain/firebaseEnvironment'
@@ -38,12 +39,13 @@ import type {
   ClassroomAnswerRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPreAssessment,
   ClassroomRoom,
   ClassroomRoundResult,
   ClassroomPersonalDecisionResult,
   PublicRoomQuestion,
 } from '../types/classroomGame'
-import { createClassroomAnswerId, classroomPaths, toPublicQuestionDocument } from './classroomFirestore'
+import { createClassroomAnswerId, createPreAssessmentId, classroomPaths, toPublicQuestionDocument } from './classroomFirestore'
 import { classroomFriendlyError, type ClassroomGameService } from './classroomGameService'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, normalizeBuildingLevels, normalizeBuildingScores, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent, type CrisisEventId, type CrisisEventIndex } from '../domain/cityCrisisEvents'
@@ -245,6 +247,16 @@ const mapPersonalDecisionResult = (snapshot: QueryDocumentSnapshot<DocumentData>
   }
 }
 
+const mapPreAssessment = (data: DocumentData): ClassroomPreAssessment => ({
+  schemaVersion: 1,
+  recordType: 'pre',
+  roomId: String(data.roomId ?? ''),
+  playerId: String(data.playerId ?? ''),
+  ownerUid: String(data.ownerUid ?? ''),
+  responses: Array.isArray(data.responses) ? data.responses.map(Number) : [],
+  submittedAt: toMillis(data.submittedAt) ?? Date.now(),
+})
+
 const fnvHash = (value: string): string => {
   let hash = 0x811c9dc5
   for (let index = 0; index < value.length; index += 1) {
@@ -397,6 +409,29 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     return player
   }
 
+  async submitPreAssessment(roomId: string, playerId: string, ownerUid: string, responses: number[]): Promise<void> {
+    if (!isValidAssessmentResponses(responses)) throw new Error('ผู้ใช้:คำตอบแบบสำรวจไม่ถูกต้อง กรุณาตอบให้ครบ 10 ข้อ')
+    const assessmentRef = doc(db, classroomPaths.assessment(roomId, createPreAssessmentId(playerId)))
+    try {
+      await setDoc(assessmentRef, {
+        schemaVersion: 1,
+        recordType: 'pre',
+        roomId,
+        playerId,
+        ownerUid,
+        responses,
+        submittedAt: serverTimestamp(),
+      })
+    } catch (error) {
+      // The record is immutable (rules reject any update), so a collision
+      // here means it already exists - a retry after a network glitch or a
+      // double-tap must still resolve as success for this same owner.
+      const existing = await getDoc(assessmentRef).catch(() => null)
+      if (existing?.exists() && existing.data().ownerUid === ownerUid) return
+      throw error
+    }
+  }
+
   subscribeRoom(roomId: string, listener: (room: ClassroomRoom | null) => void, onError: (message: string) => void): () => void {
     return onSnapshot(doc(db, classroomPaths.room(roomId)), (snapshot) => listener(snapshot.exists() ? mapRoom(snapshot.data()) : null), onErrorMessage(onError))
   }
@@ -405,6 +440,23 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
   }
   subscribePlayer(roomId: string, playerId: string, listener: (player: ClassroomPlayer | null) => void, onError: (message: string) => void): () => void {
     return onSnapshot(doc(db, classroomPaths.player(roomId, playerId)), (snapshot) => listener(snapshot.exists() ? mapPlayer({ id: snapshot.id, data: () => snapshot.data() }) : null), onErrorMessage(onError))
+  }
+  subscribePreAssessment(roomId: string, playerId: string, listener: (assessment: ClassroomPreAssessment | null) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(
+      doc(db, classroomPaths.assessment(roomId, createPreAssessmentId(playerId))),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        // A local optimistic write (this client's own in-flight setDoc,
+        // reflected immediately in cache) must never be reported as a
+        // completed submission - only once the server has actually
+        // acknowledged it. includeMetadataChanges is what guarantees a
+        // second event fires when hasPendingWrites flips to false, even if
+        // the document contents themselves did not change again.
+        if (snapshot.metadata.hasPendingWrites) return
+        listener(snapshot.exists() ? mapPreAssessment(snapshot.data()) : null)
+      },
+      onErrorMessage(onError),
+    )
   }
   subscribeQuestions(roomId: string, listener: (questions: PublicRoomQuestion[]) => void, onError: (message: string) => void): () => void {
     return onSnapshot(collection(db, `${classroomPaths.room(roomId)}/questions`), (snapshot) => listener(snapshot.docs.map((item) => mapQuestion(item.data())).sort((a, b) => a.questionNumber - b.questionNumber || a.roleId.localeCompare(b.roleId))), onErrorMessage(onError))

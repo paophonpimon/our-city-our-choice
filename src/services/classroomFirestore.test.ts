@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { computeChoiceOrderByQuestion, createRoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { createBalancedRoleOffsets, createRoleRotation, type RotatingRolePlayer } from '../domain/ourCity'
 import { createTrustedQuestions } from '../test/classroomFixtures'
-import { classroomPaths, createClassroomAnswerId, toPublicQuestionDocument } from './classroomFirestore'
+import { classroomPaths, createClassroomAnswerId, createPreAssessmentId, toPublicQuestionDocument } from './classroomFirestore'
 
 describe('simple classroom Firestore data', () => {
   it('uses stable room subcollection paths and answer IDs', () => {
@@ -11,6 +11,13 @@ describe('simple classroom Firestore data', () => {
     expect(classroomPaths.answer('ROOM01', '2::p1::doctor-01')).toBe('rooms/ROOM01/answers/2::p1::doctor-01')
     expect(classroomPaths.round('ROOM01', 2, 1)).toBe('rooms/ROOM01/rounds/2::1')
     expect(createClassroomAnswerId(2, 'p1', 'doctor-01')).toBe('2::p1::doctor-01')
+  })
+
+  it('keeps the PRE assessment isolated in its own collection, keyed pre::{playerId}', () => {
+    expect(createPreAssessmentId('p1')).toBe('pre::p1')
+    expect(classroomPaths.assessment('ROOM01', createPreAssessmentId('p1'))).toBe('rooms/ROOM01/assessments/pre::p1')
+    expect(() => createPreAssessmentId('')).toThrow()
+    expect(() => createPreAssessmentId('a/b')).toThrow()
   })
 
   // Security boundary regression test: students must never receive the

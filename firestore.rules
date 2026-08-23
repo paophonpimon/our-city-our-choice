@@ -24,6 +24,25 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/rooms/$(roomId)/players/$(playerId)).data.ownerUid == request.auth.uid;
     }
 
+    // Exactly 10 integer responses, each 1-5 — the PRE assessment's only
+    // accepted shape. Written out per-index rather than a loop: Firestore
+    // rules have no iteration construct, and this stays consistent with how
+    // every other fixed-shape document in this ruleset is validated.
+    function isValidPreResponses(responses) {
+      return responses is list
+        && responses.size() == 10
+        && responses[0] in [1, 2, 3, 4, 5]
+        && responses[1] in [1, 2, 3, 4, 5]
+        && responses[2] in [1, 2, 3, 4, 5]
+        && responses[3] in [1, 2, 3, 4, 5]
+        && responses[4] in [1, 2, 3, 4, 5]
+        && responses[5] in [1, 2, 3, 4, 5]
+        && responses[6] in [1, 2, 3, 4, 5]
+        && responses[7] in [1, 2, 3, 4, 5]
+        && responses[8] in [1, 2, 3, 4, 5]
+        && responses[9] in [1, 2, 3, 4, 5];
+    }
+
     match /rooms/{roomId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -229,6 +248,51 @@ service cloud.firestore {
           && request.resource.data.resolvedAt == request.time
           && decisionId == string(request.resource.data.gameCycle) + '::' + request.resource.data.source + '::' + string(request.resource.data.sequenceNumber) + '::' + request.resource.data.playerId;
         allow delete: if false;
+      }
+
+      // Isolated from the realtime game engine on purpose: no dependency on
+      // room.status (a PRE submission must succeed even if the teacher has
+      // already advanced the room while the student was still answering),
+      // and no write ever allowed to modify an existing record — a PRE
+      // assessment is create-once, permanent, exactly like an answer.
+      match /assessments/{assessmentId} {
+        // The student's own realtime listener is established BEFORE they
+        // submit, watching a document that does not exist yet. Without the
+        // !exists(...) short-circuit, `resource` is null there and
+        // `resource.data.ownerUid` throws during rule evaluation, which
+        // Firestore treats as a permission denial — killing that listener
+        // for good. The write itself still succeeds, but the listener that
+        // was supposed to notice it never recovers, and the client staying
+        // subscribed on that dead stream never routes the student onward
+        // (only a full page reload re-subscribes and sees the truth). This
+        // mirrors the same fix already applied to /answers.
+        allow read: if isTeacher(roomId)
+          || (signedIn() && (
+            !exists(/databases/$(database)/documents/rooms/$(roomId)/assessments/$(assessmentId))
+            || resource.data.ownerUid == request.auth.uid
+          ));
+        allow create: if signedIn()
+          && request.resource.data.schemaVersion == 1
+          && request.resource.data.recordType == 'pre'
+          && request.resource.data.roomId == roomId
+          && request.resource.data.ownerUid == request.auth.uid
+          && isPlayerOwnerAfter(roomId, request.resource.data.playerId)
+          && assessmentId == 'pre::' + request.resource.data.playerId
+          && request.resource.data.submittedAt == request.time
+          && isValidPreResponses(request.resource.data.responses)
+          && request.resource.data.keys().hasOnly([
+            'schemaVersion',
+            'recordType',
+            'roomId',
+            'playerId',
+            'ownerUid',
+            'responses',
+            'submittedAt'
+          ]);
+        // Firestore evaluates a setDoc() over an existing document as an
+        // update, not a create — so this alone is what makes the record
+        // immutable after creation; no separate "already exists" check needed.
+        allow update, delete: if false;
       }
     }
   }

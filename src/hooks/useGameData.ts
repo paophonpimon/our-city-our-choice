@@ -6,6 +6,7 @@ import { debugLog, isDebugMode } from '../debug/useDebugLog'
 import type {
   ClassroomAnswerRecord,
   ClassroomPlayer,
+  ClassroomPreAssessment,
   ClassroomRoom,
   ClassroomRoundResult,
   ClassroomCrisisResult,
@@ -67,6 +68,22 @@ export const usePlayer = (roomId: string, playerId: string): Loadable<ClassroomP
     setState(initial(null, identityKey))
     return subscribeWithIdentityGuard<ClassroomPlayer | null>(
       (listener, onError) => service.subscribePlayer(roomId, playerId, listener, onError),
+      (data) => setState({ data, loading: false, error: '', identityKey }),
+      (error) => setState((current) => ({ ...current, loading: false, error })),
+    )
+  }, [playerId, roomId, service])
+  return state
+}
+
+export const usePreAssessment = (roomId: string, playerId: string): Loadable<ClassroomPreAssessment | null> => {
+  const { service } = useGame()
+  const [state, setState] = useState(initial<ClassroomPreAssessment | null>(null))
+  useEffect(() => {
+    const identityKey = `${roomId}:${playerId}`
+    if (!roomId || !playerId) return setState({ data: null, loading: false, error: '', identityKey: '' }), undefined
+    setState(initial(null, identityKey))
+    return subscribeWithIdentityGuard<ClassroomPreAssessment | null>(
+      (listener, onError) => service.subscribePreAssessment(roomId, playerId, listener, onError),
       (data) => setState({ data, loading: false, error: '', identityKey }),
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )

@@ -257,3 +257,60 @@ describe('classroom UI contracts', () => {
     expect(resultPage).not.toMatch(/winner|leaderboard|อันดับ/i)
   })
 })
+
+describe('PRE submission never gets stuck indefinitely on "กำลังส่งคำตอบ..."', () => {
+  it('filters out unconfirmed local writes before ever reporting a PRE submission as complete', () => {
+    const service = readSource('../services/firebaseClassroomService.ts')
+    const start = service.indexOf('subscribePreAssessment(')
+    const end = service.indexOf('subscribeQuestions(', start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const subscribeBlock = service.slice(start, end)
+    expect(subscribeBlock).toContain('includeMetadataChanges: true')
+    expect(subscribeBlock).toContain('snapshot.metadata.hasPendingWrites')
+  })
+
+  it('bounds the submit spinner with a watchdog that always recovers to a Thai error, never leaving it stuck forever', () => {
+    const page = readSource('../pages/PreAssessmentPage.tsx')
+    expect(page).toContain('SUBMIT_CONFIRMATION_TIMEOUT_MS')
+    // The watchdog effect must actually clear `submitting` and surface a
+    // recoverable message - not merely fire a side effect that leaves the
+    // button disabled forever - and must clear its own timeout on cleanup
+    // (submitting turning false, or unmount from the redirect firing), or it
+    // would fire a stale error after a submission that already succeeded.
+    const start = page.indexOf('if (!submitting) return')
+    const end = page.indexOf('}, [submitting])', start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const watchdogEffect = page.slice(start, end)
+    expect(watchdogEffect).toContain('window.setTimeout(() => {')
+    expect(watchdogEffect).toContain('setSubmitting(false)')
+    expect(watchdogEffect).toContain('setError(')
+    expect(watchdogEffect).toContain('window.clearTimeout(timeoutId)')
+  })
+
+  it('never resets `submitting` to false on the success path - only the watchdog or an outright rejection may do that', () => {
+    const page = readSource('../pages/PreAssessmentPage.tsx')
+    const submitStart = page.indexOf('const submit = async')
+    const submitEnd = page.indexOf('return (\n    <main', submitStart)
+    expect(submitStart).toBeGreaterThan(-1)
+    expect(submitEnd).toBeGreaterThan(submitStart)
+    const submitFn = page.slice(submitStart, submitEnd)
+    const catchStart = submitFn.indexOf('} catch')
+    expect(catchStart).toBeGreaterThan(-1)
+    expect(submitFn.slice(0, catchStart)).not.toContain('setSubmitting(false)')
+    expect(submitFn.slice(catchStart)).toContain('setSubmitting(false)')
+  })
+
+  it('never navigates optimistically before PRE is confirmed - routing only happens from the live, server-confirmed assessment subscription', () => {
+    const page = readSource('../pages/PreAssessmentPage.tsx')
+    const submitStart = page.indexOf('const submit = async')
+    const submitEnd = page.indexOf('return (\n    <main', submitStart)
+    expect(page.slice(submitStart, submitEnd)).not.toMatch(/navigate\(/)
+  })
+
+  it('never traps a student without completed PRE in a finished room, but leaves an in-flight submission alone', () => {
+    const page = readSource('../pages/PreAssessmentPage.tsx')
+    expect(page).toContain("roomState.data?.status === 'finished' && !submitting")
+  })
+})

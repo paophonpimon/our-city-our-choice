@@ -1,6 +1,6 @@
 import type { PublicRoomQuestion, RoomQuestionSnapshot } from './classroomQuestions'
 import type { CityLevel, QuestionNumber, RoleId } from './ourCity'
-import { isQuestionAnswerRecord, type ClassroomAnswerRecord, type ClassroomPlayer, type ClassroomRoundResult } from '../types/classroomGame'
+import { isQuestionAnswerRecord, type ClassroomAnswerRecord, type ClassroomPlayer, type ClassroomRoomStatus, type ClassroomRoundResult } from '../types/classroomGame'
 import { clampCityScore, SCORE_POLICY } from './cityScoring'
 
 export const getRoleQuestion = (
@@ -87,6 +87,47 @@ export const getFinalAnswerTotals = (
     }),
     { integrityCount: 0, corruptionCount: 0, timeoutCount: 0 },
   )
+
+/**
+ * Where a student should land for a given room status - shared by the lobby
+ * guard and the PRE-assessment page's post-submit routing so a student who
+ * finishes an earlier step while the teacher has already moved the room
+ * forward always lands on the correct current screen, never a stale one.
+ */
+export const resolveStudentRouteForStatus = (
+  status: ClassroomRoomStatus | undefined,
+  roomId: string,
+): string => {
+  if (status === 'role-draw') return `/role-draw/${roomId}`
+  if (status && ['playing', 'round-result', 'crisis-intro', 'crisis-playing', 'crisis-result'].includes(status)) {
+    return `/game/${roomId}`
+  }
+  if (status === 'game-result' || status === 'finished') return `/result/${roomId}`
+  return `/lobby/${roomId}`
+}
+
+/**
+ * The lobby page's routing guard, as a pure decision: where (if anywhere) a
+ * student on /lobby must be sent instead of staying there. Returns `null`
+ * to mean "stay on the lobby page as normal."
+ *
+ * PRE gates every status except 'finished': a student who has not completed
+ * it must not slip into role-draw/playing/crisis/game-result just by
+ * navigating to /lobby after the teacher has already advanced the room past
+ * lobby. 'finished' is a deliberate exception - a closed room is a dead end
+ * with no game to route to afterward, so a stale student is never trapped
+ * filling PRE for it; the existing finished-room route wins immediately.
+ */
+export const resolveLobbyGuardRoute = (
+  status: ClassroomRoomStatus | undefined,
+  hasCompletedPreAssessment: boolean,
+  roomId: string,
+): string | null => {
+  if (status === 'finished') return resolveStudentRouteForStatus(status, roomId)
+  if (!hasCompletedPreAssessment) return `/assessment/pre/${roomId}`
+  const statusRoute = resolveStudentRouteForStatus(status, roomId)
+  return statusRoute === `/lobby/${roomId}` ? null : statusRoute
+}
 
 export const hasBalancedLockedRoles = (players: readonly ClassroomPlayer[]): boolean => {
   if (players.some((player) => player.roleId === null)) return false

@@ -3,6 +3,7 @@ import type {
   ClassroomAnswerRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPreAssessment,
   ClassroomRoom,
   ClassroomCrisisResult,
   ClassroomPersonalDecisionResult,
@@ -16,6 +17,13 @@ export interface ClassroomGameService {
   ensureSession(): Promise<string>
   createRoom(teacherSessionId: string, questionDurationSec: number): Promise<ClassroomRoom>
   joinRoom(input: ClassroomJoinInput, ownerUid: string): Promise<ClassroomPlayer>
+  submitPreAssessment(roomId: string, playerId: string, ownerUid: string, responses: number[]): Promise<void>
+  subscribePreAssessment(
+    roomId: string,
+    playerId: string,
+    listener: (assessment: ClassroomPreAssessment | null) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
   subscribeRoom(
     roomId: string,
     listener: (room: ClassroomRoom | null) => void,

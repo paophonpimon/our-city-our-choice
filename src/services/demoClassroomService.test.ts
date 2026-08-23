@@ -230,6 +230,78 @@ describe('Continue City Progress setup and role draw', () => {
   })
 })
 
+const currentPreAssessment = (service: DemoClassroomGameService, roomId: string, playerId: string) => {
+  let value: unknown = undefined
+  const unsubscribe = service.subscribePreAssessment(roomId, playerId, (assessment) => { value = assessment }, () => undefined)
+  unsubscribe()
+  return value as { responses: number[]; ownerUid: string; playerId: string; roomId: string } | null
+}
+
+const VALID_PRE_RESPONSES = [5, 4, 3, 5, 4, 3, 5, 4, 3, 5]
+
+describe('PRE assessment (isolated from the game engine)', () => {
+  it('is null before any submission, then returns exactly what was submitted', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนพรี'), 'owner-pre')
+
+    expect(currentPreAssessment(service, room.roomId, player.playerId)).toBeNull()
+
+    await service.submitPreAssessment(room.roomId, player.playerId, 'owner-pre', VALID_PRE_RESPONSES)
+
+    const stored = currentPreAssessment(service, room.roomId, player.playerId)
+    expect(stored?.responses).toEqual(VALID_PRE_RESPONSES)
+    expect(stored?.ownerUid).toBe('owner-pre')
+    expect(stored?.playerId).toBe(player.playerId)
+    expect(stored?.roomId).toBe(room.roomId)
+  })
+
+  it('never overwrites an existing submission - a resubmit with different answers is a silent no-op', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนพรี'), 'owner-pre')
+
+    await service.submitPreAssessment(room.roomId, player.playerId, 'owner-pre', VALID_PRE_RESPONSES)
+    await service.submitPreAssessment(room.roomId, player.playerId, 'owner-pre', [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+
+    expect(currentPreAssessment(service, room.roomId, player.playerId)?.responses).toEqual(VALID_PRE_RESPONSES)
+  })
+
+  it('rejects anything other than exactly 10 integer responses from 1-5', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนพรี'), 'owner-pre')
+
+    await expect(service.submitPreAssessment(room.roomId, player.playerId, 'owner-pre', [1, 2, 3])).rejects.toThrow('10 ข้อ')
+    await expect(service.submitPreAssessment(room.roomId, player.playerId, 'owner-pre', [0, 2, 3, 4, 5, 1, 2, 3, 4, 5])).rejects.toThrow('10 ข้อ')
+    expect(currentPreAssessment(service, room.roomId, player.playerId)).toBeNull()
+  })
+
+  it('rejects submission from someone who is not that player\'s owner', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนพรี'), 'owner-pre')
+
+    await expect(service.submitPreAssessment(room.roomId, player.playerId, 'someone-else', VALID_PRE_RESPONSES)).rejects.toThrow('ไม่พบผู้เล่นของคุณ')
+  })
+
+  it('still succeeds after the teacher has advanced the room past lobby - PRE never depends on room status', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนพรี'), 'owner-pre')
+
+    const snapshot = createRoomQuestionSnapshot(room.roomId, createTrustedQuestions(), 100)
+    await service.startGame(room.roomId, teacherUid, snapshot)
+    await service.beginQuestions(room.roomId, teacherUid)
+    expect(currentRoom(service, room.roomId).status).toBe('playing')
+
+    // The student was still mid-PRE when the teacher moved the room on -
+    // submission must not be blocked by the room's current status.
+    await expect(service.submitPreAssessment(room.roomId, player.playerId, 'owner-pre', VALID_PRE_RESPONSES)).resolves.toBeUndefined()
+    expect(currentPreAssessment(service, room.roomId, player.playerId)?.responses).toEqual(VALID_PRE_RESPONSES)
+  })
+})
+
 describe('cycle-aware answers, rounds, and scoring', () => {
   it('does not let a question N answer disable question N+1', async () => {
     const { service, roomId, snapshot } = await setupPlaying(1)

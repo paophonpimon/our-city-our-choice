@@ -44,6 +44,7 @@ export const classroomPaths = {
   round: (roomId: string, gameCycle: number, questionNumber: number) => `rooms/${roomId}/rounds/${gameCycle}::${questionNumber}`,
   crisisResult: (roomId: string, gameCycle: number, eventIndex: number) => `rooms/${roomId}/crisisResults/${gameCycle}::${eventIndex}`,
   personalDecisionResult: (roomId: string, decisionId: string) => `rooms/${roomId}/personalResults/${decisionId}`,
+  assessment: (roomId: string, assessmentId: string) => `rooms/${roomId}/assessments/${assessmentId}`,
 } as const
 
 export const createClassroomAnswerId = (gameCycle: number, playerId: string, questionId: string): string => {
@@ -70,6 +71,11 @@ export const createCrisisAnswerId = (gameCycle: number, playerId: string, eventI
 export const createCrisisResultId = (gameCycle: number, eventIndex: number): string => {
   if (!Number.isInteger(gameCycle) || gameCycle < 0 || ![1, 2].includes(eventIndex)) throw new Error('invalid crisis result id')
   return `${gameCycle}::${eventIndex}`
+}
+
+export const createPreAssessmentId = (playerId: string): string => {
+  if (!playerId.trim() || playerId.includes('/')) throw new Error('Firestore-safe playerId is required')
+  return `pre::${playerId}`
 }
 
 export const createPersonalDecisionId = (

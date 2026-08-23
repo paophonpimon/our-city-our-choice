@@ -1,6 +1,7 @@
 import { scoreClassroomRound } from '../domain/cityScoring'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { randomRoomId } from '../domain/roomCode'
+import { isValidAssessmentResponses } from '../domain/assessment'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import {
   assignRolesForCycle,
@@ -14,13 +15,14 @@ import type {
   ClassroomAnswerRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPreAssessment,
   ClassroomRoom,
   ClassroomRoundResult,
   ClassroomPersonalDecisionResult,
   PublicRoomQuestion,
 } from '../types/classroomGame'
 import type { ClassroomGameService } from './classroomGameService'
-import { createClassroomAnswerId, createClassroomRoundId } from './classroomFirestore'
+import { createClassroomAnswerId, createClassroomRoundId, createPreAssessmentId } from './classroomFirestore'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
@@ -34,6 +36,7 @@ interface DemoClassroomRoomState {
   rounds: Record<string, ClassroomRoundResult>
   crisisResults: Record<string, ClassroomCrisisResult>
   personalResults: Record<string, ClassroomPersonalDecisionResult>
+  assessments: Record<string, ClassroomPreAssessment>
 }
 
 interface DemoClassroomState {
@@ -140,6 +143,7 @@ const getRoomState = (state: DemoClassroomState, roomId: string): DemoClassroomR
   if (!roomState) throw new Error('ผู้ใช้:ไม่พบห้องนี้')
   roomState.crisisResults ??= {}
   roomState.personalResults ??= {}
+  roomState.assessments ??= {}
   roomState.room.currentCrisisEventIndex ??= 0
   roomState.room.currentCrisisEventId ??= null
   return roomState
@@ -208,7 +212,7 @@ export class DemoClassroomGameService implements ClassroomGameService {
       createdAt: now,
       updatedAt: now,
     }
-    state.rooms[roomId] = { room, players: {}, questions: {}, answers: {}, rounds: {}, crisisResults: {}, personalResults: {} }
+    state.rooms[roomId] = { room, players: {}, questions: {}, answers: {}, rounds: {}, crisisResults: {}, personalResults: {}, assessments: {} }
     writeState(state)
     return clone(room)
   }
@@ -247,6 +251,38 @@ export class DemoClassroomGameService implements ClassroomGameService {
     roomState.room.updatedAt = now
     writeState(state)
     return clone(player)
+  }
+
+  async submitPreAssessment(roomId: string, playerId: string, ownerUid: string, responses: number[]): Promise<void> {
+    if (!isValidAssessmentResponses(responses)) throw new Error('ผู้ใช้:คำตอบแบบสำรวจไม่ถูกต้อง กรุณาตอบให้ครบ 10 ข้อ')
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    const player = roomState.players[playerId]
+    if (!player || player.ownerUid !== ownerUid) throw new Error('ผู้ใช้:ไม่พบผู้เล่นของคุณ')
+    const assessmentId = createPreAssessmentId(playerId)
+    // Immutable: a resubmission (retry after a network glitch, double-tap)
+    // is a safe no-op rather than an error, but the stored responses never change.
+    if (roomState.assessments[assessmentId]) return
+    roomState.assessments[assessmentId] = {
+      schemaVersion: 1,
+      recordType: 'pre',
+      roomId: roomState.room.roomId,
+      playerId,
+      ownerUid,
+      responses: [...responses],
+      submittedAt: Date.now(),
+    }
+    writeState(state)
+  }
+
+  subscribePreAssessment(roomId: string, playerId: string, listener: (assessment: ClassroomPreAssessment | null) => void, onError: (message: string) => void): () => void {
+    void onError
+    const emit = (): void => emitNow(
+      readState().rooms[roomId.toUpperCase()]?.assessments[createPreAssessmentId(playerId)] ?? null,
+      listener,
+    )
+    emit()
+    return listen(emit)
   }
 
   subscribeRoom(roomId: string, listener: (room: ClassroomRoom | null) => void, onError: (message: string) => void): () => void {

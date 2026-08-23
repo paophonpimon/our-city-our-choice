@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { usePlayer, usePlayers, useRoom } from '../hooks/useGameData'
+import { CityLoader } from '../components/CityLoader'
+import { usePlayer, usePlayers, usePreAssessment, useRoom } from '../hooks/useGameData'
+import { resolveLobbyGuardRoute } from '../domain/classroomGameLoop'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { ROLE_CARD_ASSETS } from '../domain/roleCards'
 import { getClassroomStudentSession, saveClassroomViewerRole } from '../services/sessionStorage'
@@ -32,6 +34,7 @@ export const LobbyPage = () => {
   const roomState = useRoom(roomId)
   const playerState = usePlayer(roomId, session?.roomId === roomId ? session.playerId : '')
   const playersState = usePlayers(roomId)
+  const assessmentState = usePreAssessment(roomId, session?.roomId === roomId ? session.playerId : '')
   const [roleModal, setRoleModal] = useState<RoleId | 'all' | null>(null)
   const [activeTab, setActiveTab] = useState<StudentGuideTab>('how')
 
@@ -49,11 +52,9 @@ export const LobbyPage = () => {
   }, [roleModal])
 
   if (!session || session.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
-  if (roomState.data?.status === 'role-draw') return <Navigate replace to={`/role-draw/${roomId}`} />
-  if (['playing', 'round-result', 'crisis-intro', 'crisis-playing', 'crisis-result'].includes(roomState.data?.status ?? '')) {
-    return <Navigate replace to={`/game/${roomId}`} />
-  }
-  if (roomState.data?.status === 'game-result' || roomState.data?.status === 'finished') return <Navigate replace to={`/result/${roomId}`} />
+  if (assessmentState.loading) return <CityLoader variant="full" message="กำลังตรวจสอบข้อมูล..." />
+  const guardRoute = resolveLobbyGuardRoute(roomState.data?.status, Boolean(assessmentState.data), roomId)
+  if (guardRoute) return <Navigate replace to={guardRoute} />
 
   const player = playerState.data
   const nickname = player?.nickname ?? session.nickname

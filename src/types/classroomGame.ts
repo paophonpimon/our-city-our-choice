@@ -124,6 +124,22 @@ export interface ClassroomPersonalDecisionResult {
   resolvedAt: number
 }
 
+/**
+ * One student's PRE assessment submission. Deliberately minimal: no
+ * nickname/classSection/studentNumber duplication (read the player record
+ * for that), and no derived preTotal/preMean (computed later from
+ * `responses` when needed - see src/domain/assessment.ts).
+ */
+export interface ClassroomPreAssessment {
+  schemaVersion: 1
+  recordType: 'pre'
+  roomId: string
+  playerId: string
+  ownerUid: string
+  responses: number[]
+  submittedAt: number
+}
+
 export interface ClassroomJoinInput {
   roomId: string
   nickname: string
