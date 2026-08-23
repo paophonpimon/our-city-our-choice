@@ -36,7 +36,7 @@ export const JoinPage = () => {
       const player = await service.joinRoom({ roomId: normalizedRoomId, nickname, classSection: normalizedClassSection, studentNumber: Number(studentNumber) }, currentUid)
       saveClassroomStudentSession({ roomId: normalizedRoomId, playerId: player.playerId, nickname: player.nickname, classSection: player.classSection ?? normalizedClassSection, studentNumber: player.studentNumber ?? Number(studentNumber), role: 'student', sessionVersion: 1 })
       saveClassroomViewerRole('student')
-      navigate(`/assessment/pre/${normalizedRoomId}`)
+      navigate(`/lobby/${normalizedRoomId}`)
     } catch (reason) {
       setError(classroomFriendlyError(reason))
     } finally {

@@ -8,6 +8,8 @@ import { ROLE_CARD_ASSETS, ROLE_CARD_BACK_ASSET } from '../domain/roleCards'
 import { usePlayer, usePlayers, useRoom } from '../hooks/useGameData'
 import { classroomFriendlyError } from '../services'
 import { getClassroomStudentSession, getClassroomTeacherSession, getClassroomViewerRole } from '../services/sessionStorage'
+// DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
+import { withActionTiming } from '../debug/flightRecorder'
 
 const LOCATION_LABELS: Record<(typeof LOCATION_BY_ROLE)[RoleId], string> = {
   hospital: 'โรงพยาบาล',
@@ -67,7 +69,7 @@ export const RoleDrawPage = () => {
     setBusy(true)
     setError('')
     try {
-      await service.beginQuestions(roomId, uid)
+      await withActionTiming('beginQuestions', roomId, () => service.beginQuestions(roomId, uid))
     } catch (reason) {
       setError(classroomFriendlyError(reason))
     } finally {

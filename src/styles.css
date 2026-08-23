@@ -4915,8 +4915,12 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-lobby-student-card__identity { min-width: 0; }
 .teacher-lobby-student-card__identity strong { display: block; overflow: hidden; color: #173554; font-size: .78rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .teacher-lobby-student-card__identity small { display: block; margin-top: .15rem; color: #72869a; font-size: .58rem; }
-.teacher-lobby-student-card__ready { display: flex; align-items: center; gap: .25rem; color: #3b9a64; font-size: .55rem; font-weight: 600; }
-.teacher-lobby-student-card__ready i { width: .42rem; height: .42rem; border-radius: 50%; background: #40bb76; box-shadow: 0 0 0 .2rem rgb(64 187 118 / 13%); }
+.teacher-lobby-student-card__ready, .teacher-lobby-student-card__pending { display: flex; align-items: center; gap: .25rem; font-size: .55rem; font-weight: 600; }
+.teacher-lobby-student-card__ready { color: #3b9a64; }
+.teacher-lobby-student-card__pending { color: #b3811f; }
+.teacher-lobby-student-card__ready i, .teacher-lobby-student-card__pending i { width: .42rem; height: .42rem; border-radius: 50%; }
+.teacher-lobby-student-card__ready i { background: #40bb76; box-shadow: 0 0 0 .2rem rgb(64 187 118 / 13%); }
+.teacher-lobby-student-card__pending i { background: #e0a83a; box-shadow: 0 0 0 .2rem rgb(224 168 58 / 13%); }
 .teacher-lobby-roster-empty { display: grid; flex: 1; min-height: 24rem; place-content: center; justify-items: center; padding: 2rem; color: #63798f; text-align: center; }
 .teacher-lobby-roster-empty > span { display: grid; width: 5rem; height: 5rem; place-items: center; border-radius: 1.4rem; background: #e9f4ff; font-size: 2.4rem; }
 .teacher-lobby-roster-empty strong { margin-top: 1rem; color: #23568f; font-size: 1rem; }
@@ -5033,7 +5037,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   text-align: left;
 }
 .confirm-dialog h2 { font-size: 1.15rem; font-weight: 700; }
-.confirm-dialog p { margin-top: .55rem; color: #4a6685; font-size: .82rem; line-height: 1.6; }
+.confirm-dialog p { margin-top: .55rem; color: #4a6685; font-size: .82rem; line-height: 1.6; white-space: pre-line; }
 .confirm-dialog__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin-top: 1.3rem; }
 .confirm-dialog__actions button {
   min-height: 2.9rem;
@@ -5059,7 +5063,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-lobby-roster-grid { gap: .35rem; max-height: 62vh; }
   .teacher-lobby-student-card { grid-template-columns: 1.25rem 2.2rem minmax(0, 1fr); gap: .4rem; min-height: 3.45rem; padding: .4rem; }
   .teacher-lobby-student-card__avatar { width: 2.2rem; height: 2.2rem; font-size: .82rem; }
-  .teacher-lobby-student-card__ready { display: none; }
+  .teacher-lobby-student-card__ready, .teacher-lobby-student-card__pending { display: none; }
   .teacher-lobby-role-guide { padding: .6rem .7rem; }
   .teacher-lobby-role-guide__item { grid-template-columns: 1.7rem minmax(0, 1fr); padding: .3rem .4rem; }
   .teacher-lobby-role-guide__item > span { width: 1.65rem; height: 1.65rem; font-size: .88rem; }
@@ -5151,7 +5155,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   }
   .teacher-lobby-student-card__number { font-size: .52rem; }
   .teacher-lobby-student-card__avatar { display: grid; width: 2.35rem; height: 2.35rem; font-size: .86rem; }
-  .teacher-lobby-student-card__ready { display: flex; font-size: .52rem; }
+  .teacher-lobby-student-card__ready, .teacher-lobby-student-card__pending { display: flex; font-size: .52rem; }
   .teacher-lobby-student-card__identity strong { font-size: .72rem; }
   .teacher-lobby-student-card__identity small { margin-top: .08rem; font-size: .54rem; }
   .teacher-lobby-roster-empty { min-height: 0; padding: 1rem; }
@@ -5241,7 +5245,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-lobby-student-card__avatar { width: 2rem; height: 2rem; font-size: .75rem; }
   .teacher-lobby-student-card__identity strong { font-size: .61rem; }
   .teacher-lobby-student-card__identity small { font-size: .46rem; }
-  .teacher-lobby-student-card__ready { font-size: .43rem; }
+  .teacher-lobby-student-card__ready, .teacher-lobby-student-card__pending { font-size: .43rem; }
   .teacher-lobby-roster-note { margin-top: auto; padding: .3rem .45rem; }
   .teacher-lobby-roster-note > span { width: 1.1rem; height: 1.1rem; font-size: .52rem; }
   .teacher-lobby-roster-note p { font-size: .47rem; }

@@ -14,6 +14,8 @@ import { getCrisisEvent, orderCrisisChoicesForPlayer } from '../domain/cityCrisi
 import { isCrisisAnswerRecord, isQuestionAnswerRecord } from '../types/classroomGame'
 // TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
 import { debugLog, isDebugMode } from '../debug/useDebugLog'
+// DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
+import { withActionTiming } from '../debug/flightRecorder'
 
 /**
  * Full-coverage lock shown the instant a countdown hits zero. Not a dismiss-
@@ -108,19 +110,20 @@ export const GamePage = () => {
     // here rather than reaching the (authoritative, server-enforced) write.
     if (!roomState.data || roomState.data.status !== 'playing' || !question || existingAnswer || remaining <= 0) return
     const submittedForIdentity = interactionIdentityRef.current
-    if (isDebugMode()) debugLog('student', 'answer tap', `q=${roomState.data.currentQuestionNumber}`)
+    const currentQuestionNumber = roomState.data.currentQuestionNumber
+    if (isDebugMode()) debugLog('student', 'answer tap', `q=${currentQuestionNumber}`)
     setSavingChoiceId(choiceId)
     setError('')
     try {
-      if (isDebugMode()) debugLog('student', 'submit START', `q=${roomState.data.currentQuestionNumber}`)
-      await service.submitAnswer(
+      if (isDebugMode()) debugLog('student', 'submit START', `q=${currentQuestionNumber}`)
+      await withActionTiming('submitAnswer', roomId, () => service.submitAnswer(
         roomId,
         session.playerId,
         uid,
-        roomState.data.currentQuestionNumber,
+        currentQuestionNumber,
         question.questionId,
         choiceId,
-      )
+      ), { questionNumber: currentQuestionNumber })
       if (isDebugMode()) debugLog('student', 'submit OK')
     } catch (reason) {
       if (isDebugMode()) debugLog('student', 'submit ERR', String(reason))
@@ -134,7 +137,7 @@ export const GamePage = () => {
     if (!roomState.data || roomState.data.status !== 'crisis-playing' || !crisisDilemma || existingCrisisAnswer || remaining <= 0) return
     const submittedForIdentity = interactionIdentityRef.current
     setSavingChoiceId(choiceId); setError('')
-    try { await service.submitCrisisAnswer(roomId, session.playerId, uid, choiceId) }
+    try { await withActionTiming('submitCrisisAnswer', roomId, () => service.submitCrisisAnswer(roomId, session.playerId, uid, choiceId)) }
     catch (reason) { if (interactionIdentityRef.current === submittedForIdentity) setError(classroomFriendlyError(reason)) }
     finally { if (interactionIdentityRef.current === submittedForIdentity) setSavingChoiceId('') }
   }

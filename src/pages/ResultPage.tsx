@@ -17,6 +17,8 @@ import {
 } from '../services/sessionStorage'
 import { clearTeacherSnapshot } from '../services/teacherQuestionSnapshot'
 import type { ClassroomPersonalDecisionResult, PersonalDecisionOutcome } from '../types/classroomGame'
+// DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
+import { withActionTiming } from '../debug/flightRecorder'
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const CITY_REFLECTIONS: Record<CityLevel, string> = {
@@ -142,7 +144,7 @@ export const ResultPage = () => {
 
   const continueCity = async (): Promise<void> => {
     setBusy(true); setError('')
-    try { await service.continueCityProgress(roomId, uid) } catch (reason) { setError(classroomFriendlyError(reason)) } finally { setBusy(false) }
+    try { await withActionTiming('continueCityProgress', roomId, () => service.continueCityProgress(roomId, uid)) } catch (reason) { setError(classroomFriendlyError(reason)) } finally { setBusy(false) }
   }
   const endActivity = async (createNew = false): Promise<void> => {
     setBusy(true); setError('')

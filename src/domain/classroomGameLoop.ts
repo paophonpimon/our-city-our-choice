@@ -1,6 +1,6 @@
 import type { PublicRoomQuestion, RoomQuestionSnapshot } from './classroomQuestions'
 import type { CityLevel, QuestionNumber, RoleId } from './ourCity'
-import { isQuestionAnswerRecord, type ClassroomAnswerRecord, type ClassroomPlayer, type ClassroomRoomStatus, type ClassroomRoundResult } from '../types/classroomGame'
+import { isQuestionAnswerRecord, type ClassroomAnswerRecord, type ClassroomPlayer, type ClassroomPreAssessment, type ClassroomRoomStatus, type ClassroomRoundResult } from '../types/classroomGame'
 import { clampCityScore, SCORE_POLICY } from './cityScoring'
 
 export const getRoleQuestion = (
@@ -111,22 +111,41 @@ export const resolveStudentRouteForStatus = (
  * student on /lobby must be sent instead of staying there. Returns `null`
  * to mean "stay on the lobby page as normal."
  *
- * PRE gates every status except 'finished': a student who has not completed
- * it must not slip into role-draw/playing/crisis/game-result just by
- * navigating to /lobby after the teacher has already advanced the room past
- * lobby. 'finished' is a deliberate exception - a closed room is a dead end
- * with no game to route to afterward, so a stale student is never trapped
- * filling PRE for it; the existing finished-room route wins immediately.
+ * PRE only gates once the teacher has opened it (`preAssessmentOpened`).
+ * Before that, students simply follow the room's status like any other step
+ * - Join always lands on Lobby, and the room cannot leave 'lobby' status at
+ * all until PRE has been opened (enforced by startGame's own precondition),
+ * so there is nothing to gate yet. Once opened, an incomplete student must
+ * not slip into role-draw/playing/crisis/game-result just by navigating to
+ * /lobby after the teacher has advanced the room - 'finished' remains the
+ * one deliberate exception, since a closed room is a dead end with no game
+ * to route to afterward and a stale student must never be trapped filling
+ * PRE for it.
  */
 export const resolveLobbyGuardRoute = (
   status: ClassroomRoomStatus | undefined,
+  preAssessmentOpened: boolean,
   hasCompletedPreAssessment: boolean,
   roomId: string,
 ): string | null => {
   if (status === 'finished') return resolveStudentRouteForStatus(status, roomId)
-  if (!hasCompletedPreAssessment) return `/assessment/pre/${roomId}`
+  if (preAssessmentOpened && !hasCompletedPreAssessment) return `/assessment/pre/${roomId}`
   const statusRoute = resolveStudentRouteForStatus(status, roomId)
   return statusRoute === `/lobby/${roomId}` ? null : statusRoute
+}
+
+/**
+ * How many of the CURRENT players have a matching PRE submission, matched
+ * by playerId rather than a raw document count - so a stale/orphaned
+ * assessment record (e.g. from a player who left) can never inflate the
+ * teacher's completion count above the size of the actual roster.
+ */
+export const countCompletedPreAssessments = (
+  players: readonly ClassroomPlayer[],
+  assessments: readonly ClassroomPreAssessment[],
+): number => {
+  const assessedPlayerIds = new Set(assessments.map((assessment) => assessment.playerId))
+  return players.filter((player) => assessedPlayerIds.has(player.playerId)).length
 }
 
 export const hasBalancedLockedRoles = (players: readonly ClassroomPlayer[]): boolean => {

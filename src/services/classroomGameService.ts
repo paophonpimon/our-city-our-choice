@@ -24,6 +24,14 @@ export interface ClassroomGameService {
     listener: (assessment: ClassroomPreAssessment | null) => void,
     onError: (message: string) => void,
   ): ClassroomUnsubscribe
+  /** Teacher-only, room-wide PRE roster. Caller is responsible for only ever subscribing while room.status === 'lobby' && preAssessmentOpened === true. */
+  subscribeAssessments(
+    roomId: string,
+    listener: (assessments: ClassroomPreAssessment[]) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
+  /** One-way false -> true. Requires teacher ownership and room.status === 'lobby'. Idempotent: a repeat call while already open is a safe no-op. */
+  openPreAssessment(roomId: string, teacherSessionId: string): Promise<void>
   subscribeRoom(
     roomId: string,
     listener: (room: ClassroomRoom | null) => void,

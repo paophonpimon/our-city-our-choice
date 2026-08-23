@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, runTransaction, serverTimestamp, setDoc, Timestamp, type Firestore } from 'firebase/firestore'
+import { doc, getDoc, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, type Firestore } from 'firebase/firestore'
 import { computeChoiceOrderByQuestion, createRoomQuestionSnapshot } from '../src/domain/classroomQuestions'
 import { createBalancedRoleOffsets, createRoleRotation } from '../src/domain/ourCity'
 import { createTrustedQuestions } from '../src/test/classroomFixtures'
@@ -401,6 +401,30 @@ describe('PRE assessment — isolated collection, immutable, no room-status depe
     })
     const otherTeacherDb = testEnv.authenticatedContext('other-teacher').firestore()
     await assertFails(getDoc(doc(otherTeacherDb, `rooms/PRE1/assessments/pre::${STUDENT_UID}`)))
+  })
+})
+
+describe('preAssessmentOpened — teacher-controlled room field', () => {
+  it('lets the teacher set preAssessmentOpened while lobby', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'rooms/PREOPEN'), minimalRoomDoc('PREOPEN'))
+    })
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    await assertSucceeds(updateDoc(doc(teacherDb, 'rooms/PREOPEN'), {
+      preAssessmentOpened: true,
+      updatedAt: serverTimestamp(),
+    }))
+  })
+
+  it('rejects a student trying to set preAssessmentOpened themselves', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'rooms/PREOPEN2'), minimalRoomDoc('PREOPEN2'))
+    })
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(updateDoc(doc(studentDb, 'rooms/PREOPEN2'), {
+      preAssessmentOpened: true,
+      updatedAt: serverTimestamp(),
+    }))
   })
 })
 

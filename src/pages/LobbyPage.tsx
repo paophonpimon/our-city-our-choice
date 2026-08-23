@@ -53,7 +53,7 @@ export const LobbyPage = () => {
 
   if (!session || session.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
   if (assessmentState.loading) return <CityLoader variant="full" message="กำลังตรวจสอบข้อมูล..." />
-  const guardRoute = resolveLobbyGuardRoute(roomState.data?.status, Boolean(assessmentState.data), roomId)
+  const guardRoute = resolveLobbyGuardRoute(roomState.data?.status, Boolean(roomState.data?.preAssessmentOpened), Boolean(assessmentState.data), roomId)
   if (guardRoute) return <Navigate replace to={guardRoute} />
 
   const player = playerState.data

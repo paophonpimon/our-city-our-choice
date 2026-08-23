@@ -60,6 +60,15 @@ export const PreAssessmentPage = () => {
   if (roomState.data?.status === 'finished' && !submitting) {
     return <Navigate replace to={resolveStudentRouteForStatus(roomState.data.status, roomId)} />
   }
+  // Defense-in-depth: the teacher hasn't opened PRE yet, so a direct URL
+  // visit (or a stale link) has nothing to fill in - bounce back to Lobby,
+  // same as a fresh join would land. Left alone mid-submit for the same
+  // reason as the finished-room guard above: never interrupt an in-flight
+  // write, since the completed-assessment branch above will route correctly
+  // once it confirms regardless of what this guard would otherwise say.
+  if (roomState.data && !roomState.data.preAssessmentOpened && !submitting) {
+    return <Navigate replace to={`/lobby/${roomId}`} />
+  }
 
   const answeredCount = Object.keys(responses).length
   const allAnswered = answeredCount === PRE_ASSESSMENT_ITEM_COUNT

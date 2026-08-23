@@ -51,6 +51,10 @@ import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, normalizeBuildingLevels,
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent, type CrisisEventId, type CrisisEventIndex } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
 import { createCrisisAnswerId } from './classroomFirestore'
+// DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts.
+// Only timestamps stages of closeCrisisEvent that already exist below - no
+// new Firestore reads/writes, no new network operation.
+import { isFlightRecorderEnabled, record } from '../debug/flightRecorder'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -133,6 +137,10 @@ const mapRoom = (data: DocumentData): ClassroomRoom => {
     corruptionTotal: Number(data.corruptionTotal ?? 0),
     timeoutTotal: Number(data.timeoutTotal ?? 0),
     roleRotation: roleList(data.roleRotation),
+    // A room written before this field existed has no value here at all -
+    // Boolean(undefined) is false, so a legacy/missing room reads safely as
+    // "not opened" with no separate migration path required.
+    preAssessmentOpened: Boolean(data.preAssessmentOpened),
     createdAt,
     updatedAt: toMillis(data.updatedAt) ?? Date.now(),
   }
@@ -346,6 +354,7 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       corruptionTotal: 0,
       timeoutTotal: 0,
       roleRotation: [],
+      preAssessmentOpened: false,
       createdAt: now,
       updatedAt: now,
     })
@@ -458,6 +467,23 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       onErrorMessage(onError),
     )
   }
+  subscribeAssessments(roomId: string, listener: (assessments: ClassroomPreAssessment[]) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(
+      query(collection(db, `${classroomPaths.room(roomId)}/assessments`), where('recordType', '==', 'pre')),
+      (snapshot) => listener(snapshot.docs.map((item) => mapPreAssessment(item.data()))),
+      onErrorMessage(onError),
+    )
+  }
+  async openPreAssessment(roomId: string, teacherSessionId: string): Promise<void> {
+    const room = await requireRoom(roomId)
+    assertTeacher(room, teacherSessionId)
+    if (room.status !== 'lobby') throw new Error('ผู้ใช้:เปิดแบบประเมินได้เฉพาะตอนอยู่ในห้องรอเท่านั้น')
+    if (room.preAssessmentOpened) return
+    await updateDoc(doc(db, classroomPaths.room(roomId)), {
+      preAssessmentOpened: true,
+      updatedAt: serverTimestamp(),
+    })
+  }
   subscribeQuestions(roomId: string, listener: (questions: PublicRoomQuestion[]) => void, onError: (message: string) => void): () => void {
     return onSnapshot(collection(db, `${classroomPaths.room(roomId)}/questions`), (snapshot) => listener(snapshot.docs.map((item) => mapQuestion(item.data())).sort((a, b) => a.questionNumber - b.questionNumber || a.roleId.localeCompare(b.roleId))), onErrorMessage(onError))
   }
@@ -485,6 +511,7 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     const room = await requireRoom(roomId)
     assertTeacher(room, teacherSessionId)
     if (room.status !== 'lobby') throw new Error('ผู้ใช้:เกมเริ่มแล้ว')
+    if (!room.preAssessmentOpened) throw new Error('ผู้ใช้:กรุณาเปิดแบบประเมินก่อนกิจกรรมก่อนเริ่มเกม')
     if (snapshot.roomId !== roomId) throw new Error('ผู้ใช้:snapshot ไม่ตรงกับห้อง')
     const playerSnapshot = await getDocs(collection(db, `${classroomPaths.room(roomId)}/players`))
     const players = playerSnapshot.docs.map(mapPlayer)
@@ -563,18 +590,47 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
   }
 
   async closeQuestion(roomId: string, teacherSessionId: string, snapshot: RoomQuestionSnapshot): Promise<ClassroomRoundResult> {
-    const room = await requireRoom(roomId)
-    assertTeacher(room, teacherSessionId)
-    if (room.currentQuestionNumber === 0) throw new Error('ผู้ใช้:ยังไม่ได้เริ่มคำถาม')
-    const roundRef = doc(db, classroomPaths.round(roomId, room.gameCycle, room.currentQuestionNumber))
-    const existing = await getDoc(roundRef)
-    if (existing.exists()) return mapRound(existing.data())
-    if (room.status !== 'playing') throw new Error('ผู้ใช้:คำถามไม่ได้เปิดอยู่')
-    if (snapshot.roomId !== roomId) throw new Error('ผู้ใช้:trusted snapshot ไม่ตรงกับห้อง')
-    const [playerSnapshot, answerSnapshot] = await Promise.all([
+    const stageEnabled = isFlightRecorderEnabled()
+    const totalStart = Date.now()
+    if (stageEnabled) record('service', 'CLOSE_QUESTION_STAGE start', { roomId })
+
+    // requireRoom and the players/answers reads are independent of each
+    // other - the reads only need `roomId` (a parameter, known up front),
+    // not any field of `room` - so they do not need to wait for requireRoom
+    // to resolve first. Running them concurrently removes one full
+    // sequential network round trip from the critical path versus fetching
+    // them only after `room` comes back. Authorization (assertTeacher),
+    // idempotency (the existing-round check), and every other guard below
+    // still run in the same order as before, before any of this fetched
+    // data is used or any write happens - only the timing of these two
+    // independent reads changed, not what is checked or written.
+    const requireRoomAndReadsStart = Date.now()
+    if (stageEnabled) record('service', 'CLOSE_QUESTION_STAGE requireRoomAndReads start', { roomId })
+    const [room, playerSnapshot, answerSnapshot] = await Promise.all([
+      requireRoom(roomId),
       getDocs(collection(db, `${classroomPaths.room(roomId)}/players`)),
       getDocs(collection(db, `${classroomPaths.room(roomId)}/answers`)),
     ])
+    if (stageEnabled) {
+      record('service', 'CLOSE_QUESTION_STAGE requireRoomAndReads ok', {
+        roomId,
+        details: { elapsedMs: Date.now() - requireRoomAndReadsStart, playerCount: playerSnapshot.docs.length, answerDocumentCount: answerSnapshot.docs.length },
+      })
+    }
+
+    assertTeacher(room, teacherSessionId)
+    if (room.currentQuestionNumber === 0) throw new Error('ผู้ใช้:ยังไม่ได้เริ่มคำถาม')
+    const roundRef = doc(db, classroomPaths.round(roomId, room.gameCycle, room.currentQuestionNumber))
+
+    const existingRoundStart = Date.now()
+    if (stageEnabled) record('service', 'CLOSE_QUESTION_STAGE existingRound start', { roomId })
+    const existing = await getDoc(roundRef)
+    if (stageEnabled) record('service', 'CLOSE_QUESTION_STAGE existingRound ok', { roomId, details: { elapsedMs: Date.now() - existingRoundStart, existing: existing.exists() } })
+    if (existing.exists()) return mapRound(existing.data())
+    if (room.status !== 'playing') throw new Error('ผู้ใช้:คำถามไม่ได้เปิดอยู่')
+    if (snapshot.roomId !== roomId) throw new Error('ผู้ใช้:trusted snapshot ไม่ตรงกับห้อง')
+
+    const scoringStart = Date.now()
     const resolvedPlayers = playerSnapshot.docs.map(mapPlayer).map((player) => {
       if (!player.roleId) throw new Error('ผู้ใช้:มีผู้เล่นที่ยังไม่ได้รับอาชีพ')
       return { playerId: player.playerId, ownerUid: player.ownerUid, roleId: player.roleId }
@@ -586,7 +642,26 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     const finalizedAt = Date.now()
     const personalResults = resolveQuestionPersonalResults(roomId, room.gameCycle, room.currentQuestionNumber, resolvedPlayers, snapshot, answers, finalizedAt)
     assertPersonalOutcomeTotals(personalResults, result)
-    await writePersonalResults(roomId, personalResults)
+    if (stageEnabled) record('service', 'CLOSE_QUESTION_STAGE scoring', { roomId, details: { elapsedMs: Date.now() - scoringStart } })
+
+    const writePersonalStart = Date.now()
+    if (stageEnabled) record('service', 'CLOSE_QUESTION_STAGE writePersonalResults start', { roomId })
+    try {
+      await writePersonalResults(roomId, personalResults)
+      if (stageEnabled) {
+        record('service', 'CLOSE_QUESTION_STAGE writePersonalResults ok', {
+          roomId, details: { elapsedMs: Date.now() - writePersonalStart, resultCount: personalResults.length },
+        })
+      }
+    } catch (error) {
+      if (stageEnabled) {
+        record('service', 'CLOSE_QUESTION_STAGE writePersonalResults error', {
+          roomId, details: { elapsedMs: Date.now() - writePersonalStart, message: error instanceof Error ? error.message : String(error) },
+        })
+      }
+      throw error
+    }
+
     const batch = writeBatch(db)
     batch.set(roundRef, { ...result, gameCycle: room.gameCycle, finalizedAt: serverTimestamp() })
     batch.update(doc(db, classroomPaths.room(roomId)), {
@@ -598,7 +673,24 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       timeoutTotal: room.timeoutTotal + result.timeoutCount,
       updatedAt: serverTimestamp(),
     })
-    await batch.commit()
+
+    const batchCommitStart = Date.now()
+    if (stageEnabled) record('service', 'CLOSE_QUESTION_STAGE batchCommit start', { roomId })
+    try {
+      await batch.commit()
+    } catch (error) {
+      if (stageEnabled) {
+        record('service', 'CLOSE_QUESTION_STAGE batchCommit error', {
+          roomId, details: { elapsedMs: Date.now() - batchCommitStart, message: error instanceof Error ? error.message : String(error) },
+        })
+        record('service', 'CLOSE_QUESTION_STAGE total', { roomId, details: { elapsedMs: Date.now() - totalStart } })
+      }
+      throw error
+    }
+    if (stageEnabled) {
+      record('service', 'CLOSE_QUESTION_STAGE batchCommit ok', { roomId, details: { elapsedMs: Date.now() - batchCommitStart } })
+      record('service', 'CLOSE_QUESTION_STAGE total', { roomId, details: { elapsedMs: Date.now() - totalStart } })
+    }
     return { ...result, gameCycle: room.gameCycle, finalizedAt }
   }
 
@@ -671,17 +763,40 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
   }
 
   async closeCrisisEvent(roomId: string, teacherSessionId: string): Promise<ClassroomCrisisResult> {
+    const stageEnabled = isFlightRecorderEnabled()
+    const totalStart = Date.now()
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE start', { roomId })
+
+    const requireRoomStart = Date.now()
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE requireRoom start', { roomId })
     const initialRoom = await requireRoom(roomId)
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE requireRoom ok', { roomId, details: { elapsedMs: Date.now() - requireRoomStart } })
+
     assertTeacher(initialRoom, teacherSessionId)
     if (!initialRoom.currentCrisisEventId || initialRoom.currentCrisisEventIndex === 0) throw new Error('ผู้ใช้:ไม่มีเหตุการณ์วิกฤตที่กำลังดำเนินอยู่')
     const resultRef = doc(db, classroomPaths.crisisResult(roomId, initialRoom.gameCycle, initialRoom.currentCrisisEventIndex))
+
+    const existingResultStart = Date.now()
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE existingResult start', { roomId })
     const existingResult = await getDoc(resultRef)
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE existingResult ok', { roomId, details: { elapsedMs: Date.now() - existingResultStart, existing: existingResult.exists() } })
     if (existingResult.exists()) return mapCrisisResult(existingResult.data())
     if (initialRoom.status !== 'crisis-playing') throw new Error('ผู้ใช้:เหตุการณ์วิกฤตไม่ได้เปิดอยู่')
+
+    const playersAndAnswersStart = Date.now()
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE playersAndAnswers start', { roomId })
     const [playerSnapshot, answerSnapshot] = await Promise.all([
       getDocs(collection(db, `${classroomPaths.room(roomId)}/players`)),
       getDocs(collection(db, `${classroomPaths.room(roomId)}/answers`)),
     ])
+    if (stageEnabled) {
+      record('service', 'CRISIS_CLOSE_STAGE playersAndAnswers ok', {
+        roomId,
+        details: { elapsedMs: Date.now() - playersAndAnswersStart, playerCount: playerSnapshot.docs.length, answerDocumentCount: answerSnapshot.docs.length },
+      })
+    }
+
+    const scoringStart = Date.now()
     const players = playerSnapshot.docs.map(mapPlayer).map((player) => {
       if (!player.roleId) throw new Error('ผู้ใช้:มีผู้เล่นที่ยังไม่ได้รับอาชีพ')
       return { playerId: player.playerId, ownerUid: player.ownerUid, roleId: player.roleId }
@@ -696,29 +811,64 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     const personalResults = resolveCrisisPersonalResults(roomId, initialRoom.gameCycle, event, players, eventAnswers, finalizedAt)
     assertPersonalOutcomeTotals(personalResults, result)
     const crisisBuildingScores = updateBuildingScores(initialRoom.buildingScores, result.locationSummaries, initialRoom.buildingLevels)
-    await writePersonalResults(roomId, personalResults)
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE scoring', { roomId, details: { elapsedMs: Date.now() - scoringStart } })
 
-    return runTransaction(db, async (transaction) => {
-      const freshRoomSnapshot = await transaction.get(roomRef)
-      const freshExistingResult = await transaction.get(resultRef)
-      if (freshExistingResult.exists()) return mapCrisisResult(freshExistingResult.data())
-      if (!freshRoomSnapshot.exists()) throw new Error('ผู้ใช้:ไม่พบห้องนี้')
-      const room = mapRoom(freshRoomSnapshot.data())
-      assertTeacher(room, teacherSessionId)
-      if (room.status !== 'crisis-playing' || !room.currentCrisisEventId || room.currentCrisisEventIndex === 0) throw new Error('ผู้ใช้:เหตุการณ์วิกฤตไม่ได้เปิดอยู่')
-      if (room.gameCycle !== initialRoom.gameCycle || room.currentCrisisEventId !== event.id) throw new Error('ผู้ใช้:เหตุการณ์วิกฤตเปลี่ยนแล้ว')
-      transaction.set(resultRef, { ...result, finalizedAt: serverTimestamp() })
-      transaction.update(roomRef, {
-        status: 'crisis-result', cityScore: result.newCityScore, cityLevel: result.cityLevel,
-        buildingScores: crisisBuildingScores,
-        buildingLevels: deriveBuildingLevels(crisisBuildingScores),
-        integrityTotal: room.integrityTotal + result.integrityCount,
-        corruptionTotal: room.corruptionTotal + result.corruptionCount,
-        timeoutTotal: room.timeoutTotal + result.timeoutCount,
-        updatedAt: serverTimestamp(),
+    const writePersonalStart = Date.now()
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE writePersonalResults start', { roomId })
+    try {
+      await writePersonalResults(roomId, personalResults)
+      if (stageEnabled) {
+        record('service', 'CRISIS_CLOSE_STAGE writePersonalResults ok', {
+          roomId, details: { elapsedMs: Date.now() - writePersonalStart, resultCount: personalResults.length },
+        })
+      }
+    } catch (error) {
+      if (stageEnabled) {
+        record('service', 'CRISIS_CLOSE_STAGE writePersonalResults error', {
+          roomId, details: { elapsedMs: Date.now() - writePersonalStart, message: error instanceof Error ? error.message : String(error) },
+        })
+      }
+      throw error
+    }
+
+    const transactionStart = Date.now()
+    if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE runTransaction start', { roomId })
+    try {
+      const transactionResult = await runTransaction(db, async (transaction) => {
+        const freshRoomSnapshot = await transaction.get(roomRef)
+        if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE runTransaction freshRoom read completed', { roomId, details: { elapsedMs: Date.now() - transactionStart } })
+        const freshExistingResult = await transaction.get(resultRef)
+        if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE runTransaction freshCrisisResult read completed', { roomId, details: { elapsedMs: Date.now() - transactionStart } })
+        if (freshExistingResult.exists()) return mapCrisisResult(freshExistingResult.data())
+        if (!freshRoomSnapshot.exists()) throw new Error('ผู้ใช้:ไม่พบห้องนี้')
+        const room = mapRoom(freshRoomSnapshot.data())
+        assertTeacher(room, teacherSessionId)
+        if (room.status !== 'crisis-playing' || !room.currentCrisisEventId || room.currentCrisisEventIndex === 0) throw new Error('ผู้ใช้:เหตุการณ์วิกฤตไม่ได้เปิดอยู่')
+        if (room.gameCycle !== initialRoom.gameCycle || room.currentCrisisEventId !== event.id) throw new Error('ผู้ใช้:เหตุการณ์วิกฤตเปลี่ยนแล้ว')
+        transaction.set(resultRef, { ...result, finalizedAt: serverTimestamp() })
+        transaction.update(roomRef, {
+          status: 'crisis-result', cityScore: result.newCityScore, cityLevel: result.cityLevel,
+          buildingScores: crisisBuildingScores,
+          buildingLevels: deriveBuildingLevels(crisisBuildingScores),
+          integrityTotal: room.integrityTotal + result.integrityCount,
+          corruptionTotal: room.corruptionTotal + result.corruptionCount,
+          timeoutTotal: room.timeoutTotal + result.timeoutCount,
+          updatedAt: serverTimestamp(),
+        })
+        return result
       })
-      return result
-    })
+      if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE runTransaction ok', { roomId, details: { elapsedMs: Date.now() - transactionStart } })
+      if (stageEnabled) record('service', 'CRISIS_CLOSE_STAGE total', { roomId, details: { elapsedMs: Date.now() - totalStart } })
+      return transactionResult
+    } catch (error) {
+      if (stageEnabled) {
+        record('service', 'CRISIS_CLOSE_STAGE runTransaction error', {
+          roomId, details: { elapsedMs: Date.now() - transactionStart, message: error instanceof Error ? error.message : String(error) },
+        })
+        record('service', 'CRISIS_CLOSE_STAGE total', { roomId, details: { elapsedMs: Date.now() - totalStart } })
+      }
+      throw error
+    }
   }
 
   async finishGame(roomId: string, teacherSessionId: string): Promise<void> {

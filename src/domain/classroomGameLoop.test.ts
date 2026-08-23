@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createRoomQuestionSnapshot, orderChoicesForPlayer } from './classroomQuestions'
 import {
   countAnswersForQuestion,
+  countCompletedPreAssessments,
   getCityImagePath,
   getFinalAnswerTotals,
   getLiveCityScore,
@@ -12,7 +13,7 @@ import {
 } from './classroomGameLoop'
 import { ROLE_IDS } from './ourCity'
 import { createTrustedQuestions } from '../test/classroomFixtures'
-import type { ClassroomAnswerRecord, ClassroomRoomStatus, ClassroomRoundResult } from '../types/classroomGame'
+import type { ClassroomAnswerRecord, ClassroomPlayer, ClassroomPreAssessment, ClassroomRoomStatus, ClassroomRoundResult } from '../types/classroomGame'
 
 const snapshot = createRoomQuestionSnapshot('ROOM01', createTrustedQuestions(), 100)
 
@@ -47,6 +48,19 @@ describe('playable classroom loop helpers', () => {
     expect(shouldCloseQuestion(3, 3, Date.now() + 10_000)).toBe(true)
     expect(shouldCloseQuestion(1, 3, Date.now() - 1)).toBe(true)
     expect(shouldCloseQuestion(1, 3, Date.now() + 10_000)).toBe(false)
+  })
+
+  // Regression pin for a reported crisis bug: a single-student room where
+  // the crisis answer arrived ~28s before a ~30s deadline still showed
+  // "1/1 answered" but the room only progressed once the deadline itself
+  // expired - as if closure eligibility depended on the deadline. It must
+  // not: reaching lockedPlayerCount is sufficient on its own, at any
+  // distance from the deadline, including a deadline far in the future.
+  it('is close-eligible the instant everyone has answered, however far the deadline still is - this must never require waiting for the deadline', () => {
+    const wellBeforeDeadline = Date.now() + 27_800
+    expect(shouldCloseQuestion(1, 1, wellBeforeDeadline)).toBe(true)
+    expect(shouldCloseQuestion(1, 1, Date.now() + 10 * 60_000)).toBe(true)
+    expect(shouldCloseQuestion(1, 1, null)).toBe(true)
   })
 
   it('previews only submitted answer impacts and leaves missing answers for final timeout scoring', () => {
@@ -87,46 +101,77 @@ describe('playable classroom loop helpers', () => {
   })
 })
 
-describe('resolveLobbyGuardRoute — PRE must gate every status, not just lobby', () => {
+describe('resolveLobbyGuardRoute — PRE only gates once the teacher has opened it', () => {
   const ROOM_ID = 'ROOM01'
   const ADVANCED_STATUSES: ClassroomRoomStatus[] = [
     'role-draw', 'playing', 'round-result', 'crisis-intro', 'crisis-playing', 'crisis-result', 'game-result',
   ]
 
-  // 1. lobby + incomplete PRE + playing room → PRE
-  it.each(ADVANCED_STATUSES)('sends an incomplete-PRE student to PRE even once the room has advanced to %s, not into the room', (status) => {
-    expect(resolveLobbyGuardRoute(status, false, ROOM_ID)).toBe(`/assessment/pre/${ROOM_ID}`)
+  // Before the teacher opens PRE, an incomplete student is never gated to
+  // PRE - they simply follow the room's status like anyone else.
+  it('lets an incomplete-PRE student stay on the lobby page while PRE has not been opened yet', () => {
+    expect(resolveLobbyGuardRoute('lobby', false, false, ROOM_ID)).toBeNull()
+    expect(resolveLobbyGuardRoute(undefined, false, false, ROOM_ID)).toBeNull()
   })
 
-  it('sends an incomplete-PRE student to PRE while the room is still in lobby too', () => {
-    expect(resolveLobbyGuardRoute('lobby', false, ROOM_ID)).toBe(`/assessment/pre/${ROOM_ID}`)
+  // Once opened, an incomplete student must be sent to PRE for every status
+  // the room could realistically be in - even though startGame's own
+  // precondition means the room cannot actually leave 'lobby' before PRE is
+  // opened, this proves the guard itself does not rely on that invariant.
+  it.each(ADVANCED_STATUSES)('sends an incomplete-PRE student to PRE once opened, even for status %s, not into the room', (status) => {
+    expect(resolveLobbyGuardRoute(status, true, false, ROOM_ID)).toBe(`/assessment/pre/${ROOM_ID}`)
   })
 
-  // 2. PRE remains usable after room advances (this function never blocks
-  // PRE itself - PreAssessmentPage has no status check at all, and this
-  // guard's only job for an incomplete student is to always point at PRE,
-  // for every status above, which is exactly what the loop above proves.)
+  it('sends an incomplete-PRE student to PRE while the room is still in lobby too, once opened', () => {
+    expect(resolveLobbyGuardRoute('lobby', true, false, ROOM_ID)).toBe(`/assessment/pre/${ROOM_ID}`)
+  })
 
-  // 4. completed PRE + playing room → game
   it('routes a completed-PRE student straight into the current game screen once the room has advanced', () => {
-    expect(resolveLobbyGuardRoute('playing', true, ROOM_ID)).toBe(`/game/${ROOM_ID}`)
-    expect(resolveLobbyGuardRoute('role-draw', true, ROOM_ID)).toBe(`/role-draw/${ROOM_ID}`)
-    expect(resolveLobbyGuardRoute('game-result', true, ROOM_ID)).toBe(`/result/${ROOM_ID}`)
+    expect(resolveLobbyGuardRoute('playing', true, true, ROOM_ID)).toBe(`/game/${ROOM_ID}`)
+    expect(resolveLobbyGuardRoute('role-draw', true, true, ROOM_ID)).toBe(`/role-draw/${ROOM_ID}`)
+    expect(resolveLobbyGuardRoute('game-result', true, true, ROOM_ID)).toBe(`/result/${ROOM_ID}`)
   })
 
-  // 5. completed PRE + lobby → lobby (stay put: null means "render the lobby")
+  // completed PRE + lobby → lobby (stay put: null means "render the lobby")
   it('lets a completed-PRE student stay on the lobby page while the room is still in lobby', () => {
-    expect(resolveLobbyGuardRoute('lobby', true, ROOM_ID)).toBeNull()
-    expect(resolveLobbyGuardRoute(undefined, true, ROOM_ID)).toBeNull()
+    expect(resolveLobbyGuardRoute('lobby', true, true, ROOM_ID)).toBeNull()
+    expect(resolveLobbyGuardRoute(undefined, true, true, ROOM_ID)).toBeNull()
   })
 
   it('never traps a stale, incomplete-PRE student in PRE for a finished room - the existing finished-room route wins', () => {
-    expect(resolveLobbyGuardRoute('finished', false, ROOM_ID)).toBe(resolveStudentRouteForStatus('finished', ROOM_ID))
-    expect(resolveLobbyGuardRoute('finished', false, ROOM_ID)).toBe(`/result/${ROOM_ID}`)
+    expect(resolveLobbyGuardRoute('finished', true, false, ROOM_ID)).toBe(resolveStudentRouteForStatus('finished', ROOM_ID))
+    expect(resolveLobbyGuardRoute('finished', true, false, ROOM_ID)).toBe(`/result/${ROOM_ID}`)
   })
 
   it('also sends a completed-PRE student to the finished-room route, unchanged from before', () => {
-    expect(resolveLobbyGuardRoute('finished', true, ROOM_ID)).toBe(`/result/${ROOM_ID}`)
+    expect(resolveLobbyGuardRoute('finished', true, true, ROOM_ID)).toBe(`/result/${ROOM_ID}`)
+  })
+})
+
+describe('countCompletedPreAssessments — matched by playerId, never inflated by stale records', () => {
+  const players = [
+    { playerId: 'p1' },
+    { playerId: 'p2' },
+    { playerId: 'p3' },
+  ] as ClassroomPlayer[]
+
+  it('counts only current players who have a matching PRE submission', () => {
+    const assessments = [{ playerId: 'p1' }, { playerId: 'p2' }] as ClassroomPreAssessment[]
+    expect(countCompletedPreAssessments(players, assessments)).toBe(2)
+  })
+
+  it('ignores an orphaned assessment from a player no longer in the roster', () => {
+    const assessments = [{ playerId: 'p1' }, { playerId: 'someone-who-left' }] as ClassroomPreAssessment[]
+    expect(countCompletedPreAssessments(players, assessments)).toBe(1)
+  })
+
+  it('never double-counts a duplicate assessment record for the same player', () => {
+    const assessments = [{ playerId: 'p1' }, { playerId: 'p1' }] as ClassroomPreAssessment[]
+    expect(countCompletedPreAssessments(players, assessments)).toBe(1)
+  })
+
+  it('returns 0 when nobody has submitted', () => {
+    expect(countCompletedPreAssessments(players, [])).toBe(0)
   })
 })
 

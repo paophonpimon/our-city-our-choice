@@ -3,6 +3,8 @@ import { useGame } from '../context/GameContext'
 import { subscribeWithIdentityGuard } from '../services/subscriptionLifecycle'
 // TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
 import { debugLog, isDebugMode } from '../debug/useDebugLog'
+// DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
+import { tapSubscribe } from '../debug/flightRecorder'
 import type {
   ClassroomAnswerRecord,
   ClassroomPlayer,
@@ -30,7 +32,7 @@ export const useRoom = (roomId: string): Loadable<ClassroomRoom | null> => {
     if (!roomId) return setState({ data: null, loading: false, error: '', identityKey: '' }), undefined
     setState(initial(null, roomId))
     return subscribeWithIdentityGuard<ClassroomRoom | null>(
-      (listener, onError) => service.subscribeRoom(roomId, listener, onError),
+      tapSubscribe('room', roomId, (listener, onError) => service.subscribeRoom(roomId, listener, onError)),
       (data) => {
         if (isDebugMode()) debugLog('hook', 'room snapshot', `status=${data?.status ?? 'null'} q=${data?.currentQuestionNumber ?? '-'} deadline=${data?.questionDeadlineAt ?? 'null'}`)
         setState({ data, loading: false, error: '', identityKey: roomId })
@@ -48,7 +50,7 @@ export const usePlayers = (roomId: string): Loadable<ClassroomPlayer[]> => {
     if (!roomId) return setState({ data: [], loading: false, error: '', identityKey: '' }), undefined
     setState(initial([], roomId))
     return subscribeWithIdentityGuard<ClassroomPlayer[]>(
-      (listener, onError) => service.subscribePlayers(roomId, listener, onError),
+      tapSubscribe('players', roomId, (listener, onError) => service.subscribePlayers(roomId, listener, onError)),
       (data) => {
         if (isDebugMode()) debugLog('hook', 'players snapshot', `count=${data.length}`)
         setState({ data, loading: false, error: '', identityKey: roomId })
@@ -91,6 +93,28 @@ export const usePreAssessment = (roomId: string, playerId: string): Loadable<Cla
   return state
 }
 
+/**
+ * Teacher-only, room-wide PRE roster. `enabled` gates whether this hook
+ * subscribes at all - the caller is responsible for only enabling it while
+ * room.status === 'lobby' && preAssessmentOpened === true. Adding `enabled`
+ * to the effect's dependency array is what guarantees teardown the moment
+ * that condition stops holding (status advances, or on unmount).
+ */
+export const usePreAssessments = (roomId: string, enabled: boolean): Loadable<ClassroomPreAssessment[]> => {
+  const { service } = useGame()
+  const [state, setState] = useState(initial<ClassroomPreAssessment[]>([]))
+  useEffect(() => {
+    if (!roomId || !enabled) return setState({ data: [], loading: false, error: '', identityKey: '' }), undefined
+    setState(initial([], roomId))
+    return subscribeWithIdentityGuard<ClassroomPreAssessment[]>(
+      tapSubscribe('preAssessments', roomId, (listener, onError) => service.subscribeAssessments(roomId, listener, onError)),
+      (data) => setState({ data, loading: false, error: '', identityKey: roomId }),
+      (error) => setState((current) => ({ ...current, loading: false, error })),
+    )
+  }, [roomId, enabled, service])
+  return state
+}
+
 export const useQuestions = (roomId: string): Loadable<PublicRoomQuestion[]> => {
   const { service } = useGame()
   const [state, setState] = useState(initial<PublicRoomQuestion[]>([]))
@@ -113,7 +137,7 @@ export const useAnswers = (roomId: string): Loadable<ClassroomAnswerRecord[]> =>
     if (!roomId) return setState({ data: [], loading: false, error: '', identityKey: '' }), undefined
     setState(initial([], roomId))
     return subscribeWithIdentityGuard<ClassroomAnswerRecord[]>(
-      (listener, onError) => service.subscribeAnswers(roomId, listener, onError),
+      tapSubscribe('answers', roomId, (listener, onError) => service.subscribeAnswers(roomId, listener, onError)),
       (data) => {
         if (isDebugMode()) debugLog('hook', 'answers snapshot', `count=${data.length}`)
         setState({ data, loading: false, error: '', identityKey: roomId })
@@ -154,7 +178,7 @@ export const useRounds = (roomId: string): Loadable<ClassroomRoundResult[]> => {
     if (!roomId) return setState({ data: [], loading: false, error: '', identityKey: '' }), undefined
     setState(initial([], roomId))
     return subscribeWithIdentityGuard<ClassroomRoundResult[]>(
-      (listener, onError) => service.subscribeRounds(roomId, listener, onError),
+      tapSubscribe('rounds', roomId, (listener, onError) => service.subscribeRounds(roomId, listener, onError)),
       (data) => setState({ data, loading: false, error: '', identityKey: roomId }),
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )
@@ -169,7 +193,7 @@ export const useCrisisResults = (roomId: string): Loadable<ClassroomCrisisResult
     if (!roomId) return setState({ data: [], loading: false, error: '', identityKey: '' }), undefined
     setState(initial([], roomId))
     return subscribeWithIdentityGuard<ClassroomCrisisResult[]>(
-      (listener, onError) => service.subscribeCrisisResults(roomId, listener, onError),
+      tapSubscribe('crisisResults', roomId, (listener, onError) => service.subscribeCrisisResults(roomId, listener, onError)),
       (data) => setState({ data, loading: false, error: '', identityKey: roomId }),
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )

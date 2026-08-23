@@ -146,6 +146,9 @@ const getRoomState = (state: DemoClassroomState, roomId: string): DemoClassroomR
   roomState.assessments ??= {}
   roomState.room.currentCrisisEventIndex ??= 0
   roomState.room.currentCrisisEventId ??= null
+  // A room persisted (localStorage/shared demo state) before this field
+  // existed has no value here at all - it must read as false, never throw.
+  roomState.room.preAssessmentOpened ??= false
   return roomState
 }
 
@@ -209,6 +212,7 @@ export class DemoClassroomGameService implements ClassroomGameService {
       corruptionTotal: 0,
       timeoutTotal: 0,
       roleRotation: [],
+      preAssessmentOpened: false,
       createdAt: now,
       updatedAt: now,
     }
@@ -283,6 +287,27 @@ export class DemoClassroomGameService implements ClassroomGameService {
     )
     emit()
     return listen(emit)
+  }
+
+  subscribeAssessments(roomId: string, listener: (assessments: ClassroomPreAssessment[]) => void, onError: (message: string) => void): () => void {
+    void onError
+    const emit = (): void => emitNow(
+      Object.values(readState().rooms[roomId.toUpperCase()]?.assessments ?? {}),
+      listener,
+    )
+    emit()
+    return listen(emit)
+  }
+
+  async openPreAssessment(roomId: string, teacherSessionId: string): Promise<void> {
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    assertTeacher(roomState.room, teacherSessionId)
+    if (roomState.room.status !== 'lobby') throw new Error('ผู้ใช้:เปิดแบบประเมินได้เฉพาะตอนอยู่ในห้องรอเท่านั้น')
+    if (roomState.room.preAssessmentOpened) return
+    roomState.room.preAssessmentOpened = true
+    roomState.room.updatedAt = Date.now()
+    writeState(state)
   }
 
   subscribeRoom(roomId: string, listener: (room: ClassroomRoom | null) => void, onError: (message: string) => void): () => void {
@@ -383,6 +408,7 @@ export class DemoClassroomGameService implements ClassroomGameService {
     const roomState = getRoomState(state, roomId)
     assertTeacher(roomState.room, teacherSessionId)
     if (roomState.room.status !== 'lobby') throw new Error('ผู้ใช้:เกมเริ่มแล้ว')
+    if (!roomState.room.preAssessmentOpened) throw new Error('ผู้ใช้:กรุณาเปิดแบบประเมินก่อนกิจกรรมก่อนเริ่มเกม')
     if (snapshot.roomId !== roomState.room.roomId) throw new Error('ผู้ใช้:snapshot ไม่ตรงกับห้อง')
     const players = Object.values(roomState.players)
     if (players.length === 0) throw new Error('ผู้ใช้:ยังไม่มีนักเรียนในห้อง')

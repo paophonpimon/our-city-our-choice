@@ -10,13 +10,13 @@ import { JoinQrCode } from '../components/JoinQrCode'
 import { LiveAnswerImpacts } from '../components/LiveAnswerImpacts'
 import { TeacherSoundtrack, type TeacherSoundtrackHandle, type TeacherSoundtrackMode } from '../components/TeacherSoundtrack'
 import { useGame } from '../context/GameContext'
-import { countAnswersForQuestion, getLiveCityScore, shouldCloseQuestion } from '../domain/classroomGameLoop'
+import { countAnswersForQuestion, countCompletedPreAssessments, getLiveCityScore, shouldCloseQuestion } from '../domain/classroomGameLoop'
 import { createRoomQuestionSnapshot, type ParsedQuestionSheet, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import type { LocationId } from '../domain/cityScoring'
 import { resolveLiveAnswerImpact, type LiveAnswerImpact } from '../domain/liveAnswerImpact'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { BUILDING_IDS, BUILDING_LOCATION, INITIAL_BUILDING_LEVELS, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
-import { useAnswers, useCrisisResults, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
+import { useAnswers, useCrisisResults, usePlayers, usePreAssessments, useRoom, useRounds } from '../hooks/useGameData'
 import { useCountdown } from '../hooks/useCountdown'
 import { classroomFriendlyError } from '../services'
 import { loadGoogleSheetsQuestions } from '../services/googleSheetsQuestions'
@@ -33,6 +33,22 @@ import { getCrisisConclusion, getCrisisEvent } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord } from '../types/classroomGame'
 // TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
 import { debugLog, isDebugMode } from '../debug/useDebugLog'
+// DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
+import {
+  checkRealtimeGap,
+  CRISIS_AUTOCLOSE_GRACE_MS,
+  getLastActionResult,
+  getSnapshotAgeMs,
+  isCrisisAutocloseBlocked,
+  isFlightRecorderEnabled,
+  isNormalAdvanceBlocked,
+  NORMAL_ADVANCE_GRACE_MS,
+  publishTeacherDiagnosticSnapshot,
+  record,
+  recordAnomalyOnce,
+  SNAPSHOT_MISSING_GRACE_MS,
+  withActionTiming,
+} from '../debug/flightRecorder'
 
 type SheetStatus = 'loading' | 'ready' | 'error'
 type YearCutscenePhase = 'entering' | 'holding' | 'text-leaving' | 'leaving'
@@ -104,6 +120,7 @@ const STANDALONE_LAYOUT_ROOM: ClassroomRoom = {
   corruptionTotal: 0,
   timeoutTotal: 0,
   roleRotation: [],
+  preAssessmentOpened: false,
   createdAt: 0,
   updatedAt: 0,
 }
@@ -142,12 +159,16 @@ export const TeacherPage = () => {
   const [restoringStoredRoom, setRestoringStoredRoom] = useState(Boolean(storedSession?.roomId))
   const [isEndActivityDialogOpen, setIsEndActivityDialogOpen] = useState(false)
   const [isHardRecoveryDialogOpen, setIsHardRecoveryDialogOpen] = useState(false)
+  const [isPreAssessmentIncompleteDialogOpen, setIsPreAssessmentIncompleteDialogOpen] = useState(false)
   const closingRef = useRef(false)
   const roomBoundaryRef = useRef(0)
   const seenAnswerIdsRef = useRef(new Set<string>())
   const liveImpactTrackingReadyRef = useRef(false)
   const liveImpactTimersRef = useRef(new Map<string, number>())
   const teacherSoundtrackRef = useRef<TeacherSoundtrackHandle>(null)
+  // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
+  const progressionFingerprintRef = useRef('')
+  const previousRemainingRef = useRef(0)
 
   const resetRoomTransientState = useCallback((): void => {
     roomBoundaryRef.current += 1
@@ -162,6 +183,7 @@ export const TeacherPage = () => {
     setIsLobbyRulesOpen(false)
     setIsEndActivityDialogOpen(false)
     setIsHardRecoveryDialogOpen(false)
+    setIsPreAssessmentIncompleteDialogOpen(false)
     closingRef.current = false
     seenAnswerIdsRef.current.clear()
     liveImpactTrackingReadyRef.current = false
@@ -177,6 +199,13 @@ export const TeacherPage = () => {
   const roundsState = useRounds(subscribedRoomId)
   const crisisResultsState = useCrisisResults(subscribedRoomId)
   const room = roomState.data
+  const preAssessmentListenerEnabled = room?.status === 'lobby' && room.preAssessmentOpened === true
+  const preAssessmentsState = usePreAssessments(subscribedRoomId, preAssessmentListenerEnabled)
+  const completedPreAssessmentCount = countCompletedPreAssessments(playersState.data, preAssessmentsState.data)
+  const completedPreAssessmentPlayerIds = useMemo(
+    () => new Set(preAssessmentsState.data.map((assessment) => assessment.playerId)),
+    [preAssessmentsState.data],
+  )
   const teacherSoundtrackMode: TeacherSoundtrackMode = !roomId || restoringStoredRoom
     ? 'off'
     : room?.status === 'lobby' || !room
@@ -254,6 +283,158 @@ export const TeacherPage = () => {
     if (!isDebugMode() || !room) return
     debugLog('teacher', 'room render', `status=${room.status} q=${room.currentQuestionNumber} deadline=${room.questionDeadlineAt ?? 'null'}`)
   }, [room?.status, room?.currentQuestionNumber, room?.questionDeadlineAt, room])
+
+  // DIAGNOSTIC FLIGHT RECORDER — section 3: room/progression state telemetry.
+  // Logs only on a meaningful change to the tracked fields (fingerprint
+  // dedup), never on every render.
+  useEffect(() => {
+    if (!isFlightRecorderEnabled() || !room) return
+    const fingerprint = JSON.stringify([
+      room.status, room.currentQuestionNumber, room.gameCycle, room.currentCrisisEventId,
+      room.lockedPlayerCount, answerCount, crisisAnswerCount, Boolean(trustedSnapshot),
+      Boolean(currentRound), Boolean(currentCrisisResult), canAdvanceQuestion,
+    ])
+    if (progressionFingerprintRef.current === fingerprint) return
+    progressionFingerprintRef.current = fingerprint
+    record('teacher', 'PROGRESSION_STATE', {
+      roomId: room.roomId,
+      gameCycle: room.gameCycle,
+      roomStatus: room.status,
+      questionNumber: room.currentQuestionNumber,
+      crisisEventId: room.currentCrisisEventId,
+      details: {
+        lockedPlayerCount: room.lockedPlayerCount,
+        answerCount,
+        crisisAnswerCount,
+        trustedSnapshotPresent: Boolean(trustedSnapshot),
+        currentRoundPresent: Boolean(currentRound),
+        currentCrisisResultPresent: Boolean(currentCrisisResult),
+        canAdvanceQuestion,
+      },
+    })
+  }, [room, answerCount, crisisAnswerCount, trustedSnapshot, currentRound, currentCrisisResult, canAdvanceQuestion])
+
+  // DIAGNOSTIC FLIGHT RECORDER — deadline-crossing boundary event, plus a
+  // REALTIME_GAP check piggybacked on the same tick (useCountdown already
+  // re-renders every 250ms during timed phases; this adds no new timer).
+  useEffect(() => {
+    if (isFlightRecorderEnabled() && room) {
+      if (previousRemainingRef.current > 0 && remaining === 0 && (room.status === 'playing' || room.status === 'crisis-playing')) {
+        record('teacher', 'DEADLINE_REACHED', {
+          roomId: room.roomId,
+          gameCycle: room.gameCycle,
+          roomStatus: room.status,
+          questionNumber: room.currentQuestionNumber,
+          crisisEventId: room.currentCrisisEventId,
+        })
+      }
+      checkRealtimeGap('room', room.roomId)
+      checkRealtimeGap('answers', room.roomId)
+    }
+    previousRemainingRef.current = remaining
+  }, [remaining, room])
+
+  // DIAGNOSTIC FLIGHT RECORDER — anomaly A: NORMAL_ADVANCE_BLOCKED. Never
+  // auto-fixes or auto-clicks anything; only observes and records.
+  useEffect(() => {
+    if (!isFlightRecorderEnabled() || !room || room.status !== 'playing' || room.lockedPlayerCount <= 0 || answerCount < room.lockedPlayerCount) return
+    const { roomId: currentRoomId, gameCycle, currentQuestionNumber, questionDeadlineAt } = room
+    const timer = window.setTimeout(() => {
+      if (!isNormalAdvanceBlocked({ roomStatus: room.status, lockedPlayerCount: room.lockedPlayerCount, answerCount, canAdvanceQuestion })) return
+      recordAnomalyOnce(`normal-advance-blocked:${currentRoomId}:${gameCycle}:${currentQuestionNumber}`, 'NORMAL_ADVANCE_BLOCKED', {
+        roomId: currentRoomId,
+        gameCycle,
+        roomStatus: room.status,
+        questionNumber: currentQuestionNumber,
+        details: {
+          answerCount,
+          lockedPlayerCount: room.lockedPlayerCount,
+          trustedSnapshotPresent: Boolean(trustedSnapshot),
+          shouldCloseQuestionResult: shouldCloseQuestion(answerCount, room.lockedPlayerCount, questionDeadlineAt),
+          canAdvanceQuestion,
+          answersListenerAgeMs: getSnapshotAgeMs('answers', currentRoomId),
+        },
+      })
+    }, NORMAL_ADVANCE_GRACE_MS)
+    return () => window.clearTimeout(timer)
+  }, [room, answerCount, canAdvanceQuestion, trustedSnapshot])
+
+  // DIAGNOSTIC FLIGHT RECORDER — anomaly B: CRISIS_AUTOCLOSE_BLOCKED.
+  //
+  // Field reconciliation: this effect's own deps are [room, crisisAnswerCount]
+  // (no `remaining`), so once those stop changing, the grace-period timer
+  // below is scheduled once and fires once - it is a SINGLE point-in-time
+  // sample taken CRISIS_AUTOCLOSE_GRACE_MS after the block was first
+  // detected, not a continuously live read. A prior report showed this
+  // sample as `false` in a run a later review believed had an in-flight
+  // close attempt - those are not actually in conflict: `false` here only
+  // proves closingRef was unset AT THAT ONE SAMPLED INSTANT, not that no
+  // attempt was ever made before or after it. The field is renamed to say
+  // exactly that, and paired with the action-timing tracker's status
+  // (itself updated live by every real closeCrisisEvent call, independent
+  // of this timer), which is a much less ambiguous signal of whether an
+  // attempt actually happened.
+  useEffect(() => {
+    if (!isFlightRecorderEnabled() || !room || room.status !== 'crisis-playing' || room.lockedPlayerCount <= 0 || crisisAnswerCount < room.lockedPlayerCount) return
+    const { roomId: currentRoomId, gameCycle, currentCrisisEventIndex, currentCrisisEventId, questionDeadlineAt } = room
+    const timer = window.setTimeout(() => {
+      if (!isCrisisAutocloseBlocked({ roomStatus: room.status, lockedPlayerCount: room.lockedPlayerCount, crisisAnswerCount })) return
+      const closingRefSampledAtDetection = closingRef.current
+      const lastCloseAction = getLastActionResult('closeCrisisEvent')
+      recordAnomalyOnce(`crisis-autoclose-blocked:${currentRoomId}:${gameCycle}:${currentCrisisEventIndex}`, 'CRISIS_AUTOCLOSE_BLOCKED', {
+        roomId: currentRoomId,
+        gameCycle,
+        roomStatus: room.status,
+        crisisEventId: currentCrisisEventId,
+        details: {
+          crisisAnswerCount,
+          lockedPlayerCount: room.lockedPlayerCount,
+          eventIndex: currentCrisisEventIndex,
+          questionDeadlineAt,
+          closingRefSampledAtDetection,
+          lastCloseCrisisEventStatus: lastCloseAction?.status ?? 'never-started',
+          lastCloseCrisisEventAgeMs: lastCloseAction ? Date.now() - lastCloseAction.ts : null,
+          crisisResultsListenerAgeMs: getSnapshotAgeMs('crisisResults', currentRoomId),
+        },
+      })
+    }, CRISIS_AUTOCLOSE_GRACE_MS)
+    return () => window.clearTimeout(timer)
+  }, [room, crisisAnswerCount])
+
+  // DIAGNOSTIC FLIGHT RECORDER — anomaly C: SNAPSHOT_MISSING.
+  useEffect(() => {
+    if (!isFlightRecorderEnabled() || !room || room.status !== 'playing' || trustedSnapshot) return
+    const { roomId: currentRoomId, gameCycle, currentQuestionNumber } = room
+    const timer = window.setTimeout(() => {
+      recordAnomalyOnce(`snapshot-missing:${currentRoomId}:${gameCycle}:${currentQuestionNumber}`, 'SNAPSHOT_MISSING', {
+        roomId: currentRoomId,
+        gameCycle,
+        roomStatus: room.status,
+        questionNumber: currentQuestionNumber,
+        details: { sheetStatus, hasStoredSnapshot: Boolean(restoreTeacherSnapshot(currentRoomId)) },
+      })
+    }, SNAPSHOT_MISSING_GRACE_MS)
+    return () => window.clearTimeout(timer)
+  }, [room, trustedSnapshot, sheetStatus])
+
+  // DIAGNOSTIC FLIGHT RECORDER — publishes the compact state the debug
+  // panel renders. Cheap object build, guarded so it costs nothing when
+  // disabled.
+  useEffect(() => {
+    if (!isFlightRecorderEnabled()) return
+    publishTeacherDiagnosticSnapshot({
+      roomId: room?.roomId ?? null,
+      roomStatus: room?.status ?? null,
+      questionNumber: room?.currentQuestionNumber ?? null,
+      gameCycle: room?.gameCycle ?? null,
+      crisisEventId: room?.currentCrisisEventId ?? null,
+      answerCount,
+      lockedPlayerCount: room?.lockedPlayerCount ?? 0,
+      crisisAnswerCount,
+      trustedSnapshotPresent: Boolean(trustedSnapshot),
+      canAdvanceQuestion,
+    })
+  }, [room, answerCount, crisisAnswerCount, trustedSnapshot, canAdvanceQuestion])
 
   useEffect(() => {
     resetRoomTransientState()
@@ -358,7 +539,7 @@ export const TeacherPage = () => {
     closingRef.current = true
     setActionError('')
     try {
-      await service.closeQuestion(room.roomId, uid, trustedSnapshot)
+      await withActionTiming('closeQuestion', room.roomId, () => service.closeQuestion(room.roomId, uid, trustedSnapshot))
     } catch (reason) {
       setActionError(classroomFriendlyError(reason))
     } finally {
@@ -369,7 +550,7 @@ export const TeacherPage = () => {
   const closeCurrentCrisis = useCallback(async (): Promise<void> => {
     if (!room || room.status !== 'crisis-playing' || closingRef.current) return
     closingRef.current = true; setActionError('')
-    try { await service.closeCrisisEvent(room.roomId, uid) }
+    try { await withActionTiming('closeCrisisEvent', room.roomId, () => service.closeCrisisEvent(room.roomId, uid)) }
     catch (reason) { setActionError(classroomFriendlyError(reason)) }
     finally { closingRef.current = false }
   }, [room, service, uid])
@@ -413,8 +594,22 @@ export const TeacherPage = () => {
     }
   }
 
+  const openPreAssessment = async (): Promise<void> => {
+    if (!room) return
+    setBusy(true)
+    setActionError('')
+    try {
+      await service.openPreAssessment(room.roomId, uid)
+    } catch (reason) {
+      setActionError(classroomFriendlyError(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const startGame = async (): Promise<void> => {
     if (!room || !sheet?.valid) return
+    setIsPreAssessmentIncompleteDialogOpen(false)
     setBusy(true)
     setActionError('')
     teacherSoundtrackRef.current?.playGame()
@@ -422,13 +617,22 @@ export const TeacherPage = () => {
       const snapshot = createRoomQuestionSnapshot(room.roomId, sheet.questions)
       saveTeacherSnapshot(snapshot)
       setTrustedSnapshot(snapshot)
-      await service.startGame(room.roomId, uid, snapshot)
+      await withActionTiming('startGame', room.roomId, () => service.startGame(room.roomId, uid, snapshot))
     } catch (reason) {
       teacherSoundtrackRef.current?.playLobby()
       setActionError(classroomFriendlyError(reason))
     } finally {
       setBusy(false)
     }
+  }
+
+  const requestStartGame = (): void => {
+    if (!room) return
+    if (completedPreAssessmentCount < participantCount) {
+      setIsPreAssessmentIncompleteDialogOpen(true)
+      return
+    }
+    void startGame()
   }
 
   const nextOrFinish = async (): Promise<void> => {
@@ -442,10 +646,10 @@ export const TeacherPage = () => {
       let finalizedRound = currentRound
       if (room.status === 'playing') {
         if (!trustedSnapshot) throw new Error('ผู้ใช้:ไม่พบข้อมูลตรวจคำตอบในเครื่องครู')
-        finalizedRound = await service.closeQuestion(room.roomId, uid, trustedSnapshot)
+        finalizedRound = await withActionTiming('closeQuestion', room.roomId, () => service.closeQuestion(room.roomId, uid, trustedSnapshot))
       }
       if (room.currentQuestionNumber === 10) {
-        await service.finishGame(room.roomId, uid)
+        await withActionTiming('finishGame', room.roomId, () => service.finishGame(room.roomId, uid))
         navigate(`/result/${room.roomId}`)
       } else {
         const cutscene = {
@@ -470,7 +674,7 @@ export const TeacherPage = () => {
         let buildingStories: BuildingChangeStory[] = []
         try {
           const [nextRoom] = await Promise.all([
-            service.openNextQuestion(room.roomId, uid),
+            withActionTiming('openNextQuestion', room.roomId, () => service.openNextQuestion(room.roomId, uid)),
             waitForCutscene(timing.title),
           ])
           if (!boundaryIsCurrent()) return
@@ -610,8 +814,8 @@ export const TeacherPage = () => {
     const integrityPercent = result && room.lockedPlayerCount ? Math.round(result.integrityCount / room.lockedPlayerCount * 100) : 0
     const corruptionPercent = result && room.lockedPlayerCount ? Math.round(result.corruptionCount / room.lockedPlayerCount * 100) : 0
     const timeoutPercent = result && room.lockedPlayerCount ? Math.round(result.timeoutCount / room.lockedPlayerCount * 100) : 0
-    const beginEvent = async (): Promise<void> => { setBusy(true); setActionError(''); try { await service.beginCrisisEvent(room.roomId, uid) } catch (reason) { setActionError(classroomFriendlyError(reason)) } finally { setBusy(false) } }
-    const continueAfterEvent = async (): Promise<void> => { setBusy(true); setActionError(''); try { await service.openNextQuestion(room.roomId, uid) } catch (reason) { setActionError(classroomFriendlyError(reason)) } finally { setBusy(false) } }
+    const beginEvent = async (): Promise<void> => { setBusy(true); setActionError(''); try { await withActionTiming('beginCrisisEvent', room.roomId, () => service.beginCrisisEvent(room.roomId, uid)) } catch (reason) { setActionError(classroomFriendlyError(reason)) } finally { setBusy(false) } }
+    const continueAfterEvent = async (): Promise<void> => { setBusy(true); setActionError(''); try { await withActionTiming('openNextQuestion', room.roomId, () => service.openNextQuestion(room.roomId, uid)) } catch (reason) { setActionError(classroomFriendlyError(reason)) } finally { setBusy(false) } }
     return (
       <>
       <TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />
@@ -832,7 +1036,13 @@ export const TeacherPage = () => {
                     <strong title={player.nickname}>{player.nickname}</strong>
                     <small>ชั้น {player.classSection ?? '–'} · เลขที่ {player.studentNumber ?? '–'}</small>
                   </span>
-                  <span className="teacher-lobby-student-card__ready"><i aria-hidden="true" />พร้อม</span>
+                  {room?.preAssessmentOpened ? (
+                    completedPreAssessmentPlayerIds.has(player.playerId)
+                      ? <span className="teacher-lobby-student-card__ready"><i aria-hidden="true" />ทำแบบประเมินแล้ว</span>
+                      : <span className="teacher-lobby-student-card__pending"><i aria-hidden="true" />ยังไม่ได้ทำแบบประเมิน</span>
+                  ) : (
+                    <span className="teacher-lobby-student-card__ready"><i aria-hidden="true" />พร้อม</span>
+                  )}
                 </li>
               ))}
             </ol>
@@ -881,6 +1091,19 @@ export const TeacherPage = () => {
                 <div className={roomReady ? 'is-ready' : 'is-waiting'}><span className="teacher-lobby-summary__icon" aria-hidden="true">{roomReady ? '✓' : '…'}</span><p>สถานะห้อง<strong>{roomReady ? 'พร้อมเริ่มเกม' : 'รอผู้เล่น'}</strong></p></div>
               </div>
 
+              {room?.preAssessmentOpened ? (
+                <div className="teacher-lobby-summary">
+                  <div className={completedPreAssessmentCount === participantCount && participantCount > 0 ? 'is-ready' : 'is-waiting'}>
+                    <span className="teacher-lobby-summary__icon" aria-hidden="true">📝</span>
+                    <p>แบบประเมินก่อนกิจกรรม<strong>ทำเสร็จ {completedPreAssessmentCount} / {participantCount} <small>คน</small></strong></p>
+                  </div>
+                </div>
+              ) : (
+                <button className="teacher-lobby-primary-button" disabled={busy || room?.status !== 'lobby'} onClick={() => void openPreAssessment()} type="button">
+                  <span aria-hidden="true">📝</span> เริ่มแบบประเมินก่อนกิจกรรม
+                </button>
+              )}
+
               <div className="teacher-lobby-role-guide">
                 <div className="teacher-lobby-card-heading"><div><strong>8 อาชีพในเมือง</strong><p>ระบบจะสุ่มและกระจายบทบาทให้สมดุล</p></div><span aria-hidden="true">⚄</span></div>
                 <div className="teacher-lobby-role-guide__grid">
@@ -905,9 +1128,9 @@ export const TeacherPage = () => {
               </button>
 
               {sheetStatus === 'error' ? <div className="teacher-lobby-error"><p>{sheetError}</p><button onClick={() => void loadQuestions()}>ลองโหลดข้อมูลอีกครั้ง</button></div> : null}
-              <button className="teacher-lobby-primary-button teacher-lobby-primary-button--start" disabled={busy || participantCount === 0 || sheetStatus !== 'ready' || room?.status !== 'lobby'} onClick={() => void startGame()}>
+              <button className="teacher-lobby-primary-button teacher-lobby-primary-button--start" disabled={busy || participantCount === 0 || sheetStatus !== 'ready' || room?.status !== 'lobby' || !room?.preAssessmentOpened} onClick={requestStartGame}>
                 <span aria-hidden="true">▶</span> เริ่มเกม
-                <small>{participantCount === 0 ? 'รอให้นักเรียนเข้าห้องก่อน' : 'เริ่มสร้างเมืองของเรากันเลย!'}</small>
+                <small>{participantCount === 0 ? 'รอให้นักเรียนเข้าห้องก่อน' : !room?.preAssessmentOpened ? 'กรุณาเปิดแบบประเมินก่อนกิจกรรมก่อน' : 'เริ่มสร้างเมืองของเรากันเลย!'}</small>
               </button>
               <button aria-label="ยุติห้องเดิมและเริ่มห้องใหม่" className="teacher-lobby-new-room-button" disabled={busy} onClick={() => setIsEndActivityDialogOpen(true)} type="button"><span aria-hidden="true">⚙</span> เริ่มห้องใหม่</button>
               <details className="teacher-lobby-more-options">
@@ -960,6 +1183,15 @@ export const TeacherPage = () => {
         onConfirm={confirmHardRecovery}
         open={isHardRecoveryDialogOpen}
         title="แก้ปัญหาห้องค้าง"
+      />
+      <ConfirmDialog
+        body={`มีนักเรียน ${Math.max(participantCount - completedPreAssessmentCount, 0)} คนยังทำแบบประเมินก่อนกิจกรรมไม่เสร็จ\nต้องการเริ่มกิจกรรมต่อหรือไม่?`}
+        busy={busy}
+        confirmLabel="เริ่มกิจกรรมต่อ"
+        onCancel={() => setIsPreAssessmentIncompleteDialogOpen(false)}
+        onConfirm={() => void startGame()}
+        open={isPreAssessmentIncompleteDialogOpen}
+        title="นักเรียนบางคนยังทำแบบประเมินไม่เสร็จ"
       />
     </main>
     </>

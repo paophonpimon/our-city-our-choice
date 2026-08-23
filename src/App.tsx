@@ -12,6 +12,8 @@ import { RoleDrawPage } from './pages/RoleDrawPage'
 import { TeacherPage } from './pages/TeacherPage'
 // TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
 import { DebugOverlay } from './debug/DebugOverlay'
+// DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
+import { FlightRecorderPanel } from './debug/FlightRecorderPanel'
 
 const App = () => (
   <BrowserRouter>
@@ -29,6 +31,7 @@ const App = () => (
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <DebugOverlay />
+      <FlightRecorderPanel />
     </GameProvider>
   </BrowserRouter>
 )

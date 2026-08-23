@@ -75,6 +75,7 @@ const setupRoleDraw = async (playerCount = 8, duration = 30) => {
     await service.joinRoom(joinInput(room.roomId, `Player ${index + 1}`, index + 1), `owner-${index + 1}`)
   }
   const snapshot = createRoomQuestionSnapshot(room.roomId, createTrustedQuestions(), 100)
+  await service.openPreAssessment(room.roomId, teacherUid)
   await service.startGame(room.roomId, teacherUid, snapshot)
   return { service, roomId: room.roomId, snapshot }
 }
@@ -164,6 +165,7 @@ describe('Continue City Progress setup and role draw', () => {
     await service.joinRoom(joinInput(room.roomId, 'น้ำ'), 'owner-1')
     await expect(service.joinRoom(joinInput(room.roomId, 'น้ำ'), 'owner-2')).rejects.toThrow('ชื่อนี้ถูกใช้แล้ว')
     const snapshot = createRoomQuestionSnapshot(room.roomId, createTrustedQuestions(), 100)
+    await service.openPreAssessment(room.roomId, teacherUid)
     await service.startGame(room.roomId, teacherUid, snapshot)
     await expect(service.joinRoom(joinInput(room.roomId, 'คนใหม่'), 'owner-3')).rejects.toThrow('เกมเริ่มแล้ว')
   })
@@ -291,6 +293,7 @@ describe('PRE assessment (isolated from the game engine)', () => {
     const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนพรี'), 'owner-pre')
 
     const snapshot = createRoomQuestionSnapshot(room.roomId, createTrustedQuestions(), 100)
+    await service.openPreAssessment(room.roomId, teacherUid)
     await service.startGame(room.roomId, teacherUid, snapshot)
     await service.beginQuestions(room.roomId, teacherUid)
     expect(currentRoom(service, room.roomId).status).toBe('playing')
@@ -299,6 +302,78 @@ describe('PRE assessment (isolated from the game engine)', () => {
     // submission must not be blocked by the room's current status.
     await expect(service.submitPreAssessment(room.roomId, player.playerId, 'owner-pre', VALID_PRE_RESPONSES)).resolves.toBeUndefined()
     expect(currentPreAssessment(service, room.roomId, player.playerId)?.responses).toEqual(VALID_PRE_RESPONSES)
+  })
+})
+
+const currentAssessments = (service: DemoClassroomGameService, roomId: string) => {
+  let value: unknown[] = []
+  const unsubscribe = service.subscribeAssessments(roomId, (assessments) => { value = assessments }, () => undefined)
+  unsubscribe()
+  return value as { playerId: string }[]
+}
+
+describe('openPreAssessment — teacher-controlled, one-way false -> true gate', () => {
+  it('defaults a newly created room to preAssessmentOpened: false', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    expect(room.preAssessmentOpened).toBe(false)
+    expect(currentRoom(service, room.roomId).preAssessmentOpened).toBe(false)
+  })
+
+  it('lets the teacher open PRE while the room is still in lobby', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    await service.openPreAssessment(room.roomId, teacherUid)
+    expect(currentRoom(service, room.roomId).preAssessmentOpened).toBe(true)
+  })
+
+  it('is idempotent - opening an already-open room is a safe no-op', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    await service.openPreAssessment(room.roomId, teacherUid)
+    await expect(service.openPreAssessment(room.roomId, teacherUid)).resolves.toBeUndefined()
+    expect(currentRoom(service, room.roomId).preAssessmentOpened).toBe(true)
+  })
+
+  it('rejects a non-teacher trying to open PRE', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    await expect(service.openPreAssessment(room.roomId, 'not-the-teacher')).rejects.toThrow()
+    expect(currentRoom(service, room.roomId).preAssessmentOpened).toBe(false)
+  })
+
+  it('rejects opening PRE once the room has left lobby', async () => {
+    const { service, roomId } = await setupRoleDraw(1)
+    await expect(service.openPreAssessment(roomId, teacherUid)).rejects.toThrow('ตอนอยู่ในห้องรอเท่านั้น')
+  })
+
+  it('blocks startGame until PRE has been opened, and allows it once opened', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    await service.joinRoom(joinInput(room.roomId, 'นักเรียน'), 'owner-1')
+    const snapshot = createRoomQuestionSnapshot(room.roomId, createTrustedQuestions(), 100)
+
+    await expect(service.startGame(room.roomId, teacherUid, snapshot)).rejects.toThrow('กรุณาเปิดแบบประเมินก่อนกิจกรรมก่อนเริ่มเกม')
+
+    await service.openPreAssessment(room.roomId, teacherUid)
+    await expect(service.startGame(room.roomId, teacherUid, snapshot)).resolves.toBeUndefined()
+    expect(currentRoom(service, room.roomId).status).toBe('role-draw')
+  })
+
+  it('subscribeAssessments reflects submitted PRE records for the room, matched by playerId', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const playerA = await service.joinRoom(joinInput(room.roomId, 'นักเรียนเอ'), 'owner-a')
+    const playerB = await service.joinRoom(joinInput(room.roomId, 'นักเรียนบี', 2), 'owner-b')
+
+    expect(currentAssessments(service, room.roomId)).toHaveLength(0)
+
+    await service.submitPreAssessment(room.roomId, playerA.playerId, 'owner-a', VALID_PRE_RESPONSES)
+    expect(currentAssessments(service, room.roomId).map((assessment) => assessment.playerId)).toEqual([playerA.playerId])
+
+    await service.submitPreAssessment(room.roomId, playerB.playerId, 'owner-b', VALID_PRE_RESPONSES)
+    expect(currentAssessments(service, room.roomId).map((assessment) => assessment.playerId).sort())
+      .toEqual([playerA.playerId, playerB.playerId].sort())
   })
 })
 

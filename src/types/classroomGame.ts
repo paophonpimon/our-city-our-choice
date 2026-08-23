@@ -41,6 +41,14 @@ export interface ClassroomRoom {
   corruptionTotal: number
   timeoutTotal: number
   roleRotation: RoleId[]
+  /**
+   * Teacher-controlled, one-way false -> true gate for the PRE assessment.
+   * Not a new room status: students keep following the existing status flow
+   * (Join -> Lobby) until the teacher opens PRE, at which point incomplete
+   * students are routed to it. A room created before this field existed has
+   * no value here at all and must be read as false, never as an error.
+   */
+  preAssessmentOpened: boolean
   createdAt: number
   updatedAt: number
 }
