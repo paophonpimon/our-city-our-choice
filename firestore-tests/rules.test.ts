@@ -404,6 +404,162 @@ describe('PRE assessment — isolated collection, immutable, no room-status depe
   })
 })
 
+describe('POST assessment and Reflection — Phase B1, same rule shape as PRE', () => {
+  const setUpRoomAndPlayer = async (roomId: string, status = 'finished'): Promise<void> => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, `rooms/${roomId}`), minimalRoomDoc(roomId, { status }))
+      await setDoc(doc(db, `rooms/${roomId}/players/${STUDENT_UID}`), {
+        playerId: STUDENT_UID,
+        nickname: 'Test Student',
+        nicknameKey: 'test student',
+        classSection: '1/1',
+        studentNumber: 1,
+        ownerUid: STUDENT_UID,
+        roleId: null,
+        roleHistory: [],
+        roleOffset: null,
+        joinedAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+      })
+    })
+  }
+
+  const validPostDoc = () => ({
+    schemaVersion: 1,
+    recordType: 'post',
+    roomId: 'POST1',
+    playerId: STUDENT_UID,
+    ownerUid: STUDENT_UID,
+    responses: [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+    submittedAt: serverTimestamp(),
+  })
+
+  const validReflectionDoc = () => ({
+    schemaVersion: 1,
+    recordType: 'reflection',
+    roomId: 'POST1',
+    playerId: STUDENT_UID,
+    ownerUid: STUDENT_UID,
+    r1: 'สถานการณ์ที่ยากที่สุดคือตอนเลือกงบประมาณ',
+    r2: 'เข้าใจว่าไม่ใช่แค่ผลประโยชน์ของตัวเอง',
+    r3: 'เคยเห็นเพื่อนแจ้งเรื่องทุจริตในโรงเรียน',
+    submittedAt: serverTimestamp(),
+  })
+
+  it('accepts a valid POST submission from the owning student', async () => {
+    await setUpRoomAndPlayer('POST1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertSucceeds(setDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), validPostDoc()))
+  })
+
+  it('accepts a valid Reflection submission from the owning student', async () => {
+    await setUpRoomAndPlayer('POST1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertSucceeds(setDoc(doc(studentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`), validReflectionDoc()))
+  })
+
+  it('succeeds even before the room reaches finished (no room-status dependency, same as PRE)', async () => {
+    await setUpRoomAndPlayer('POST1', 'lobby')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertSucceeds(setDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), validPostDoc()))
+  })
+
+  it('rejects a POST/Reflection submission for a player the caller does not own', async () => {
+    await setUpRoomAndPlayer('POST1')
+    const otherUid = 'someone-else'
+    const otherDb = testEnv.authenticatedContext(otherUid).firestore()
+    await assertFails(setDoc(doc(otherDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), { ...validPostDoc(), ownerUid: otherUid }))
+    await assertFails(setDoc(doc(otherDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`), { ...validReflectionDoc(), ownerUid: otherUid }))
+  })
+
+  it.each([
+    ['too few responses', [1, 2, 3]],
+    ['too many responses', [1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1]],
+    ['an out-of-range value', [0, 2, 3, 4, 5, 1, 2, 3, 4, 5]],
+    ['a non-integer value', [1.5, 2, 3, 4, 5, 1, 2, 3, 4, 5]],
+  ])('rejects an invalid POST response count/value: %s', async (_label, responses) => {
+    await setUpRoomAndPlayer('POST1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(setDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), { ...validPostDoc(), responses }))
+  })
+
+  it.each([
+    ['empty r1', (base: ReturnType<typeof validReflectionDoc>) => ({ ...base, r1: '' })],
+    ['whitespace-only r2', (base: ReturnType<typeof validReflectionDoc>) => ({ ...base, r2: '   ' })],
+    ['missing r3 entirely', (base: ReturnType<typeof validReflectionDoc>) => Object.fromEntries(Object.entries(base).filter(([key]) => key !== 'r3'))],
+    ['non-string r1', (base: ReturnType<typeof validReflectionDoc>) => ({ ...base, r1: 123 })],
+  ])('rejects a malformed reflection: %s', async (_label, transform) => {
+    await setUpRoomAndPlayer('POST1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(setDoc(doc(studentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`), transform(validReflectionDoc())))
+  })
+
+  it('rejects a document carrying extra fields such as postTotal/gain/nickname', async () => {
+    await setUpRoomAndPlayer('POST1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(setDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), { ...validPostDoc(), postTotal: 35 }))
+    await assertFails(setDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), { ...validPostDoc(), gain: 5 }))
+    await assertFails(setDoc(doc(studentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`), { ...validReflectionDoc(), nickname: 'leaked nickname' }))
+  })
+
+  it('is immutable: overwrite/update is rejected for both POST and Reflection, and the original content survives', async () => {
+    await setUpRoomAndPlayer('POST1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    const postRef = doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`)
+    const reflectionRef = doc(studentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`)
+    await assertSucceeds(setDoc(postRef, validPostDoc()))
+    await assertSucceeds(setDoc(reflectionRef, validReflectionDoc()))
+    await assertFails(setDoc(postRef, { ...validPostDoc(), responses: [5, 5, 5, 5, 5, 5, 5, 5, 5, 5] }))
+    await assertFails(setDoc(reflectionRef, { ...validReflectionDoc(), r1: 'คำตอบใหม่ที่ไม่ควรบันทึกทับ' }))
+
+    let storedPostResponses: unknown
+    let storedR1: unknown
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const privilegedDb = context.firestore()
+      storedPostResponses = (await getDoc(doc(privilegedDb, `rooms/POST1/assessments/post::${STUDENT_UID}`))).data()?.responses
+      storedR1 = (await getDoc(doc(privilegedDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`))).data()?.r1
+    })
+    expect(storedPostResponses).toEqual(validPostDoc().responses)
+    expect(storedR1).toBe(validReflectionDoc().r1)
+  })
+
+  it('lets the owning student read their own POST/Reflection record, but cross-player read fails for another student', async () => {
+    await setUpRoomAndPlayer('POST1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/POST1/assessments/post::${STUDENT_UID}`), validPostDoc())
+      await setDoc(doc(context.firestore(), `rooms/POST1/assessments/reflection::${STUDENT_UID}`), validReflectionDoc())
+    })
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertSucceeds(getDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`)))
+    await assertSucceeds(getDoc(doc(studentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`)))
+
+    const otherStudentDb = testEnv.authenticatedContext('other-student').firestore()
+    await assertFails(getDoc(doc(otherStudentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`)))
+    await assertFails(getDoc(doc(otherStudentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`)))
+  })
+
+  it('lets the teacher read a student\'s POST/Reflection evidence in their own (owned) room', async () => {
+    await setUpRoomAndPlayer('POST1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/POST1/assessments/post::${STUDENT_UID}`), validPostDoc())
+      await setDoc(doc(context.firestore(), `rooms/POST1/assessments/reflection::${STUDENT_UID}`), validReflectionDoc())
+    })
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    await assertSucceeds(getDoc(doc(teacherDb, `rooms/POST1/assessments/post::${STUDENT_UID}`)))
+    await assertSucceeds(getDoc(doc(teacherDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`)))
+  })
+
+  it('rejects a read from a teacher of an unrelated room (not this room\'s teacher)', async () => {
+    await setUpRoomAndPlayer('POST1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/POST1/assessments/post::${STUDENT_UID}`), validPostDoc())
+    })
+    const otherTeacherDb = testEnv.authenticatedContext('other-teacher').firestore()
+    await assertFails(getDoc(doc(otherTeacherDb, `rooms/POST1/assessments/post::${STUDENT_UID}`)))
+  })
+})
+
 describe('preAssessmentOpened — teacher-controlled room field', () => {
   it('lets the teacher set preAssessmentOpened while lobby', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {

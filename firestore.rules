@@ -43,6 +43,24 @@ service cloud.firestore {
         && responses[9] in [1, 2, 3, 4, 5];
     }
 
+    // POST reuses the exact same 10-item, 1-5 shape as PRE (see
+    // src/domain/assessment.ts) — same validator, different record type.
+    function isValidPostResponses(responses) {
+      return isValidPreResponses(responses);
+    }
+
+    // Non-empty after trimming (matches src/domain/assessment.ts's
+    // isValidReflection, which rules cannot call directly), and bounded —
+    // REFLECTION_ANSWER_MAX_LENGTH in that same file. Rules have no
+    // .trim(), so "non-empty after trim" is expressed as "contains at
+    // least one non-whitespace character".
+    function isMeaningfulReflectionText(value) {
+      return value is string
+        && value.size() > 0
+        && value.size() <= 1000
+        && value.matches('.*\\S.*');
+    }
+
     match /rooms/{roomId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -251,10 +269,11 @@ service cloud.firestore {
       }
 
       // Isolated from the realtime game engine on purpose: no dependency on
-      // room.status (a PRE submission must succeed even if the teacher has
-      // already advanced the room while the student was still answering),
-      // and no write ever allowed to modify an existing record — a PRE
-      // assessment is create-once, permanent, exactly like an answer.
+      // room.status (a PRE/POST/Reflection submission must succeed even if
+      // the teacher has already advanced or finished the room while the
+      // student was still answering), and no write ever allowed to modify
+      // an existing record — every assessment record is create-once,
+      // permanent, exactly like an answer.
       match /assessments/{assessmentId} {
         // The student's own realtime listener is established BEFORE they
         // submit, watching a document that does not exist yet. Without the
@@ -271,27 +290,67 @@ service cloud.firestore {
             !exists(/databases/$(database)/documents/rooms/$(roomId)/assessments/$(assessmentId))
             || resource.data.ownerUid == request.auth.uid
           ));
+        // Fields shared by every record type are checked once here; each
+        // record type then adds its own id-prefix, shape, and content
+        // checks in its own branch below. This is a pure refactor of the
+        // original PRE-only rule — PRE's own requirements are unchanged,
+        // just no longer duplicated for POST/Reflection.
         allow create: if signedIn()
           && request.resource.data.schemaVersion == 1
-          && request.resource.data.recordType == 'pre'
           && request.resource.data.roomId == roomId
           && request.resource.data.ownerUid == request.auth.uid
           && isPlayerOwnerAfter(roomId, request.resource.data.playerId)
-          && assessmentId == 'pre::' + request.resource.data.playerId
           && request.resource.data.submittedAt == request.time
-          && isValidPreResponses(request.resource.data.responses)
-          && request.resource.data.keys().hasOnly([
-            'schemaVersion',
-            'recordType',
-            'roomId',
-            'playerId',
-            'ownerUid',
-            'responses',
-            'submittedAt'
-          ]);
+          && (
+            (
+              request.resource.data.recordType == 'pre'
+              && assessmentId == 'pre::' + request.resource.data.playerId
+              && isValidPreResponses(request.resource.data.responses)
+              && request.resource.data.keys().hasOnly([
+                'schemaVersion',
+                'recordType',
+                'roomId',
+                'playerId',
+                'ownerUid',
+                'responses',
+                'submittedAt'
+              ])
+            ) || (
+              request.resource.data.recordType == 'post'
+              && assessmentId == 'post::' + request.resource.data.playerId
+              && isValidPostResponses(request.resource.data.responses)
+              && request.resource.data.keys().hasOnly([
+                'schemaVersion',
+                'recordType',
+                'roomId',
+                'playerId',
+                'ownerUid',
+                'responses',
+                'submittedAt'
+              ])
+            ) || (
+              request.resource.data.recordType == 'reflection'
+              && assessmentId == 'reflection::' + request.resource.data.playerId
+              && isMeaningfulReflectionText(request.resource.data.r1)
+              && isMeaningfulReflectionText(request.resource.data.r2)
+              && isMeaningfulReflectionText(request.resource.data.r3)
+              && request.resource.data.keys().hasOnly([
+                'schemaVersion',
+                'recordType',
+                'roomId',
+                'playerId',
+                'ownerUid',
+                'r1',
+                'r2',
+                'r3',
+                'submittedAt'
+              ])
+            )
+          );
         // Firestore evaluates a setDoc() over an existing document as an
-        // update, not a create — so this alone is what makes the record
-        // immutable after creation; no separate "already exists" check needed.
+        // update, not a create — so this alone is what makes every record
+        // type immutable after creation; no separate "already exists"
+        // check needed. Covers PRE, POST, and Reflection alike.
         allow update, delete: if false;
       }
     }

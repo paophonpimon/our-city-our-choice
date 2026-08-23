@@ -78,6 +78,16 @@ export const createPreAssessmentId = (playerId: string): string => {
   return `pre::${playerId}`
 }
 
+export const createPostAssessmentId = (playerId: string): string => {
+  if (!playerId.trim() || playerId.includes('/')) throw new Error('Firestore-safe playerId is required')
+  return `post::${playerId}`
+}
+
+export const createReflectionId = (playerId: string): string => {
+  if (!playerId.trim() || playerId.includes('/')) throw new Error('Firestore-safe playerId is required')
+  return `reflection::${playerId}`
+}
+
 export const createPersonalDecisionId = (
   gameCycle: number,
   source: 'question' | 'crisis',

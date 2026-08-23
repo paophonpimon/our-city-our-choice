@@ -102,11 +102,14 @@ export const ResultPage = () => {
     if (status === 'lobby') navigate(isTeacher ? '/teacher' : `/lobby/${roomId}`, { replace: true })
   }, [isTeacher, navigate, roomId, roomState.data?.status])
 
+  // Assessment Phase B1: a student whose activity just finished still needs
+  // their session to submit POST/Reflection (see /assessment/post/:roomCode)
+  // - the session must survive this transition, not be cleared here. Only
+  // the assessment flow's own "กลับหน้าหลัก" completion action clears it now.
   useEffect(() => {
     if (roomState.data?.status !== 'finished' || isTeacher || !hasStudentSession) return
-    clearClassroomStudentSession()
-    navigate('/', { replace: true })
-  }, [hasStudentSession, isTeacher, navigate, roomState.data?.status])
+    navigate(`/assessment/post/${roomId}`, { replace: true })
+  }, [hasStudentSession, isTeacher, navigate, roomId, roomState.data?.status])
 
   useEffect(() => {
     if (!activeBuildingId) return undefined

@@ -148,6 +148,42 @@ export interface ClassroomPreAssessment {
   submittedAt: number
 }
 
+/**
+ * One student's POST assessment submission - same shape as PRE, same 10
+ * statements and 1-5 scale, stored as its own immutable record so PRE
+ * evidence is never overwritten. No derived postTotal/postMean/gain here;
+ * those are computed later from the raw PRE/POST responses when needed.
+ */
+export interface ClassroomPostAssessment {
+  schemaVersion: 1
+  recordType: 'post'
+  roomId: string
+  playerId: string
+  ownerUid: string
+  responses: number[]
+  submittedAt: number
+}
+
+/**
+ * One student's open-ended reflection (R1-R3). Deliberately unscored: no
+ * theme, tag, or derived field is stored here - just the student's
+ * original wording, exactly as submitted.
+ */
+export interface ClassroomReflection {
+  schemaVersion: 1
+  recordType: 'reflection'
+  roomId: string
+  playerId: string
+  ownerUid: string
+  r1: string
+  r2: string
+  r3: string
+  submittedAt: number
+}
+
+/** Any record stored under a room's `assessments` collection/map, keyed by a recordType-prefixed id (`pre::`/`post::`/`reflection::`). */
+export type ClassroomAssessmentRecord = ClassroomPreAssessment | ClassroomPostAssessment | ClassroomReflection
+
 export interface ClassroomJoinInput {
   roomId: string
   nickname: string

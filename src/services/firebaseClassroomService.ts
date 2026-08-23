@@ -20,7 +20,7 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 import { getCityLevel, scoreClassroomRound } from '../domain/cityScoring'
-import { isValidAssessmentResponses } from '../domain/assessment'
+import { isValidAssessmentResponses, isValidReflection, type ReflectionInput } from '../domain/assessment'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { assertStagingBuildNotUsingProduction, resolveFirebaseEnvironmentName } from '../domain/firebaseEnvironment'
@@ -39,13 +39,15 @@ import type {
   ClassroomAnswerRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPostAssessment,
   ClassroomPreAssessment,
+  ClassroomReflection,
   ClassroomRoom,
   ClassroomRoundResult,
   ClassroomPersonalDecisionResult,
   PublicRoomQuestion,
 } from '../types/classroomGame'
-import { createClassroomAnswerId, createPreAssessmentId, classroomPaths, toPublicQuestionDocument } from './classroomFirestore'
+import { createClassroomAnswerId, createPostAssessmentId, createPreAssessmentId, createReflectionId, classroomPaths, toPublicQuestionDocument } from './classroomFirestore'
 import { classroomFriendlyError, type ClassroomGameService } from './classroomGameService'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, normalizeBuildingLevels, normalizeBuildingScores, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent, type CrisisEventId, type CrisisEventIndex } from '../domain/cityCrisisEvents'
@@ -265,6 +267,28 @@ const mapPreAssessment = (data: DocumentData): ClassroomPreAssessment => ({
   submittedAt: toMillis(data.submittedAt) ?? Date.now(),
 })
 
+const mapPostAssessment = (data: DocumentData): ClassroomPostAssessment => ({
+  schemaVersion: 1,
+  recordType: 'post',
+  roomId: String(data.roomId ?? ''),
+  playerId: String(data.playerId ?? ''),
+  ownerUid: String(data.ownerUid ?? ''),
+  responses: Array.isArray(data.responses) ? data.responses.map(Number) : [],
+  submittedAt: toMillis(data.submittedAt) ?? Date.now(),
+})
+
+const mapReflection = (data: DocumentData): ClassroomReflection => ({
+  schemaVersion: 1,
+  recordType: 'reflection',
+  roomId: String(data.roomId ?? ''),
+  playerId: String(data.playerId ?? ''),
+  ownerUid: String(data.ownerUid ?? ''),
+  r1: String(data.r1 ?? ''),
+  r2: String(data.r2 ?? ''),
+  r3: String(data.r3 ?? ''),
+  submittedAt: toMillis(data.submittedAt) ?? Date.now(),
+})
+
 const fnvHash = (value: string): string => {
   let hash = 0x811c9dc5
   for (let index = 0; index < value.length; index += 1) {
@@ -441,6 +465,51 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     }
   }
 
+  async submitPostAssessment(roomId: string, playerId: string, ownerUid: string, responses: number[]): Promise<void> {
+    if (!isValidAssessmentResponses(responses)) throw new Error('ผู้ใช้:คำตอบแบบประเมินไม่ถูกต้อง กรุณาตอบให้ครบ 10 ข้อ')
+    const assessmentRef = doc(db, classroomPaths.assessment(roomId, createPostAssessmentId(playerId)))
+    try {
+      await setDoc(assessmentRef, {
+        schemaVersion: 1,
+        recordType: 'post',
+        roomId,
+        playerId,
+        ownerUid,
+        responses,
+        submittedAt: serverTimestamp(),
+      })
+    } catch (error) {
+      // Same immutable-retry semantics as PRE: a collision here means the
+      // record already exists - a retry after a network glitch or a
+      // double-tap must still resolve as success for this same owner.
+      const existing = await getDoc(assessmentRef).catch(() => null)
+      if (existing?.exists() && existing.data().ownerUid === ownerUid) return
+      throw error
+    }
+  }
+
+  async submitReflection(roomId: string, playerId: string, ownerUid: string, reflection: ReflectionInput): Promise<void> {
+    if (!isValidReflection(reflection)) throw new Error('ผู้ใช้:กรุณาตอบคำถามทั้ง 3 ข้อให้ครบถ้วน')
+    const assessmentRef = doc(db, classroomPaths.assessment(roomId, createReflectionId(playerId)))
+    try {
+      await setDoc(assessmentRef, {
+        schemaVersion: 1,
+        recordType: 'reflection',
+        roomId,
+        playerId,
+        ownerUid,
+        r1: reflection.r1,
+        r2: reflection.r2,
+        r3: reflection.r3,
+        submittedAt: serverTimestamp(),
+      })
+    } catch (error) {
+      const existing = await getDoc(assessmentRef).catch(() => null)
+      if (existing?.exists() && existing.data().ownerUid === ownerUid) return
+      throw error
+    }
+  }
+
   subscribeRoom(roomId: string, listener: (room: ClassroomRoom | null) => void, onError: (message: string) => void): () => void {
     return onSnapshot(doc(db, classroomPaths.room(roomId)), (snapshot) => listener(snapshot.exists() ? mapRoom(snapshot.data()) : null), onErrorMessage(onError))
   }
@@ -463,6 +532,28 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
         // the document contents themselves did not change again.
         if (snapshot.metadata.hasPendingWrites) return
         listener(snapshot.exists() ? mapPreAssessment(snapshot.data()) : null)
+      },
+      onErrorMessage(onError),
+    )
+  }
+  subscribePostAssessment(roomId: string, playerId: string, listener: (assessment: ClassroomPostAssessment | null) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(
+      doc(db, classroomPaths.assessment(roomId, createPostAssessmentId(playerId))),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return
+        listener(snapshot.exists() ? mapPostAssessment(snapshot.data()) : null)
+      },
+      onErrorMessage(onError),
+    )
+  }
+  subscribeReflection(roomId: string, playerId: string, listener: (reflection: ClassroomReflection | null) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(
+      doc(db, classroomPaths.assessment(roomId, createReflectionId(playerId))),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return
+        listener(snapshot.exists() ? mapReflection(snapshot.data()) : null)
       },
       onErrorMessage(onError),
     )

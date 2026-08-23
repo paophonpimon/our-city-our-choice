@@ -1,7 +1,7 @@
 import { scoreClassroomRound } from '../domain/cityScoring'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { randomRoomId } from '../domain/roomCode'
-import { isValidAssessmentResponses } from '../domain/assessment'
+import { isValidAssessmentResponses, isValidReflection, type ReflectionInput } from '../domain/assessment'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import {
   assignRolesForCycle,
@@ -13,16 +13,19 @@ import {
 import { compareClassroomPlayersByStudentNumber, isClassSection } from '../types/classroomGame'
 import type {
   ClassroomAnswerRecord,
+  ClassroomAssessmentRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPostAssessment,
   ClassroomPreAssessment,
+  ClassroomReflection,
   ClassroomRoom,
   ClassroomRoundResult,
   ClassroomPersonalDecisionResult,
   PublicRoomQuestion,
 } from '../types/classroomGame'
 import type { ClassroomGameService } from './classroomGameService'
-import { createClassroomAnswerId, createClassroomRoundId, createPreAssessmentId } from './classroomFirestore'
+import { createClassroomAnswerId, createClassroomRoundId, createPostAssessmentId, createPreAssessmentId, createReflectionId } from './classroomFirestore'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
@@ -36,7 +39,7 @@ interface DemoClassroomRoomState {
   rounds: Record<string, ClassroomRoundResult>
   crisisResults: Record<string, ClassroomCrisisResult>
   personalResults: Record<string, ClassroomPersonalDecisionResult>
-  assessments: Record<string, ClassroomPreAssessment>
+  assessments: Record<string, ClassroomAssessmentRecord>
 }
 
 interface DemoClassroomState {
@@ -282,17 +285,88 @@ export class DemoClassroomGameService implements ClassroomGameService {
   subscribePreAssessment(roomId: string, playerId: string, listener: (assessment: ClassroomPreAssessment | null) => void, onError: (message: string) => void): () => void {
     void onError
     const emit = (): void => emitNow(
-      readState().rooms[roomId.toUpperCase()]?.assessments[createPreAssessmentId(playerId)] ?? null,
+      (readState().rooms[roomId.toUpperCase()]?.assessments[createPreAssessmentId(playerId)] as ClassroomPreAssessment | undefined) ?? null,
       listener,
     )
     emit()
     return listen(emit)
   }
 
+  async submitPostAssessment(roomId: string, playerId: string, ownerUid: string, responses: number[]): Promise<void> {
+    if (!isValidAssessmentResponses(responses)) throw new Error('ผู้ใช้:คำตอบแบบประเมินไม่ถูกต้อง กรุณาตอบให้ครบ 10 ข้อ')
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    const player = roomState.players[playerId]
+    if (!player || player.ownerUid !== ownerUid) throw new Error('ผู้ใช้:ไม่พบผู้เล่นของคุณ')
+    const assessmentId = createPostAssessmentId(playerId)
+    // Immutable: a resubmission (retry after a network glitch, double-tap)
+    // is a safe no-op rather than an error, but the stored responses never change.
+    if (roomState.assessments[assessmentId]) return
+    roomState.assessments[assessmentId] = {
+      schemaVersion: 1,
+      recordType: 'post',
+      roomId: roomState.room.roomId,
+      playerId,
+      ownerUid,
+      responses: [...responses],
+      submittedAt: Date.now(),
+    }
+    writeState(state)
+  }
+
+  subscribePostAssessment(roomId: string, playerId: string, listener: (assessment: ClassroomPostAssessment | null) => void, onError: (message: string) => void): () => void {
+    void onError
+    const emit = (): void => emitNow(
+      (readState().rooms[roomId.toUpperCase()]?.assessments[createPostAssessmentId(playerId)] as ClassroomPostAssessment | undefined) ?? null,
+      listener,
+    )
+    emit()
+    return listen(emit)
+  }
+
+  async submitReflection(roomId: string, playerId: string, ownerUid: string, reflection: ReflectionInput): Promise<void> {
+    if (!isValidReflection(reflection)) throw new Error('ผู้ใช้:กรุณาตอบคำถามทั้ง 3 ข้อให้ครบถ้วน')
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    const player = roomState.players[playerId]
+    if (!player || player.ownerUid !== ownerUid) throw new Error('ผู้ใช้:ไม่พบผู้เล่นของคุณ')
+    const assessmentId = createReflectionId(playerId)
+    // Immutable, same as PRE/POST: a resubmission is a safe no-op, the
+    // student's originally stored wording never changes.
+    if (roomState.assessments[assessmentId]) return
+    roomState.assessments[assessmentId] = {
+      schemaVersion: 1,
+      recordType: 'reflection',
+      roomId: roomState.room.roomId,
+      playerId,
+      ownerUid,
+      r1: reflection.r1,
+      r2: reflection.r2,
+      r3: reflection.r3,
+      submittedAt: Date.now(),
+    }
+    writeState(state)
+  }
+
+  subscribeReflection(roomId: string, playerId: string, listener: (reflection: ClassroomReflection | null) => void, onError: (message: string) => void): () => void {
+    void onError
+    const emit = (): void => emitNow(
+      (readState().rooms[roomId.toUpperCase()]?.assessments[createReflectionId(playerId)] as ClassroomReflection | undefined) ?? null,
+      listener,
+    )
+    emit()
+    return listen(emit)
+  }
+
+  // Server-side equivalent of Firebase's `where('recordType', '==', 'pre')`
+  // query: the assessments map now also holds post/reflection records under
+  // the same room, and this is the teacher's PRE-only roster subscription -
+  // it must never let a post/reflection record be miscounted as a PRE
+  // response.
   subscribeAssessments(roomId: string, listener: (assessments: ClassroomPreAssessment[]) => void, onError: (message: string) => void): () => void {
     void onError
     const emit = (): void => emitNow(
-      Object.values(readState().rooms[roomId.toUpperCase()]?.assessments ?? {}),
+      Object.values(readState().rooms[roomId.toUpperCase()]?.assessments ?? {}).filter((record): record is ClassroomPreAssessment => record.recordType === 'pre'),
       listener,
     )
     emit()

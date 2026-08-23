@@ -377,6 +377,150 @@ describe('openPreAssessment — teacher-controlled, one-way false -> true gate',
   })
 })
 
+const currentPostAssessment = (service: DemoClassroomGameService, roomId: string, playerId: string) => {
+  let value: unknown = undefined
+  const unsubscribe = service.subscribePostAssessment(roomId, playerId, (assessment) => { value = assessment }, () => undefined)
+  unsubscribe()
+  return value as { responses: number[]; ownerUid: string; playerId: string; roomId: string } | null
+}
+
+const currentReflection = (service: DemoClassroomGameService, roomId: string, playerId: string) => {
+  let value: unknown = undefined
+  const unsubscribe = service.subscribeReflection(roomId, playerId, (reflection) => { value = reflection }, () => undefined)
+  unsubscribe()
+  return value as { r1: string; r2: string; r3: string; ownerUid: string; playerId: string; roomId: string } | null
+}
+
+const VALID_POST_RESPONSES = [4, 5, 3, 4, 5, 3, 4, 5, 3, 4]
+const VALID_REFLECTION = { r1: 'สถานการณ์ที่ยากคือตอนตัดสินใจเรื่องงบประมาณ', r2: 'เข้าใจมากขึ้นว่าไม่ใช่แค่เรื่องของตัวเอง', r3: 'เคยเห็นเพื่อนแจ้งเรื่องทุจริตในโรงเรียน' }
+
+describe('POST assessment (Phase B1, isolated from the game engine, same shape as PRE)', () => {
+  it('is null before any submission, then returns exactly what was submitted', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนโพสต์'), 'owner-post')
+
+    expect(currentPostAssessment(service, room.roomId, player.playerId)).toBeNull()
+
+    await service.submitPostAssessment(room.roomId, player.playerId, 'owner-post', VALID_POST_RESPONSES)
+
+    const stored = currentPostAssessment(service, room.roomId, player.playerId)
+    expect(stored?.responses).toEqual(VALID_POST_RESPONSES)
+    expect(stored?.ownerUid).toBe('owner-post')
+    expect(stored?.playerId).toBe(player.playerId)
+    expect(stored?.roomId).toBe(room.roomId)
+  })
+
+  it('never overwrites an existing submission - a resubmit with different answers is a silent no-op', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนโพสต์'), 'owner-post')
+
+    await service.submitPostAssessment(room.roomId, player.playerId, 'owner-post', VALID_POST_RESPONSES)
+    await service.submitPostAssessment(room.roomId, player.playerId, 'owner-post', [1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+
+    expect(currentPostAssessment(service, room.roomId, player.playerId)?.responses).toEqual(VALID_POST_RESPONSES)
+  })
+
+  it('rejects anything other than exactly 10 integer responses from 1-5', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนโพสต์'), 'owner-post')
+
+    await expect(service.submitPostAssessment(room.roomId, player.playerId, 'owner-post', [1, 2, 3])).rejects.toThrow('10 ข้อ')
+    await expect(service.submitPostAssessment(room.roomId, player.playerId, 'owner-post', [0, 2, 3, 4, 5, 1, 2, 3, 4, 5])).rejects.toThrow('10 ข้อ')
+    expect(currentPostAssessment(service, room.roomId, player.playerId)).toBeNull()
+  })
+
+  it('rejects submission from someone who is not that player\'s owner', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนโพสต์'), 'owner-post')
+
+    await expect(service.submitPostAssessment(room.roomId, player.playerId, 'someone-else', VALID_POST_RESPONSES)).rejects.toThrow('ไม่พบผู้เล่นของคุณ')
+    expect(currentPostAssessment(service, room.roomId, player.playerId)).toBeNull()
+  })
+
+  it('does not depend on room status - a room without PRE opened, or a legacy room, must not crash POST submission', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนโพสต์'), 'owner-post')
+
+    // No openPreAssessment/startGame ever called - room stays 'lobby'. POST
+    // must still be independently submittable (mirrors PRE's own
+    // no-room-status-dependency guarantee).
+    await expect(service.submitPostAssessment(room.roomId, player.playerId, 'owner-post', VALID_POST_RESPONSES)).resolves.toBeUndefined()
+  })
+})
+
+describe('Reflection (Phase B1, R1-R3, unscored)', () => {
+  it('is null before any submission, then returns exactly the original wording submitted - never rewritten', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนสะท้อน'), 'owner-reflect')
+
+    expect(currentReflection(service, room.roomId, player.playerId)).toBeNull()
+
+    const withPadding = { r1: '  มีช่องว่างรอบข้อความ  ', r2: VALID_REFLECTION.r2, r3: VALID_REFLECTION.r3 }
+    await service.submitReflection(room.roomId, player.playerId, 'owner-reflect', withPadding)
+
+    const stored = currentReflection(service, room.roomId, player.playerId)
+    expect(stored?.r1).toBe(withPadding.r1) // stored byte-for-byte, not trimmed
+    expect(stored?.r2).toBe(VALID_REFLECTION.r2)
+    expect(stored?.r3).toBe(VALID_REFLECTION.r3)
+    expect(stored?.ownerUid).toBe('owner-reflect')
+  })
+
+  it('never overwrites an existing submission - a resubmit is a silent no-op', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนสะท้อน'), 'owner-reflect')
+
+    await service.submitReflection(room.roomId, player.playerId, 'owner-reflect', VALID_REFLECTION)
+    await service.submitReflection(room.roomId, player.playerId, 'owner-reflect', { r1: 'คำตอบใหม่', r2: 'คำตอบใหม่', r3: 'คำตอบใหม่' })
+
+    expect(currentReflection(service, room.roomId, player.playerId)).toMatchObject(VALID_REFLECTION)
+  })
+
+  it('rejects an empty or whitespace-only answer, and does not score/theme anything', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนสะท้อน'), 'owner-reflect')
+
+    await expect(service.submitReflection(room.roomId, player.playerId, 'owner-reflect', { r1: '', r2: 'ตอบ', r3: 'ตอบ' })).rejects.toThrow('ครบถ้วน')
+    await expect(service.submitReflection(room.roomId, player.playerId, 'owner-reflect', { r1: '   ', r2: 'ตอบ', r3: 'ตอบ' })).rejects.toThrow('ครบถ้วน')
+    expect(currentReflection(service, room.roomId, player.playerId)).toBeNull()
+  })
+
+  it('rejects submission from someone who is not that player\'s owner', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนสะท้อน'), 'owner-reflect')
+
+    await expect(service.submitReflection(room.roomId, player.playerId, 'someone-else', VALID_REFLECTION)).rejects.toThrow('ไม่พบผู้เล่นของคุณ')
+  })
+})
+
+describe('PRE roster subscription is not polluted by POST/Reflection records in the same assessments map', () => {
+  it('subscribeAssessments (teacher PRE roster) only ever reports recordType pre, even after POST and Reflection are submitted for the same player', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียน'), 'owner-1')
+
+    await service.submitPreAssessment(room.roomId, player.playerId, 'owner-1', VALID_PRE_RESPONSES)
+    expect(currentAssessments(service, room.roomId)).toHaveLength(1)
+
+    await service.submitPostAssessment(room.roomId, player.playerId, 'owner-1', VALID_POST_RESPONSES)
+    await service.submitReflection(room.roomId, player.playerId, 'owner-1', VALID_REFLECTION)
+
+    // Still exactly the one PRE record - POST/Reflection must never be
+    // miscounted as PRE completion on the teacher's roster.
+    const roster = currentAssessments(service, room.roomId)
+    expect(roster).toHaveLength(1)
+    expect(roster[0]?.playerId).toBe(player.playerId)
+  })
+})
+
 describe('cycle-aware answers, rounds, and scoring', () => {
   it('does not let a question N answer disable question N+1', async () => {
     const { service, roomId, snapshot } = await setupPlaying(1)

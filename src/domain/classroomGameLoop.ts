@@ -148,6 +148,40 @@ export const countCompletedPreAssessments = (
   return players.filter((player) => assessedPlayerIds.has(player.playerId)).length
 }
 
+/**
+ * The POST-assessment route's guard, as a pure decision: where (if
+ * anywhere) a student on /assessment/post/:roomCode must be sent instead
+ * of staying there. Mirrors resolveLobbyGuardRoute's shape.
+ *
+ * POST/Reflection are only ever appropriate once the activity is truly
+ * over (`status === 'finished'`) - every earlier status (including
+ * 'game-result', where the teacher may still choose to continue playing)
+ * must bounce the student to wherever the room actually is, exactly like
+ * every other status-based redirect in this app. Returns `null` to mean
+ * "stay on this page."
+ */
+export const resolvePostAssessmentGuardRoute = (
+  status: ClassroomRoomStatus | undefined,
+  roomId: string,
+): string | null => (status === 'finished' ? null : resolveStudentRouteForStatus(status, roomId))
+
+export type AssessmentFlowStep = 'post' | 'reflection' | 'complete'
+
+/**
+ * Pure derivation of which step the combined POST+Reflection page should
+ * show, from server-confirmed presence alone - never from local component
+ * state - so a refresh at any point resumes at the correct step instead of
+ * losing or repeating a completed submission.
+ */
+export const resolveAssessmentFlowStep = (
+  hasPostAssessment: boolean,
+  hasReflection: boolean,
+): AssessmentFlowStep => {
+  if (!hasPostAssessment) return 'post'
+  if (!hasReflection) return 'reflection'
+  return 'complete'
+}
+
 export const hasBalancedLockedRoles = (players: readonly ClassroomPlayer[]): boolean => {
   if (players.some((player) => player.roleId === null)) return false
   const counts = new Map<RoleId, number>()

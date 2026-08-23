@@ -8,7 +8,9 @@ import { tapSubscribe } from '../debug/flightRecorder'
 import type {
   ClassroomAnswerRecord,
   ClassroomPlayer,
+  ClassroomPostAssessment,
   ClassroomPreAssessment,
+  ClassroomReflection,
   ClassroomRoom,
   ClassroomRoundResult,
   ClassroomCrisisResult,
@@ -86,6 +88,38 @@ export const usePreAssessment = (roomId: string, playerId: string): Loadable<Cla
     setState(initial(null, identityKey))
     return subscribeWithIdentityGuard<ClassroomPreAssessment | null>(
       (listener, onError) => service.subscribePreAssessment(roomId, playerId, listener, onError),
+      (data) => setState({ data, loading: false, error: '', identityKey }),
+      (error) => setState((current) => ({ ...current, loading: false, error })),
+    )
+  }, [playerId, roomId, service])
+  return state
+}
+
+export const usePostAssessment = (roomId: string, playerId: string): Loadable<ClassroomPostAssessment | null> => {
+  const { service } = useGame()
+  const [state, setState] = useState(initial<ClassroomPostAssessment | null>(null))
+  useEffect(() => {
+    const identityKey = `${roomId}:${playerId}`
+    if (!roomId || !playerId) return setState({ data: null, loading: false, error: '', identityKey: '' }), undefined
+    setState(initial(null, identityKey))
+    return subscribeWithIdentityGuard<ClassroomPostAssessment | null>(
+      (listener, onError) => service.subscribePostAssessment(roomId, playerId, listener, onError),
+      (data) => setState({ data, loading: false, error: '', identityKey }),
+      (error) => setState((current) => ({ ...current, loading: false, error })),
+    )
+  }, [playerId, roomId, service])
+  return state
+}
+
+export const useReflection = (roomId: string, playerId: string): Loadable<ClassroomReflection | null> => {
+  const { service } = useGame()
+  const [state, setState] = useState(initial<ClassroomReflection | null>(null))
+  useEffect(() => {
+    const identityKey = `${roomId}:${playerId}`
+    if (!roomId || !playerId) return setState({ data: null, loading: false, error: '', identityKey: '' }), undefined
+    setState(initial(null, identityKey))
+    return subscribeWithIdentityGuard<ClassroomReflection | null>(
+      (listener, onError) => service.subscribeReflection(roomId, playerId, listener, onError),
       (data) => setState({ data, loading: false, error: '', identityKey }),
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )

@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage'
 import { JoinPage } from './pages/JoinPage'
 import { LobbyPage } from './pages/LobbyPage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { PostAssessmentPage } from './pages/PostAssessmentPage'
 import { PreAssessmentPage } from './pages/PreAssessmentPage'
 import { ResultPage } from './pages/ResultPage'
 import { RoleDrawPage } from './pages/RoleDrawPage'
@@ -23,6 +24,7 @@ const App = () => (
         <Route path="/teacher" element={<TeacherPage />} />
         <Route path="/join" element={<JoinPage />} />
         <Route path="/assessment/pre/:roomCode" element={<PreAssessmentPage />} />
+        <Route path="/assessment/post/:roomCode" element={<PostAssessmentPage />} />
         <Route path="/lobby/:roomCode" element={<LobbyPage />} />
         <Route path="/game/:roomCode" element={<GamePage />} />
         <Route path="/role-draw/:roomCode" element={<RoleDrawPage />} />

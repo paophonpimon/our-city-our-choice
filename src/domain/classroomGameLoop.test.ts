@@ -7,7 +7,9 @@ import {
   getFinalAnswerTotals,
   getLiveCityScore,
   getRoleQuestion,
+  resolveAssessmentFlowStep,
   resolveLobbyGuardRoute,
+  resolvePostAssessmentGuardRoute,
   resolveStudentRouteForStatus,
   shouldCloseQuestion,
 } from './classroomGameLoop'
@@ -196,5 +198,52 @@ describe('resolveStudentRouteForStatus — PRE submission must route to the CURR
   it('only resolves to the lobby itself while the room genuinely is still lobby (or status is not yet known)', () => {
     expect(resolveStudentRouteForStatus('lobby', ROOM_ID)).toBe(`/lobby/${ROOM_ID}`)
     expect(resolveStudentRouteForStatus(undefined, ROOM_ID)).toBe(`/lobby/${ROOM_ID}`)
+  })
+})
+
+describe('resolvePostAssessmentGuardRoute — POST/Reflection only ever appropriate once the activity is truly finished', () => {
+  const ROOM_ID = 'ROOM01'
+  const NOT_YET_FINISHED_STATUSES: ClassroomRoomStatus[] = [
+    'lobby', 'role-draw', 'playing', 'round-result', 'crisis-intro', 'crisis-playing', 'crisis-result', 'game-result',
+  ]
+
+  it.each(NOT_YET_FINISHED_STATUSES)('bounces a direct visit away from POST while the activity is not finished yet (status %s)', (status) => {
+    const route = resolvePostAssessmentGuardRoute(status, ROOM_ID)
+    expect(route).not.toBeNull()
+    expect(route).toBe(resolveStudentRouteForStatus(status, ROOM_ID))
+  })
+
+  it('bounces even from game-result, where the teacher may still choose to continue playing', () => {
+    expect(resolvePostAssessmentGuardRoute('game-result', ROOM_ID)).toBe(`/result/${ROOM_ID}`)
+  })
+
+  it('lets the student stay once the room is finished', () => {
+    expect(resolvePostAssessmentGuardRoute('finished', ROOM_ID)).toBeNull()
+  })
+
+  it('bounces when status is not yet known (room still loading)', () => {
+    expect(resolvePostAssessmentGuardRoute(undefined, ROOM_ID)).not.toBeNull()
+  })
+})
+
+describe('resolveAssessmentFlowStep — derived purely from server-confirmed presence, never local state', () => {
+  it('starts at post when neither POST nor reflection exist yet', () => {
+    expect(resolveAssessmentFlowStep(false, false)).toBe('post')
+  })
+
+  it('resumes at reflection once POST exists but reflection does not - refresh must never lose or repeat a completed POST', () => {
+    expect(resolveAssessmentFlowStep(true, false)).toBe('reflection')
+  })
+
+  it('shows complete once both exist - refresh must never repeat a completed reflection', () => {
+    expect(resolveAssessmentFlowStep(true, true)).toBe('complete')
+  })
+
+  it('never resolves to complete or reflection when POST itself is still missing, even if reflection somehow already exists', () => {
+    // Reflection can only ever be submitted from the reflection step, which
+    // itself requires POST to already exist, so this combination should
+    // not occur in practice - but the derivation must still fail safe by
+    // treating POST as the gating step, not silently skip ahead.
+    expect(resolveAssessmentFlowStep(false, true)).toBe('post')
   })
 })

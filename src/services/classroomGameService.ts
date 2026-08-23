@@ -3,7 +3,9 @@ import type {
   ClassroomAnswerRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPostAssessment,
   ClassroomPreAssessment,
+  ClassroomReflection,
   ClassroomRoom,
   ClassroomCrisisResult,
   ClassroomPersonalDecisionResult,
@@ -11,6 +13,7 @@ import type {
   ClassroomUnsubscribe,
   PublicRoomQuestion,
 } from '../types/classroomGame'
+import type { ReflectionInput } from '../domain/assessment'
 
 export interface ClassroomGameService {
   readonly isDemo: boolean
@@ -32,6 +35,22 @@ export interface ClassroomGameService {
   ): ClassroomUnsubscribe
   /** One-way false -> true. Requires teacher ownership and room.status === 'lobby'. Idempotent: a repeat call while already open is a safe no-op. */
   openPreAssessment(roomId: string, teacherSessionId: string): Promise<void>
+  /** Isolated from room status, exactly like PRE - create-once, immutable. A repeat call for the same player is a safe no-op, never an error. */
+  submitPostAssessment(roomId: string, playerId: string, ownerUid: string, responses: number[]): Promise<void>
+  subscribePostAssessment(
+    roomId: string,
+    playerId: string,
+    listener: (assessment: ClassroomPostAssessment | null) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
+  /** Isolated from room status, exactly like PRE - create-once, immutable. A repeat call for the same player is a safe no-op, never an error. */
+  submitReflection(roomId: string, playerId: string, ownerUid: string, reflection: ReflectionInput): Promise<void>
+  subscribeReflection(
+    roomId: string,
+    playerId: string,
+    listener: (reflection: ClassroomReflection | null) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
   subscribeRoom(
     roomId: string,
     listener: (room: ClassroomRoom | null) => void,
