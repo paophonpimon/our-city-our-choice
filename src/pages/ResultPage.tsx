@@ -12,6 +12,7 @@ import { useGame } from '../context/GameContext'
 import { LOCATION_BUILDING, normalizeBuildingLevels, type BuildingId, type BuildingLevel } from '../domain/cityBuildings'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
 import { formatCityLevel, MAX_GAME_CYCLES, ROLES, type CityLevel } from '../domain/ourCity'
+import { countPersonalDecisionOutcomes } from '../domain/personalDecisionResults'
 import { useAssessmentEvidence, useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
 import { classroomFriendlyError } from '../services'
 import {
@@ -22,7 +23,6 @@ import {
   getClassroomViewerRole,
 } from '../services/sessionStorage'
 import { clearTeacherSnapshot } from '../services/teacherQuestionSnapshot'
-import type { ClassroomPersonalDecisionResult, PersonalDecisionOutcome } from '../types/classroomGame'
 // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
 import { withActionTiming } from '../debug/flightRecorder'
 
@@ -75,10 +75,7 @@ const addLocationSummary = (target: LocationSummary, source: LocationSummary): L
     scoreAverage: participantCount > 0 ? scoreTotal / participantCount : 0,
   }
 }
-const countPersonalResults = (results: readonly ClassroomPersonalDecisionResult[]) => results.reduce(
-  (totals, result) => ({ ...totals, [result.outcome]: totals[result.outcome] + 1 }),
-  { integrity: 0, corruption: 0, timeout: 0 } satisfies Record<PersonalDecisionOutcome, number>,
-)
+const PERSONAL_RESULTS_READ_ERROR = 'ไม่สามารถโหลดผลการตัดสินใจส่วนตัวได้ กรุณาลองใหม่'
 
 export const ResultPage = () => {
   const roomId = (useParams().roomCode ?? '').toUpperCase()
@@ -182,28 +179,36 @@ export const ResultPage = () => {
   if (!isTeacher && hasStudentSession) {
     const personalCurrent = personalResultsState.data.filter((result) => result.gameCycle === room.gameCycle)
     const personalCumulative = personalResultsState.data.filter((result) => result.gameCycle <= room.gameCycle)
-    const currentTotals = countPersonalResults(personalCurrent)
-    const cumulativeTotals = countPersonalResults(personalCumulative)
+    const currentTotals = countPersonalDecisionOutcomes(personalCurrent)
+    const cumulativeTotals = countPersonalDecisionOutcomes(personalCumulative)
     const currentTotal = currentTotals.integrity + currentTotals.corruption + currentTotals.timeout
     const cumulativeTotal = cumulativeTotals.integrity + cumulativeTotals.corruption + cumulativeTotals.timeout
     const role = ROLES.find((candidate) => candidate.id === playerState.data?.roleId)
     const hasPrivateResults = personalCurrent.length > 0
+    const personalResultsFailed = Boolean(personalResultsState.error)
     return (
       <main className={`student-cycle-result is-${room.cityLevel}`}>
         <div className="result-city-art" aria-hidden="true"><CityScene buildingLevels={room.buildingLevels} cityLevel={room.cityLevel} /></div><div className="result-city-veil" aria-hidden="true" />
         <section className="student-cycle-result__card">
           <header className="student-cycle-result__header"><p>ผลลัพธ์ส่วนตัว • รอบที่ {room.gameCycle + 1}</p><h1>ผลการตัดสินใจของฉัน</h1><span>ข้อมูลนี้แสดงเฉพาะการตัดสินใจของคุณเท่านั้น</span></header>
-          <section className="student-decision-counters" aria-label="การตัดสินใจของฉันในรอบนี้">
-            <article className="is-integrity"><span aria-hidden="true">✓</span><p>เลือกทางสุจริต<strong>{hasPrivateResults ? currentTotals.integrity : '—'}</strong></p></article>
-            <article className="is-corruption"><span aria-hidden="true">!</span><p>เลือกทางทุจริต<strong>{hasPrivateResults ? currentTotals.corruption : '—'}</strong></p></article>
-            <article className="is-timeout"><span aria-hidden="true">?</span><p>ไม่ได้ตอบ<strong>{hasPrivateResults ? currentTotals.timeout : '—'}</strong></p></article>
-          </section>
-          <div className="student-cycle-result__total"><span>รอบนี้</span><strong>{hasPrivateResults ? `${currentTotal} การตัดสินใจ` : 'ยังไม่มีข้อมูลผลส่วนตัวสำหรับรอบนี้'}</strong><small>รวมคำถามปกติและเหตุการณ์วิกฤตที่สรุปผลแล้ว</small></div>
+          {personalResultsFailed ? (
+            <section className="student-cycle-result__data-state is-error" role="alert">{PERSONAL_RESULTS_READ_ERROR}</section>
+          ) : hasPrivateResults ? (
+            <>
+              <section className="student-decision-counters" aria-label="การตัดสินใจของฉันในรอบนี้">
+                <article className="is-integrity"><span aria-hidden="true">✓</span><p>เลือกทางสุจริต<strong>{currentTotals.integrity}</strong></p></article>
+                <article className="is-corruption"><span aria-hidden="true">!</span><p>เลือกทางทุจริต<strong>{currentTotals.corruption}</strong></p></article>
+                <article className="is-timeout"><span aria-hidden="true">?</span><p>ไม่ได้ตอบ<strong>{currentTotals.timeout}</strong></p></article>
+              </section>
+              <div className="student-cycle-result__total"><span>รอบนี้</span><strong>{currentTotal} การตัดสินใจ</strong><small>รวมคำถามปกติและเหตุการณ์วิกฤตที่สรุปผลแล้ว</small></div>
+            </>
+          ) : (
+            <section className="student-cycle-result__data-state">ยังไม่มีข้อมูลผลส่วนตัวสำหรับรอบนี้</section>
+          )}
           <section className="student-cycle-result__secondary"><article><span>อาชีพของฉัน</span><strong>{role?.label ?? 'รอข้อมูลอาชีพ'}</strong></article><article><span>ผลเมืองร่วมกัน</span><strong>{formatCityLevel(room.cityLevel)}</strong><small>{Math.round(room.cityScore).toLocaleString('th-TH')} / 1,000 คะแนน</small></article></section>
-          <details className="student-cycle-result__cumulative"><summary>ดูผลสะสมทั้งหมด</summary><div><span>เลือกทางสุจริต <strong>{cumulativeTotals.integrity}</strong></span><span>เลือกทางทุจริต <strong>{cumulativeTotals.corruption}</strong></span><span>ไม่ได้ตอบ <strong>{cumulativeTotals.timeout}</strong></span><span>รวม <strong>{cumulativeTotal} การตัดสินใจ</strong></span></div></details>
+          {personalResultsFailed || !hasPrivateResults ? null : <details className="student-cycle-result__cumulative"><summary>ดูผลสะสมทั้งหมด</summary><div><span>เลือกทางสุจริต <strong>{cumulativeTotals.integrity}</strong></span><span>เลือกทางทุจริต <strong>{cumulativeTotals.corruption}</strong></span><span>ไม่ได้ตอบ <strong>{cumulativeTotals.timeout}</strong></span><span>รวม <strong>{cumulativeTotal} การตัดสินใจ</strong></span></div></details>}
           <p className="student-cycle-result__reflection">{CITY_REFLECTIONS[room.cityLevel]}</p>
           {room.status === 'game-result' ? <strong className="student-cycle-result__waiting">รอครูเลือกว่าจะเล่นต่อหรือจบกิจกรรม</strong> : <button className="student-cycle-result__home" onClick={goHome} type="button">กลับหน้าหลัก</button>}
-          {personalResultsState.error ? <output className="student-cycle-result__error">{personalResultsState.error}</output> : null}
         </section>
       </main>
     )

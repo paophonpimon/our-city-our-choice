@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createRoomQuestionSnapshot } from './classroomQuestions'
 import { CITY_CRISIS_EVENTS } from './cityCrisisEvents'
-import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from './personalDecisionResults'
+import { assertPersonalOutcomeTotals, countPersonalDecisionOutcomes, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from './personalDecisionResults'
 import { createTrustedQuestions } from '../test/classroomFixtures'
 
 const players = [
@@ -11,6 +11,22 @@ const players = [
 ]
 
 describe('trusted personal decision results', () => {
+  it('counts numeric personal totals from the finalized records available to Result', () => {
+    const records = (['integrity', 'integrity', 'corruption', 'timeout'] as const).map((outcome, index) => ({
+      decisionId: `0::question::${index + 1}::student-1`,
+      roomId: 'ROOM01',
+      playerId: 'student-1',
+      ownerUid: 'owner-1',
+      gameCycle: 0,
+      roleId: 'doctor' as const,
+      source: 'question' as const,
+      sequenceNumber: index + 1,
+      outcome,
+      resolvedAt: 100 + index,
+    }))
+    expect(countPersonalDecisionOutcomes(records)).toEqual({ integrity: 2, corruption: 1, timeout: 1 })
+  })
+
   it('resolves normal-question outcomes without exposing answer keys or chosen ids', () => {
     const snapshot = createRoomQuestionSnapshot('ROOM01', createTrustedQuestions(), 100)
     const questionFor = (roleId: typeof players[number]['roleId']) => {

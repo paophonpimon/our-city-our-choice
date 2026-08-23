@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, type Firestore } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where, type Firestore } from 'firebase/firestore'
 import { computeChoiceOrderByQuestion, createRoomQuestionSnapshot } from '../src/domain/classroomQuestions'
 import { createBalancedRoleOffsets, createRoleRotation } from '../src/domain/ourCity'
 import { createTrustedQuestions } from '../src/test/classroomFixtures'
@@ -775,5 +775,70 @@ describe('room code creation race (collision safety)', () => {
     // The original room is still untouched by any of this.
     const originalStillIntact = await getDoc(doc(dbA, 'rooms', raceRoomId))
     expect(originalStillIntact.data()?.teacherSessionId).toBe(winnerUid)
+  })
+})
+
+describe('personalResults production query privacy', () => {
+  const ROOM_ID = 'PERS'
+  const RESULT_PATH = `rooms/${ROOM_ID}/personalResults`
+
+  const seedPersonalResult = async (status: 'game-result' | 'finished') => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, `rooms/${ROOM_ID}`), minimalRoomDoc(ROOM_ID, { status }))
+      await setDoc(doc(db, `rooms/${ROOM_ID}/players/${STUDENT_UID}`), {
+        playerId: STUDENT_UID,
+        nickname: 'Student One',
+        nicknameKey: 'student one',
+        classSection: '1/1',
+        studentNumber: 1,
+        ownerUid: STUDENT_UID,
+        roleId: 'student',
+        roleHistory: ['student'],
+        roleOffset: 0,
+        joinedAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+      })
+      await setDoc(doc(db, `${RESULT_PATH}/0::question::1::${STUDENT_UID}`), {
+        decisionId: `0::question::1::${STUDENT_UID}`,
+        roomId: ROOM_ID,
+        playerId: STUDENT_UID,
+        ownerUid: STUDENT_UID,
+        gameCycle: 0,
+        roleId: 'student',
+        source: 'question',
+        sequenceNumber: 1,
+        outcome: 'integrity',
+        resolvedAt: serverTimestamp(),
+      })
+    })
+  }
+
+  const productionQuery = (db: Firestore, ownerUid: string, playerId: string) => query(
+    collection(db, RESULT_PATH),
+    where('ownerUid', '==', ownerUid),
+    where('playerId', '==', playerId),
+  )
+
+  it.each(['game-result', 'finished'] as const)('lets the owning student run the exact production query during %s', async (status) => {
+    await seedPersonalResult(status)
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore() as unknown as Firestore
+    const snapshot = await assertSucceeds(getDocs(productionQuery(studentDb, STUDENT_UID, STUDENT_UID)))
+    expect(snapshot.docs).toHaveLength(1)
+    expect(snapshot.docs[0]?.data().outcome).toBe('integrity')
+  })
+
+  it('denies another student and denies every room-wide student query', async () => {
+    await seedPersonalResult('game-result')
+    const otherDb = testEnv.authenticatedContext('other-student').firestore() as unknown as Firestore
+    const ownerDb = testEnv.authenticatedContext(STUDENT_UID).firestore() as unknown as Firestore
+    await assertFails(getDocs(productionQuery(otherDb, STUDENT_UID, STUDENT_UID)))
+    await assertFails(getDocs(collection(ownerDb, RESULT_PATH)))
+  })
+
+  it('keeps the existing teacher boundary: teachers write outcomes but do not list private student results', async () => {
+    await seedPersonalResult('finished')
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore() as unknown as Firestore
+    await assertFails(getDocs(productionQuery(teacherDb, STUDENT_UID, STUDENT_UID)))
   })
 })

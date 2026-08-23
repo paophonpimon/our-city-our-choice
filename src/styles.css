@@ -7273,3 +7273,107 @@ img.game-home-cast {
   .assessment-submit { padding-top: .85rem; }
 }
 
+/* Final stabilization: controls communicate state without changing flow. */
+.city-stage__action-button--next:disabled {
+  border-color: #91a4b6;
+  background: linear-gradient(180deg, #e7edf2, #cbd6df);
+  box-shadow: inset 0 1px rgb(255 255 255 / 55%);
+  color: #607488;
+  opacity: 1;
+}
+
+.game-play-choice.is-unanswered {
+  border-color: #c9ddea !important;
+  background: linear-gradient(145deg, #fbfdff, #f1f8fc) !important;
+  color: #173e68;
+}
+.game-play-choice.is-unanswered:not(:disabled):hover {
+  border-color: #c9ddea !important;
+  background: linear-gradient(145deg, #fbfdff, #f1f8fc) !important;
+  box-shadow: 0 .35rem .8rem rgb(38 82 119 / 7%);
+  transform: none;
+}
+.game-play-choice.is-unanswered:focus-visible {
+  outline: 3px solid #7b59c8;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px white;
+}
+.game-play-choice.is-selected,
+.game-play-choice.is-selected:disabled {
+  border-color: #3eb774 !important;
+  background: #ecfaf2 !important;
+  box-shadow: 0 0 0 3px rgb(62 183 116 / 16%);
+  opacity: 1 !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  .game-play-choice.is-unanswered:not(:disabled):hover {
+    border-color: #9dbed4 !important;
+    background: #f8fbfd !important;
+    box-shadow: 0 .4rem .85rem rgb(38 82 119 / 9%);
+    transform: translateY(-1px);
+  }
+}
+
+.city-stage__teacher-utilities,
+.role-draw-header__utilities { display: flex; align-items: center; gap: .55rem; }
+.teacher-emergency-end {
+  min-height: 2.75rem;
+  padding: .55rem .8rem;
+  border: 1px solid #d88990;
+  border-radius: .8rem;
+  background: #fff5f5;
+  color: #a92f3a;
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.teacher-emergency-end:not(:disabled):hover { border-color: #c84d59; background: #ffe9ea; }
+.teacher-emergency-end:disabled { cursor: not-allowed; opacity: .48; }
+.teacher-emergency-end--crisis {
+  position: fixed;
+  z-index: 40;
+  top: 1rem;
+  right: 1rem;
+  box-shadow: 0 .45rem 1rem rgb(61 16 21 / 18%);
+}
+.confirm-dialog p { white-space: pre-line; }
+
+.student-cycle-result__data-state {
+  padding: 1rem;
+  border: 1px solid #cbdfea;
+  border-radius: 1rem;
+  background: #f3f9fd;
+  color: #486a85;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+.student-cycle-result__data-state.is-error { border-color: #efbdc1; background: #fff2f3; color: #aa303b; }
+
+/* Force the intended light civic assessment shell above every legacy page/card rule. */
+html:has(.assessment-page),
+body:has(.assessment-page),
+#root:has(.assessment-page) { background-color: #edf6fd; color-scheme: light; }
+.our-city-page.assessment-page {
+  background-color: #edf6fd !important;
+  background-image:
+    linear-gradient(rgb(250 253 255 / 95%), rgb(239 247 254 / 97%)),
+    url('/images/new-city/backgrounds/city-overview-normal.webp') !important;
+  color: var(--assessment-ink) !important;
+}
+.assessment-page .assessment-scale,
+.assessment-page .assessment-item,
+.assessment-page .assessment-complete { border-color: var(--assessment-border) !important; background: rgb(255 255 255 / 96%) !important; color: var(--assessment-ink) !important; }
+.assessment-page .assessment-textarea { border-color: #cbddeb !important; background: #fbfdff !important; color: var(--assessment-ink) !important; }
+.assessment-page .assessment-submit { background: linear-gradient(to top, #edf6fd 72%, rgb(237 246 253 / 0)) !important; }
+.assessment-page .assessment-primary-button { border-color: #0f5fc9 !important; background: linear-gradient(180deg, #2c7cec, #145fce) !important; color: white !important; }
+
+@media (max-width: 767px), (orientation: portrait) {
+  .city-stage__teacher-utilities { align-items: flex-start; }
+  .teacher-emergency-end--stage { min-height: 2.5rem; padding: .45rem .6rem; }
+  .role-draw-header__utilities { gap: .35rem; }
+  .teacher-emergency-end--role-draw { min-height: 2.35rem; padding: .35rem .55rem; font-size: .62rem; }
+}
+

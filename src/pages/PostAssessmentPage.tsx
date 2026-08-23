@@ -19,10 +19,9 @@ import { clearClassroomStudentSession, getClassroomStudentSession, saveClassroom
 
 /**
  * Same upper bound and rationale as PreAssessmentPage's watchdog: a normal
- * submission confirms in well under a second; this only guards against a
- * genuinely unconfirmable write. submitPostAssessment/submitReflection are
- * both idempotent, so a retry after this fires can never create a
- * duplicate or second record.
+ * write normally resolves in well under a second; this only guards a write
+ * promise that genuinely remains unresolved. A resolved Firestore write is
+ * already the active submission's server acknowledgement.
  */
 const SUBMIT_CONFIRMATION_TIMEOUT_MS = 15_000
 
@@ -39,6 +38,8 @@ export const PostAssessmentPage = () => {
   const [postResponses, setPostResponses] = useState<Partial<Record<number, AssessmentScaleValue>>>({})
   const [reflectionInput, setReflectionInput] = useState<ReflectionInput>(emptyReflection)
   const [submitting, setSubmitting] = useState(false)
+  const [postWriteAcknowledged, setPostWriteAcknowledged] = useState(false)
+  const [reflectionWriteAcknowledged, setReflectionWriteAcknowledged] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -69,7 +70,12 @@ export const PostAssessmentPage = () => {
     if (guardRoute) return <Navigate replace to={guardRoute} />
   }
 
-  const step = resolveAssessmentFlowStep(Boolean(postAssessmentState.data), Boolean(reflectionState.data))
+  const step = resolveAssessmentFlowStep(
+    Boolean(postAssessmentState.data),
+    Boolean(reflectionState.data),
+    postWriteAcknowledged,
+    reflectionWriteAcknowledged,
+  )
 
   const answeredPostCount = Object.keys(postResponses).length
   const allPostAnswered = answeredPostCount === ASSESSMENT_ITEM_COUNT
@@ -85,10 +91,9 @@ export const PostAssessmentPage = () => {
         (value): value is AssessmentScaleValue => value !== undefined,
       )
       await service.submitPostAssessment(roomId, session.playerId, uid, orderedResponses)
-      // No imperative navigate: the live usePostAssessment subscription
-      // above picks up the server-confirmed record and re-derives `step`
-      // to 'reflection'. `submitting` is intentionally left true until then
-      // - only the watchdog above can clear it after this point.
+      setError('')
+      setPostWriteAcknowledged(true)
+      setSubmitting(false)
     } catch (reason) {
       setError(classroomFriendlyError(reason))
       setSubmitting(false)
@@ -102,6 +107,9 @@ export const PostAssessmentPage = () => {
     setError('')
     try {
       await service.submitReflection(roomId, session.playerId, uid, reflectionInput)
+      setError('')
+      setReflectionWriteAcknowledged(true)
+      setSubmitting(false)
     } catch (reason) {
       setError(classroomFriendlyError(reason))
       setSubmitting(false)

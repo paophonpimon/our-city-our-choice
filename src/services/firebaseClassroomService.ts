@@ -66,7 +66,7 @@ import {
   OBSERVATION_ASSESSMENT_ID,
   toPublicQuestionDocument,
 } from './classroomFirestore'
-import { classroomFriendlyError, isKnownAssessmentRecordType, type ClassroomGameService } from './classroomGameService'
+import { canEmergencyTerminate, classroomFriendlyError, isKnownAssessmentRecordType, type ClassroomGameService } from './classroomGameService'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, normalizeBuildingLevels, normalizeBuildingScores, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent, type CrisisEventId, type CrisisEventIndex } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
@@ -685,8 +685,12 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
   }
   subscribePersonalDecisionResults(roomId: string, playerId: string, ownerUid: string, listener: (results: ClassroomPersonalDecisionResult[]) => void, onError: (message: string) => void): () => void {
     return onSnapshot(
-      query(collection(db, `${classroomPaths.room(roomId)}/personalResults`), where('ownerUid', '==', ownerUid)),
-      (snapshot) => listener(snapshot.docs.map(mapPersonalDecisionResult).filter((result) => result.playerId === playerId).sort((a, b) => a.gameCycle - b.gameCycle || a.resolvedAt - b.resolvedAt)),
+      query(
+        collection(db, `${classroomPaths.room(roomId)}/personalResults`),
+        where('ownerUid', '==', ownerUid),
+        where('playerId', '==', playerId),
+      ),
+      (snapshot) => listener(snapshot.docs.map(mapPersonalDecisionResult).sort((a, b) => a.gameCycle - b.gameCycle || a.resolvedAt - b.resolvedAt)),
       onErrorMessage(onError),
     )
   }
@@ -1093,6 +1097,21 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       assertTeacher(room, teacherSessionId)
       if (room.status === 'finished') return
       if (room.status !== 'game-result') throw new Error('ผู้ใช้:จบกิจกรรมได้จากหน้าสรุปผลเกมเท่านั้น')
+      transaction.update(roomRef, {
+        status: 'finished', questionStartedAt: null, questionDeadlineAt: null, updatedAt: serverTimestamp(),
+      })
+    })
+  }
+
+  async terminateActivity(roomId: string, teacherSessionId: string): Promise<void> {
+    const roomRef = doc(db, classroomPaths.room(roomId))
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(roomRef)
+      if (!snapshot.exists()) throw new Error('ผู้ใช้:ไม่พบห้องนี้')
+      const room = mapRoom(snapshot.data())
+      assertTeacher(room, teacherSessionId)
+      if (room.status === 'finished') return
+      if (!canEmergencyTerminate(room.status)) throw new Error('ผู้ใช้:ยุติฉุกเฉินได้เฉพาะระหว่างกิจกรรม')
       transaction.update(roomRef, {
         status: 'finished', questionStartedAt: null, questionDeadlineAt: null, updatedAt: serverTimestamp(),
       })

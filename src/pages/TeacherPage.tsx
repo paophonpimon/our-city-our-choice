@@ -9,11 +9,12 @@ import { createClassroomJoinUrl, LOCATION_POSITIONS } from '../components/classr
 import { JoinQrCode } from '../components/JoinQrCode'
 import { LiveAnswerImpacts } from '../components/LiveAnswerImpacts'
 import { TeacherSoundtrack, type TeacherSoundtrackHandle, type TeacherSoundtrackMode } from '../components/TeacherSoundtrack'
+import { TeacherEmergencyEndControl } from '../components/TeacherEmergencyEndControl'
 import { useGame } from '../context/GameContext'
-import { countAnswersForQuestion, countCompletedPreAssessments, getLiveCityScore, shouldCloseQuestion } from '../domain/classroomGameLoop'
+import { countAnswersForQuestion, countCompletedPreAssessments, countCrisisAnswersForEvent, getLiveCityScore, shouldAutoCloseCrisis, shouldCloseQuestion } from '../domain/classroomGameLoop'
 import { createRoomQuestionSnapshot, type ParsedQuestionSheet, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import type { LocationId } from '../domain/cityScoring'
-import { deriveBuildingLevelTransitions, type BuildingTransitionDirection } from '../domain/cityPresentation'
+import { deriveBuildingLevelTransitions, getCrisisPresentationTiming, getNormalPresentationTiming, LIVE_ANSWER_IMPACT_DURATION_MS, type BuildingTransitionDirection } from '../domain/cityPresentation'
 import { resolveLiveAnswerImpact, type LiveAnswerImpact } from '../domain/liveAnswerImpact'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { BUILDING_IDS, BUILDING_LOCATION, INITIAL_BUILDING_LEVELS, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
@@ -31,7 +32,6 @@ import { clearAllTeacherSnapshots, clearTeacherSnapshot, restoreTeacherSnapshot,
 import type { ClassroomRoom } from '../types/classroomGame'
 import { isQuestionAnswerRecord } from '../types/classroomGame'
 import { getCrisisConclusion, getCrisisEvent } from '../domain/cityCrisisEvents'
-import { isCrisisAnswerRecord } from '../types/classroomGame'
 // TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
 import { debugLog, isDebugMode } from '../debug/useDebugLog'
 // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
@@ -76,8 +76,6 @@ const BUILDING_STORY_LABELS: Record<BuildingId, string> = {
   school: 'โรงเรียน',
   newsAgency: 'สำนักข่าว',
 }
-
-const LIVE_ANSWER_IMPACT_DURATION_MS = 2_500
 
 const sameBuildingLevels = (left: BuildingLevels | null, right: BuildingLevels): boolean =>
   left !== null && BUILDING_IDS.every((buildingId) => left[buildingId] === right[buildingId])
@@ -306,7 +304,7 @@ export const TeacherPage = () => {
     ),
   )
   const crisisAnswerCount = room?.currentCrisisEventId
-    ? new Set(answersState.data.filter((answer) => isCrisisAnswerRecord(answer) && answer.gameCycle === room.gameCycle && answer.eventId === room.currentCrisisEventId).map((answer) => answer.playerId)).size
+    ? countCrisisAnswersForEvent(answersState.data, room.gameCycle, room.currentCrisisEventId)
     : 0
   const currentCrisisResult = room && room.currentCrisisEventIndex > 0
     ? crisisResultsState.data.find((result) => result.gameCycle === room.gameCycle && result.eventIndex === room.currentCrisisEventIndex) ?? null
@@ -623,7 +621,12 @@ export const TeacherPage = () => {
   }, [room, service, uid])
 
   useEffect(() => {
-    if (room?.status === 'crisis-playing' && shouldCloseQuestion(crisisAnswerCount, room.lockedPlayerCount, room.questionDeadlineAt)) void closeCurrentCrisis()
+    if (room?.status === 'crisis-playing' && shouldAutoCloseCrisis(
+      crisisAnswerCount,
+      room.lockedPlayerCount,
+      room.questionStartedAt,
+      room.questionDeadlineAt,
+    )) void closeCurrentCrisis()
   }, [closeCurrentCrisis, crisisAnswerCount, remaining, room])
 
   useEffect(() => {
@@ -641,9 +644,7 @@ export const TeacherPage = () => {
     const nextLevels = normalizeBuildingLevels(room.buildingLevels)
     const stories = toBuildingChangeStories(previousLevels, nextLevels)
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const timing = reducedMotion
-      ? { preRevealHold: 900, resolutionCue: 100, settle: 1_800 }
-      : { preRevealHold: 1_200, resolutionCue: 700, settle: 2_400 }
+    const timing = getCrisisPresentationTiming(reducedMotion)
     const presentationIsCurrent = (): boolean =>
       presentationRunRef.current === run
       && roomBoundaryRef.current === boundary
@@ -804,9 +805,7 @@ export const TeacherPage = () => {
       const nextLevels = normalizeBuildingLevels(finalizedRoom.buildingLevels)
       const stories = toBuildingChangeStories(previousLevels, nextLevels)
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      const timing = reducedMotion
-        ? { darken: 50, title: 1_700, textFade: 50, reveal: 100, settle: stories.length > 0 ? 2_300 : 700 }
-        : { darken: 500, title: 1_400, textFade: 500, reveal: 600, settle: stories.length > 0 ? 1_900 : 0 }
+      const timing = getNormalPresentationTiming(stories.length > 0, reducedMotion)
       const cutscene = {
         cityYear: room.gameCycle * 10 + room.currentQuestionNumber,
         phase: 'entering' as const,
@@ -920,6 +919,7 @@ export const TeacherPage = () => {
       <>
       <TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />
       <main className={`teacher-crisis-page teacher-crisis-page--${room.status}${crisisRevealPhase ? ` teacher-crisis-page--${crisisRevealPhase}` : ''}`}>
+        <TeacherEmergencyEndControl className="teacher-emergency-end--crisis" disabled={busy} roomId={room.roomId} />
         <div className="teacher-crisis-city" aria-hidden="true">
           <CityScene
             buildingLevels={visualBuildingLevels ?? room.buildingLevels}
@@ -996,7 +996,12 @@ export const TeacherPage = () => {
         roundImpact={currentRound?.roundAverage ?? null}
         locationImpacts={room.status === 'round-result' ? currentRound?.locationSummaries ?? null : null}
         roundHistory={roundsState.data}
-        utilityControls={<TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />}
+        utilityControls={(
+          <div className="city-stage__teacher-utilities">
+            <TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />
+            <TeacherEmergencyEndControl className="teacher-emergency-end--stage" roomId={room.roomId} />
+          </div>
+        )}
         controls={
           <>
             <button
@@ -1007,16 +1012,14 @@ export const TeacherPage = () => {
             >
               <span aria-hidden="true">■</span> ปิดรับคำตอบ
             </button>
-            {canAdvanceQuestion ? (
-              <button
-                className="city-stage__action-button city-stage__action-button--next"
-                disabled={busy || missingTrusted}
-                onClick={() => void nextOrFinish()}
-              >
-                <span aria-hidden="true">{room.currentQuestionNumber === 10 ? '▣' : '▶'}</span>
-                {room.currentQuestionNumber === 10 ? ' ดูผลรอบนี้' : ' ไปข้อถัดไป'}
-              </button>
-            ) : null}
+            <button
+              className="city-stage__action-button city-stage__action-button--next"
+              disabled={busy || missingTrusted || !canAdvanceQuestion}
+              onClick={() => void nextOrFinish()}
+            >
+              <span aria-hidden="true">{room.currentQuestionNumber === 10 ? '▣' : '▶'}</span>
+              {room.currentQuestionNumber === 10 ? ' ดูผลรอบนี้' : ' ไปข้อถัดไป'}
+            </button>
             <button
               className="city-stage__action-button city-stage__action-button--continue"
               disabled

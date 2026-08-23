@@ -8,6 +8,7 @@ import type {
   ClassroomPreAssessment,
   ClassroomReflection,
   ClassroomRoom,
+  ClassroomRoomStatus,
   ClassroomTeacherObservation,
   ClassroomCrisisResult,
   ClassroomPersonalDecisionResult,
@@ -21,6 +22,18 @@ export const isKnownAssessmentRecordType = (
   value: unknown,
 ): value is ClassroomAssessmentRecord['recordType'] =>
   value === 'pre' || value === 'post' || value === 'reflection' || value === 'observation'
+
+export const EMERGENCY_TERMINATION_STATUSES = [
+  'role-draw',
+  'playing',
+  'round-result',
+  'crisis-intro',
+  'crisis-playing',
+  'crisis-result',
+] as const satisfies readonly ClassroomRoomStatus[]
+
+export const canEmergencyTerminate = (status: ClassroomRoomStatus): boolean =>
+  (EMERGENCY_TERMINATION_STATUSES as readonly ClassroomRoomStatus[]).includes(status)
 
 export interface ClassroomGameService {
   readonly isDemo: boolean
@@ -147,6 +160,7 @@ export interface ClassroomGameService {
   finishGame(roomId: string, teacherSessionId: string): Promise<void>
   continueCityProgress(roomId: string, teacherSessionId: string): Promise<ClassroomRoom>
   endActivity(roomId: string, teacherSessionId: string): Promise<void>
+  terminateActivity(roomId: string, teacherSessionId: string): Promise<void>
 }
 
 export const classroomFriendlyError = (error: unknown): string => {

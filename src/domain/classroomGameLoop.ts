@@ -1,6 +1,7 @@
 import type { PublicRoomQuestion, RoomQuestionSnapshot } from './classroomQuestions'
+import type { CrisisEventId } from './cityCrisisEvents'
 import type { CityLevel, QuestionNumber, RoleId } from './ourCity'
-import { isQuestionAnswerRecord, type ClassroomAnswerRecord, type ClassroomPlayer, type ClassroomPreAssessment, type ClassroomRoomStatus, type ClassroomRoundResult } from '../types/classroomGame'
+import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomAnswerRecord, type ClassroomPlayer, type ClassroomPreAssessment, type ClassroomRoomStatus, type ClassroomRoundResult } from '../types/classroomGame'
 import { clampCityScore, SCORE_POLICY } from './cityScoring'
 
 export const getRoleQuestion = (
@@ -24,6 +25,37 @@ export const shouldCloseQuestion = (
 ): boolean =>
   lockedPlayerCount > 0 &&
   (answerCount >= lockedPlayerCount || (questionDeadlineAt !== null && now >= questionDeadlineAt))
+
+export const countCrisisAnswersForEvent = (
+  answers: readonly ClassroomAnswerRecord[],
+  gameCycle: number,
+  eventId: CrisisEventId,
+): number => new Set(
+  answers
+    .filter((answer) => isCrisisAnswerRecord(answer) && answer.gameCycle === gameCycle && answer.eventId === eventId)
+    .map((answer) => answer.playerId),
+).size
+
+/**
+ * Crisis auto-close is intentionally stricter than normal-question closure.
+ * A timeout is trusted only when the currently observed crisis-playing room
+ * carries its own complete, forward-moving timing pair.
+ */
+export const shouldAutoCloseCrisis = (
+  answerCount: number,
+  lockedPlayerCount: number,
+  questionStartedAt: number | null,
+  questionDeadlineAt: number | null,
+  now = Date.now(),
+): boolean => lockedPlayerCount > 0 && (
+  answerCount >= lockedPlayerCount
+  || (
+    questionStartedAt !== null
+    && questionDeadlineAt !== null
+    && questionDeadlineAt > questionStartedAt
+    && now >= questionDeadlineAt
+  )
+)
 
 /**
  * Shows the teacher how submitted answers are moving the city before the
@@ -169,16 +201,18 @@ export type AssessmentFlowStep = 'post' | 'reflection' | 'complete'
 
 /**
  * Pure derivation of which step the combined POST+Reflection page should
- * show, from server-confirmed presence alone - never from local component
- * state - so a refresh at any point resumes at the correct step instead of
- * losing or repeating a completed submission.
+ * show. Existing server records drive refresh/resume, while a resolved
+ * active write may acknowledge the same immutable record immediately
+ * without waiting for a second listener delivery.
  */
 export const resolveAssessmentFlowStep = (
   hasPostAssessment: boolean,
   hasReflection: boolean,
+  hasPostWriteAcknowledgement = false,
+  hasReflectionWriteAcknowledgement = false,
 ): AssessmentFlowStep => {
-  if (!hasPostAssessment) return 'post'
-  if (!hasReflection) return 'reflection'
+  if (!hasPostAssessment && !hasPostWriteAcknowledgement) return 'post'
+  if (!hasReflection && !hasReflectionWriteAcknowledgement) return 'reflection'
   return 'complete'
 }
 

@@ -47,7 +47,8 @@ describe('classroom UI contracts', () => {
     const teacherPage = readSource('../pages/TeacherPage.tsx')
     expect(teacherPage).toContain('const canAdvanceQuestion = Boolean(')
     expect(teacherPage).toContain('shouldCloseQuestion(answerCount, room.lockedPlayerCount, room.questionDeadlineAt)')
-    expect(teacherPage).toContain('{canAdvanceQuestion ? (')
+    expect(teacherPage).toContain('disabled={busy || missingTrusted || !canAdvanceQuestion}')
+    expect(teacherPage).not.toContain('{canAdvanceQuestion ? (')
     expect(teacherPage).toContain("await withActionTiming('closeQuestion', room.roomId")
     expect(teacherPage).toContain('service.closeQuestion')
     expect(teacherPage).toContain('service.openNextQuestion')
@@ -67,12 +68,28 @@ describe('classroom UI contracts', () => {
     expect(resultPage).toContain('<TeacherObservationSection')
   })
 
-  it('starts assessment-complete finished only from ResultPage, never active question or crisis controls', () => {
+  it('keeps normal completion on Result while exposing a separate confirmed emergency control in active teacher screens', () => {
     const teacherPage = readSource('../pages/TeacherPage.tsx')
+    const roleDrawPage = readSource('../pages/RoleDrawPage.tsx')
+    const emergencyControl = readSource('./TeacherEmergencyEndControl.tsx')
     const resultPage = readSource('../pages/ResultPage.tsx')
-    expect(teacherPage).not.toContain('setIsEndActivityDialogOpen')
-    expect(teacherPage).not.toContain('city-stage__action-button--end')
+    expect(teacherPage).toContain('<TeacherEmergencyEndControl')
+    expect(roleDrawPage).toContain('<TeacherEmergencyEndControl')
+    expect(emergencyControl).toContain('await service.terminateActivity(roomId, uid)')
+    expect(emergencyControl).toContain('confirmLabel="ยุติกิจกรรมทันที"')
+    expect(emergencyControl).not.toContain('clearClassroomTeacherSession')
     expect(resultPage).toContain("if (room.status === 'game-result') await service.endActivity(roomId, uid)")
+  })
+
+  it('keeps unanswered normal choices neutral and limits hover styling to real hover devices', () => {
+    const gamePage = readSource('../pages/GamePage.tsx')
+    const styles = readSource('../styles.css')
+    expect(gamePage).toContain("? 'is-selected'")
+    expect(gamePage).toContain(": 'is-unanswered'")
+    expect(styles).toContain('@media (hover: hover) and (pointer: fine) {')
+    expect(styles).toContain('.game-play-choice.is-unanswered:focus-visible')
+    expect(styles).toContain('.game-play-choice.is-selected:disabled')
+    expect(styles).toContain('.city-stage__action-button--next:disabled')
   })
 
   it('keeps assessment rendering and server-confirmed submission behavior while sharing the light civic shell', () => {
@@ -88,7 +105,10 @@ describe('classroom UI contracts', () => {
     expect(postPage).toContain('await service.submitPostAssessment(roomId, session.playerId, uid, orderedResponses)')
     expect(postPage).toContain('await service.submitReflection(roomId, session.playerId, uid, reflectionInput)')
     expect(prePage).toContain('if (assessmentState.data) return <Navigate replace')
-    expect(postPage).toContain('resolveAssessmentFlowStep(Boolean(postAssessmentState.data), Boolean(reflectionState.data))')
+    expect(postPage).toContain('postWriteAcknowledged,')
+    expect(postPage).toContain('reflectionWriteAcknowledged,')
+    expect(postPage).toContain('setPostWriteAcknowledged(true)')
+    expect(postPage).toContain('setReflectionWriteAcknowledged(true)')
     expect(prePage).toContain('our-city-page assessment-page')
     expect(postPage).toContain('our-city-page assessment-page')
     expect(prePage).not.toContain("from-[#050b14]")
@@ -96,6 +116,8 @@ describe('classroom UI contracts', () => {
     expect(styles).toContain('.our-city-page.assessment-page {')
     expect(styles).toContain('.assessment-choice.is-selected {')
     expect(styles).toContain('.assessment-submit {')
+    expect(styles).toContain('body:has(.assessment-page)')
+    expect(styles).toContain('background-color: #edf6fd !important')
   })
 
   it('keeps Teacher Lobby controls and gives the create-room card the full top-aligned control width', () => {
@@ -140,7 +162,9 @@ describe('classroom UI contracts', () => {
     const liveImpacts = readSource('./LiveAnswerImpacts.tsx')
     const styles = readSource('../styles.css')
     expect(teacherPage).toContain('resolveLiveAnswerImpact(answer, trustedSnapshot)')
-    expect(teacherPage).toContain('const LIVE_ANSWER_IMPACT_DURATION_MS = 2_500')
+    const presentation = readSource('../domain/cityPresentation.ts')
+    expect(teacherPage).toContain('LIVE_ANSWER_IMPACT_DURATION_MS')
+    expect(presentation).toContain('export const LIVE_ANSWER_IMPACT_DURATION_MS = 2_500')
     expect(teacherPage).toContain('<LiveAnswerImpacts impacts={liveAnswerImpacts} />')
     expect(liveImpacts).toContain('{signedLocationScore(impact.score)}')
     expect(styles).toContain('animation: live-answer-impact-pop 2.5s')
@@ -160,6 +184,16 @@ describe('classroom UI contracts', () => {
     expect(crisisFlow).toContain("crisisRevealPhase !== 'revealed'")
     expect(crisisFlow).toContain('service.openNextQuestion(room.roomId, uid)')
     expect(crisisFlow.match(/void continueAfterEvent\(\)/g)).toHaveLength(1)
+  })
+
+  it('uses current Crisis identity and validated Crisis timing for auto-close while keeping manual close', () => {
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    const gamePage = readSource('../pages/GamePage.tsx')
+    expect(teacherPage).toContain('countCrisisAnswersForEvent(answersState.data, room.gameCycle, room.currentCrisisEventId)')
+    expect(teacherPage).toContain('shouldAutoCloseCrisis(')
+    expect(teacherPage).toContain('room.questionStartedAt,')
+    expect(teacherPage).toContain('onClick={() => void closeCurrentCrisis()}')
+    expect(gamePage).toContain('answer.playerId === activePlayerId')
   })
 
   it('clears all temporary presentation state and timers at room boundaries', () => {
@@ -365,6 +399,17 @@ describe('classroom UI contracts', () => {
     expect(resultPage).toContain('เริ่มห้องใหม่')
     expect(resultPage).not.toMatch(/winner|leaderboard|อันดับ/i)
   })
+
+  it('renders personal result numbers only from loaded records with explicit empty and read-error states', () => {
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    const firebaseService = readSource('../services/firebaseClassroomService.ts')
+    expect(firebaseService).toContain("where('ownerUid', '==', ownerUid)")
+    expect(firebaseService).toContain("where('playerId', '==', playerId)")
+    expect(resultPage).toContain('<strong>{currentTotals.integrity}</strong>')
+    expect(resultPage).toContain('ยังไม่มีข้อมูลผลส่วนตัวสำหรับรอบนี้')
+    expect(resultPage).toContain('ไม่สามารถโหลดผลการตัดสินใจส่วนตัวได้ กรุณาลองใหม่')
+    expect(resultPage).not.toContain("hasPrivateResults ? currentTotals.integrity : '—'")
+  })
 })
 
 describe('PRE submission never gets stuck indefinitely on "กำลังส่งคำตอบ..."', () => {
@@ -421,5 +466,28 @@ describe('PRE submission never gets stuck indefinitely on "กำลังส่
   it('never traps a student without completed PRE in a finished room, but leaves an in-flight submission alone', () => {
     const page = readSource('../pages/PreAssessmentPage.tsx')
     expect(page).toContain("roomState.data?.status === 'finished' && !submitting")
+  })
+})
+
+describe('POST and Reflection active submit acknowledgements', () => {
+  it('uses each resolved write as acknowledgement and leaves the watchdog only around an unresolved promise', () => {
+    const page = readSource('../pages/PostAssessmentPage.tsx')
+    const postWrite = page.indexOf('await service.submitPostAssessment(')
+    const postAck = page.indexOf('setPostWriteAcknowledged(true)', postWrite)
+    const reflectionWrite = page.indexOf('await service.submitReflection(')
+    const reflectionAck = page.indexOf('setReflectionWriteAcknowledged(true)', reflectionWrite)
+    expect(postAck).toBeGreaterThan(postWrite)
+    expect(reflectionAck).toBeGreaterThan(reflectionWrite)
+    expect(page.indexOf('setSubmitting(false)', postWrite)).toBeGreaterThan(postAck)
+    expect(page.indexOf('setSubmitting(false)', reflectionWrite)).toBeGreaterThan(reflectionAck)
+    expect(page).toContain('if (!submitting) return')
+  })
+
+  it('keeps rejected writes on the real error path and preserves server-derived refresh/resume inputs', () => {
+    const page = readSource('../pages/PostAssessmentPage.tsx')
+    expect(page.match(/catch \(reason\)/g)).toHaveLength(2)
+    expect(page).toContain('setError(classroomFriendlyError(reason))')
+    expect(page).toContain('Boolean(postAssessmentState.data),')
+    expect(page).toContain('Boolean(reflectionState.data),')
   })
 })

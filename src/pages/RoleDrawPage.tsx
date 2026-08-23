@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useGame } from '../context/GameContext'
 import { CityLoader } from '../components/CityLoader'
+import { TeacherEmergencyEndControl } from '../components/TeacherEmergencyEndControl'
 import { LOCATION_BY_ROLE } from '../domain/cityScoring'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { ROLE_CARD_ASSETS, ROLE_CARD_BACK_ASSET } from '../domain/roleCards'
@@ -81,7 +82,10 @@ export const RoleDrawPage = () => {
     <main className="our-city-page role-draw-page grid min-h-dvh place-items-center px-5 py-8 text-center">
       <header className="game-public-header role-draw-header">
         <Link className="game-brand" to="/" aria-label="Our City, Our Choice หน้าหลัก"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b><small>เมืองนี้...อยู่ที่เรา</small></strong></Link>
-        <div className="role-draw-room"><span>ห้องเรียน</span><strong>{roomId}</strong></div>
+        <div className="role-draw-header__utilities">
+          {isTeacher ? <TeacherEmergencyEndControl className="teacher-emergency-end--role-draw" disabled={busy} roomId={roomId} /> : null}
+          <div className="role-draw-room"><span>ห้องเรียน</span><strong>{roomId}</strong></div>
+        </div>
       </header>
       <section className={`our-city-panel role-draw-panel w-full max-w-6xl p-7 md:p-10 ${!isTeacher && revealed && playerRole ? 'is-player-revealed' : ''}`}>
         <p className="role-draw-kicker">รอบที่ {room.gameCycle + 1}</p>

@@ -80,3 +80,22 @@ describe('firebaseClassroomService.endActivity — assessment lifecycle guard', 
     expect(endActivitySource).toContain("status: 'finished'")
   })
 })
+
+describe('firebaseClassroomService.terminateActivity — explicit emergency lifecycle', () => {
+  const source = readSource('./firebaseClassroomService.ts')
+  const start = source.indexOf('async terminateActivity(')
+  const terminateSource = source.slice(start)
+
+  it('authorizes the teacher, accepts only active states, clears timing, and leaves normal endActivity untouched', () => {
+    expect(start).toBeGreaterThan(-1)
+    expect(terminateSource).toContain('assertTeacher(room, teacherSessionId)')
+    expect(terminateSource).toContain("if (room.status === 'finished') return")
+    expect(terminateSource).toContain('if (!canEmergencyTerminate(room.status)) throw new Error')
+    expect(terminateSource).toContain("status: 'finished', questionStartedAt: null, questionDeadlineAt: null")
+
+    const normalStart = source.indexOf('async endActivity(')
+    const normalEnd = source.indexOf('async terminateActivity(', normalStart)
+    const normalSource = source.slice(normalStart, normalEnd)
+    expect(normalSource).toContain("if (room.status !== 'game-result') throw new Error")
+  })
+})

@@ -95,7 +95,10 @@ export const GamePage = () => {
     [crisisDilemma, crisisEvent, roomId, session],
   )
   const existingCrisisAnswer = crisisEvent
-    ? answersState.data.find((answer) => isCrisisAnswerRecord(answer) && answer.gameCycle === roomState.data?.gameCycle && answer.eventId === crisisEvent.id)
+    ? answersState.data.find((answer) => isCrisisAnswerRecord(answer)
+      && answer.gameCycle === roomState.data?.gameCycle
+      && answer.eventId === crisisEvent.id
+      && answer.playerId === activePlayerId)
     : undefined
   const role = ROLES.find((item) => item.id === playerState.data?.roleId)
   const countdownEnded = roomState.data?.status === 'playing' && remaining === 0 && !existingAnswer
@@ -221,8 +224,8 @@ export const GamePage = () => {
               <button
                 className={`game-play-choice min-h-32 rounded-2xl border p-5 text-left text-lg font-bold transition ${
                   existingAnswer?.choiceId === choice.id
-                    ? 'border-[#f4c96d] bg-[#f4c96d]/12'
-                    : 'border-white/18 bg-white/7 hover:border-white/40 hover:bg-white/10'
+                    ? 'is-selected'
+                    : 'is-unanswered'
                 } disabled:cursor-not-allowed disabled:opacity-55`}
                 disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing' || remaining <= 0}
                 key={choice.id}

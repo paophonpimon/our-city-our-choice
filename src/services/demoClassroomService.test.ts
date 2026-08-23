@@ -194,6 +194,37 @@ describe('Continue City Progress setup and role draw', () => {
     expect(replacement.status).toBe('lobby')
   })
 
+  it('keeps normal end guarded while explicit teacher emergency termination covers every active state', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'Player one'), 'owner-1')
+    await service.openPreAssessment(room.roomId, teacherUid)
+    await service.submitPreAssessment(room.roomId, player.playerId, 'owner-1', Array(10).fill(3))
+
+    for (const status of ['role-draw', 'playing', 'round-result', 'crisis-intro', 'crisis-playing', 'crisis-result'] as const) {
+      setRoomFieldsForTests(room.roomId, {
+        status,
+        questionStartedAt: 100,
+        questionDeadlineAt: 200,
+      })
+      await expect(service.terminateActivity(room.roomId, 'not-the-teacher')).rejects.toThrow('ไม่มีสิทธิ์ควบคุมห้องนี้')
+      await service.terminateActivity(room.roomId, teacherUid)
+      expect(currentRoom(service, room.roomId)).toMatchObject({
+        status: 'finished',
+        questionStartedAt: null,
+        questionDeadlineAt: null,
+      })
+      await expect(service.terminateActivity(room.roomId, teacherUid)).resolves.toBeUndefined()
+    }
+
+    setRoomFieldsForTests(room.roomId, { status: 'game-result' })
+    await expect(service.terminateActivity(room.roomId, teacherUid)).rejects.toThrow('เฉพาะระหว่างกิจกรรม')
+    expect(currentPlayers(service, room.roomId)).toHaveLength(1)
+    let retainedPre: ClassroomAssessmentRecord | null = null
+    service.subscribePreAssessment(room.roomId, player.playerId, (record) => { retainedPre = record }, () => undefined)()
+    expect(retainedPre).toMatchObject({ recordType: 'pre', playerId: player.playerId })
+  })
+
   it('requires a positive student number and orders the teacher roster by student number', async () => {
     const service = new DemoClassroomGameService()
     const room = await service.createRoom(teacherUid, 30)

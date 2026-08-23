@@ -15,7 +15,7 @@ interface ResolvedPlayer {
   roleId: RoleId
 }
 
-const countOutcomes = (results: readonly ClassroomPersonalDecisionResult[]) => results.reduce(
+export const countPersonalDecisionOutcomes = (results: readonly ClassroomPersonalDecisionResult[]) => results.reduce(
   (totals, result) => ({ ...totals, [result.outcome]: totals[result.outcome] + 1 }),
   { integrity: 0, corruption: 0, timeout: 0 } satisfies Record<PersonalDecisionOutcome, number>,
 )
@@ -24,7 +24,7 @@ export const assertPersonalOutcomeTotals = (
   results: readonly ClassroomPersonalDecisionResult[],
   expected: { integrityCount: number; corruptionCount: number; timeoutCount: number },
 ): void => {
-  const totals = countOutcomes(results)
+  const totals = countPersonalDecisionOutcomes(results)
   if (totals.integrity !== expected.integrityCount || totals.corruption !== expected.corruptionCount || totals.timeout !== expected.timeoutCount) {
     throw new Error('trusted personal outcome totals do not match aggregate result')
   }

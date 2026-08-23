@@ -3,6 +3,7 @@ import { createRoomQuestionSnapshot, orderChoicesForPlayer } from './classroomQu
 import {
   countAnswersForQuestion,
   countCompletedPreAssessments,
+  countCrisisAnswersForEvent,
   getCityImagePath,
   getFinalAnswerTotals,
   getLiveCityScore,
@@ -12,6 +13,7 @@ import {
   resolvePostAssessmentGuardRoute,
   resolveStudentRouteForStatus,
   shouldCloseQuestion,
+  shouldAutoCloseCrisis,
 } from './classroomGameLoop'
 import { ROLE_IDS } from './ourCity'
 import { createTrustedQuestions } from '../test/classroomFixtures'
@@ -63,6 +65,37 @@ describe('playable classroom loop helpers', () => {
     expect(shouldCloseQuestion(1, 1, wellBeforeDeadline)).toBe(true)
     expect(shouldCloseQuestion(1, 1, Date.now() + 10 * 60_000)).toBe(true)
     expect(shouldCloseQuestion(1, 1, null)).toBe(true)
+  })
+
+  it('keeps fresh Crisis 1 and Crisis 2 open at zero answers before their deadlines', () => {
+    const now = 100_000
+    expect(shouldAutoCloseCrisis(0, 1, now, now + 30_000, now + 10)).toBe(false)
+    expect(shouldAutoCloseCrisis(0, 1, now + 60_000, now + 90_000, now + 60_010)).toBe(false)
+  })
+
+  it('counts Crisis answers only for the current event and cycle', () => {
+    const answers = [
+      { recordType: 'crisis', playerId: 'p1', gameCycle: 0, eventId: 'construction-audit' },
+      { recordType: 'crisis', playerId: 'p1', gameCycle: 0, eventId: 'public-emergency' },
+      { recordType: 'crisis', playerId: 'p2', gameCycle: 1, eventId: 'public-emergency' },
+      { recordType: 'question', playerId: 'p3', gameCycle: 0 },
+    ] as ClassroomAnswerRecord[]
+    expect(countCrisisAnswersForEvent(answers, 0, 'public-emergency')).toBe(1)
+    expect(shouldAutoCloseCrisis(countCrisisAnswersForEvent(answers, 0, 'construction-audit'), 2, 100, 200, 101)).toBe(false)
+    const priorEventOnly = answers.filter((answer) => !('eventId' in answer) || answer.eventId !== 'public-emergency')
+    expect(shouldAutoCloseCrisis(countCrisisAnswersForEvent(priorEventOnly, 0, 'public-emergency'), 1, 100, 200, 101)).toBe(false)
+  })
+
+  it('auto-closes Crisis when all current players answered or a valid current deadline elapsed', () => {
+    expect(shouldAutoCloseCrisis(1, 1, 100, 30_100, 101)).toBe(true)
+    expect(shouldAutoCloseCrisis(0, 1, 100, 30_100, 30_101)).toBe(true)
+  })
+
+  it('never trusts a missing, reversed, or stale unpaired Crisis deadline', () => {
+    expect(shouldAutoCloseCrisis(0, 1, null, 50, 100)).toBe(false)
+    expect(shouldAutoCloseCrisis(0, 1, 100, null, 200)).toBe(false)
+    expect(shouldAutoCloseCrisis(0, 1, 100, 100, 200)).toBe(false)
+    expect(shouldAutoCloseCrisis(0, 1, 101, 100, 200)).toBe(false)
   })
 
   it('previews only submitted answer impacts and leaves missing answers for final timeout scoring', () => {
@@ -226,7 +259,7 @@ describe('resolvePostAssessmentGuardRoute — POST/Reflection only ever appropri
   })
 })
 
-describe('resolveAssessmentFlowStep — derived purely from server-confirmed presence, never local state', () => {
+describe('resolveAssessmentFlowStep — server records plus resolved active-write acknowledgement', () => {
   it('starts at post when neither POST nor reflection exist yet', () => {
     expect(resolveAssessmentFlowStep(false, false)).toBe('post')
   })
@@ -245,5 +278,14 @@ describe('resolveAssessmentFlowStep — derived purely from server-confirmed pre
     // not occur in practice - but the derivation must still fail safe by
     // treating POST as the gating step, not silently skip ahead.
     expect(resolveAssessmentFlowStep(false, true)).toBe('post')
+  })
+
+  it('advances immediately from a resolved POST write without waiting for a second listener event', () => {
+    expect(resolveAssessmentFlowStep(false, false, true, false)).toBe('reflection')
+  })
+
+  it('completes immediately from a resolved Reflection write while refresh still uses server records', () => {
+    expect(resolveAssessmentFlowStep(true, false, false, true)).toBe('complete')
+    expect(resolveAssessmentFlowStep(true, true)).toBe('complete')
   })
 })
