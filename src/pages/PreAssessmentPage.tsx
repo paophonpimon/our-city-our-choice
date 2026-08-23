@@ -97,48 +97,48 @@ export const PreAssessmentPage = () => {
   }
 
   return (
-    <main className="our-city-page min-h-dvh px-4 py-6 md:px-8 md:py-8">
-      <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <div className="flex items-center justify-between">
+    <main className="our-city-page assessment-page min-h-dvh px-4 py-6 md:px-8 md:py-8">
+      <section className="assessment-shell mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <div className="assessment-topbar flex items-center justify-between">
           <Link className="game-brand" to="/" aria-label="Our City, Our Choice หน้าหลัก">
             <span className="game-brand__mark" aria-hidden="true">🏙️</span>
             <strong>OUR CITY<br /><b>OUR CHOICE</b></strong>
           </Link>
-          <span className="rounded-full border border-white/18 bg-white/7 px-3 py-1 text-xs font-bold text-[#a9c5c3]">ห้อง {roomId}</span>
+          <span className="assessment-room-badge">ห้อง {roomId}</span>
         </div>
 
-        <header className="text-center">
-          <p className="text-sm font-bold text-[#f4c96d]">ก่อนเริ่มกิจกรรม</p>
-          <h1 className="text-2xl font-black md:text-3xl">แบบสำรวจความคิดเห็นของฉัน</h1>
-          <p className="mt-2 text-sm text-[#a9c5c3] md:text-base">ตอบตามความรู้สึกจริงของคุณ ไม่มีคำตอบถูกหรือผิด และไม่มีผลต่อคะแนนในเกม</p>
+        <header className="assessment-header text-center">
+          <p className="assessment-kicker">ก่อนเริ่มกิจกรรม</p>
+          <h1>แบบสำรวจความคิดเห็นของฉัน</h1>
+          <p>ตอบตามความรู้สึกจริงของคุณ ไม่มีคำตอบถูกหรือผิด และไม่มีผลต่อคะแนนในเกม</p>
         </header>
 
-        <div className="our-city-panel rounded-2xl p-4 md:p-5" aria-label="คำอธิบายระดับความคิดเห็น">
-          <p className="mb-3 text-sm font-bold text-[#f4c96d]">ระดับความคิดเห็น</p>
-          <ul className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-5">
+        <div className="assessment-scale" aria-label="คำอธิบายระดับความคิดเห็น">
+          <p className="assessment-scale__title">ระดับความคิดเห็น</p>
+          <ul className="assessment-scale__list">
             {ASSESSMENT_SCALE.map((option) => (
-              <li className="flex items-center gap-2 rounded-xl bg-white/6 px-3 py-2" key={option.value}>
-                <strong className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/12 text-sm font-black">{option.value}</strong>
+              <li className="assessment-scale__item" key={option.value}>
+                <strong>{option.value}</strong>
                 <span>{option.label}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <form aria-busy={submitting} className="flex flex-col gap-4" onSubmit={(event) => void submit(event)}>
+        <form aria-busy={submitting} className="assessment-form" onSubmit={(event) => void submit(event)}>
           {PRE_ASSESSMENT_ITEMS.map((statement, index) => (
-            <fieldset className="our-city-panel rounded-2xl p-4 md:p-5" key={index}>
-              <legend className="mb-3 text-base font-bold leading-relaxed md:text-lg">
-                <span className="mr-2 inline-grid h-7 w-7 place-items-center rounded-full bg-[#f4c96d]/18 text-sm font-black text-[#f4c96d]">{index + 1}</span>
+            <fieldset className="assessment-item" key={index}>
+              <legend className="assessment-item__prompt">
+                <span>{index + 1}</span>
                 {statement}
               </legend>
-              <div className="grid grid-cols-5 gap-2" role="group" aria-label={`ตัวเลือกสำหรับข้อที่ ${index + 1}`}>
+              <div className="assessment-choices" role="group" aria-label={`ตัวเลือกสำหรับข้อที่ ${index + 1}`}>
                 {ASSESSMENT_SCALE.map((option) => {
                   const inputId = `pre-item-${index}-value-${option.value}`
                   const selected = responses[index] === option.value
                   return (
                     <label
-                      className={`grid min-h-14 cursor-pointer place-items-center rounded-xl border text-lg font-black transition ${selected ? 'border-[#f4c96d] bg-[#f4c96d]/16 text-[#f4c96d]' : 'border-white/18 bg-white/7 text-white hover:border-white/40'}`}
+                      className={`assessment-choice${selected ? ' is-selected' : ''}`}
                       htmlFor={inputId}
                       key={option.value}
                       title={option.label}
@@ -160,12 +160,12 @@ export const PreAssessmentPage = () => {
             </fieldset>
           ))}
 
-          {error ? <p className="text-red-200" role="alert">{error}</p> : null}
+          {error ? <p className="assessment-error" role="alert">{error}</p> : null}
 
-          <div className="sticky bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-[#050b14] to-transparent pb-2 pt-6">
-            <p className="text-sm text-[#a9c5c3]">ตอบแล้ว {answeredCount} / {PRE_ASSESSMENT_ITEM_COUNT} ข้อ</p>
+          <div className="assessment-submit">
+            <p>ตอบแล้ว {answeredCount} / {PRE_ASSESSMENT_ITEM_COUNT} ข้อ</p>
             <button
-              className="w-full max-w-xs rounded-2xl bg-[#f4c96d] px-6 py-4 text-lg font-black text-[#1c1305] disabled:cursor-not-allowed disabled:opacity-40"
+              className="assessment-primary-button"
               disabled={!allAnswered || submitting}
               type="submit"
             >

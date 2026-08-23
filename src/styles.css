@@ -6,7 +6,7 @@
 @import "@fontsource/mitr/700.css";
 
 :root {
-  font-family: "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Leelawadee UI", Tahoma, "Noto Sans Thai", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   color: #fff7df;
   background: #080b23;
   font-synthesis: none;
@@ -1377,7 +1377,8 @@
     linear-gradient(rgb(255 255 255 / 96%), rgb(248 252 255 / 96%)),
     url('/images/new-city/backgrounds/city-overview-normal.webp') center / cover fixed;
   color: var(--lobby-navy);
-  font-family: "Mitr", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  font-family: "Leelawadee UI", Tahoma, "Noto Sans Thai", system-ui, sans-serif;
+  line-height: 1.5;
 }
 .teacher-lobby-birds {
   position: fixed;
@@ -1673,7 +1674,7 @@
 .teacher-lobby-reset-room-button:disabled { opacity: .45; }
 .teacher-lobby-error { padding: .65rem .8rem; border: 1px solid #f2b9bd; border-radius: .65rem; background: #fff0f1; color: #b42c38; font-size: .68rem; }
 .teacher-lobby-error button { margin-top: .25rem; font-weight: 700; text-decoration: underline; }
-.teacher-lobby-create-card { display: grid; max-width: 29rem; margin: auto; place-items: center; padding: 2rem; border: 1px solid #dce7f2; border-radius: 1.1rem; background: rgb(255 255 255 / 90%); box-shadow: 0 .8rem 1.8rem rgb(24 67 112 / 9%); text-align: center; }
+.teacher-lobby-create-card { display: grid; width: 100%; max-width: none; align-self: flex-start; margin: 0; place-items: center; padding: clamp(1.6rem, 3vw, 2.5rem); border: 1px solid #dce7f2; border-radius: 1.1rem; background: rgb(255 255 255 / 90%); box-shadow: 0 .8rem 1.8rem rgb(24 67 112 / 9%); text-align: center; }
 .teacher-lobby-create-card__icon { display: grid; width: 4.5rem; height: 4.5rem; place-items: center; border-radius: 1.3rem; background: #e5f2ff; font-size: 2rem; }
 .teacher-lobby-kicker { margin-top: 1.2rem; color: #2668bd !important; font-size: .7rem; font-weight: 600; }
 .teacher-lobby-create-card h2 { margin-top: .2rem; font-size: 1.8rem; font-weight: 700; }
@@ -1723,7 +1724,7 @@
   .teacher-lobby-title { grid-column: 1 / -1; grid-row: 2; padding: .7rem 0 0; border-top: 1px solid #d4deea; border-left: 0; }
   .teacher-lobby-layout { grid-template-columns: 1fr; }
   .teacher-lobby-role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .teacher-lobby-control { min-height: 40rem; }
+  .teacher-lobby-control { min-height: 0; }
 }
 
 @media (max-width: 600px) {
@@ -5119,6 +5120,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
     overflow: clip;
   }
   .teacher-lobby-room-card,
+  .teacher-lobby-create-card,
   .teacher-lobby-summary,
   .teacher-lobby-error,
   .teacher-lobby-role-guide,
@@ -5126,6 +5128,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-lobby-primary-button,
   .teacher-lobby-new-room-button,
   .teacher-lobby-secondary-actions { grid-column: 1 / -1; }
+  .teacher-lobby-create-card { align-self: start; }
   .teacher-lobby-roster,
   .teacher-lobby-control { padding: .68rem; }
   .teacher-lobby-roster .teacher-lobby-section-heading { gap: .65rem; padding-bottom: .58rem; }
@@ -6890,5 +6893,250 @@ img.game-home-cast {
   .teacher-evidence-summary__matched > header,
   .teacher-evidence-summary__observation > header,
   .teacher-evidence-summary__reflections > header { flex-direction: column; }
+}
+
+/* UX-P1: readable Thai body typography with Mitr reserved for display text. */
+.teacher-lobby-brand strong,
+.teacher-lobby-title h1,
+.teacher-lobby-section-heading h2,
+.teacher-lobby-create-card h2,
+.teacher-lobby-card-heading strong,
+.teacher-lobby-rules-dialog h2 {
+  font-family: "Mitr", "Leelawadee UI", Tahoma, sans-serif;
+  font-weight: 600;
+}
+
+/* PRE, POST, Reflection, and completion share one light civic instrument. */
+.our-city-page.assessment-page {
+  --assessment-blue: #1769df;
+  --assessment-blue-dark: #124f9a;
+  --assessment-ink: #173554;
+  --assessment-muted: #5e748b;
+  --assessment-border: #d7e5f2;
+  background:
+    linear-gradient(rgb(250 253 255 / 95%), rgb(239 247 254 / 97%)),
+    url('/images/new-city/backgrounds/city-overview-normal.webp') center / cover fixed;
+  color: var(--assessment-ink);
+  font-family: "Leelawadee UI", Tahoma, "Noto Sans Thai", system-ui, sans-serif;
+  line-height: 1.65;
+}
+
+.assessment-shell { padding-bottom: 1rem; }
+.assessment-topbar { padding-bottom: 1rem; border-bottom: 1px solid #cfdfee; }
+.assessment-page .game-brand > strong {
+  font-family: "Mitr", "Leelawadee UI", Tahoma, sans-serif;
+  font-weight: 600;
+}
+.assessment-page .game-brand > strong b { font-weight: 600; }
+.assessment-room-badge {
+  flex: none;
+  padding: .42rem .8rem;
+  border: 1px solid #cbdff2;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 88%);
+  color: #315979;
+  font-size: .78rem;
+  font-weight: 600;
+  box-shadow: 0 .25rem .7rem rgb(29 76 122 / 7%);
+}
+
+.assessment-header { max-width: 42rem; margin-inline: auto; }
+.assessment-kicker {
+  color: var(--assessment-blue);
+  font-size: .88rem;
+  font-weight: 600;
+}
+.assessment-header h1,
+.assessment-complete h1 {
+  color: #153d6b;
+  font-family: "Mitr", "Leelawadee UI", Tahoma, sans-serif;
+  font-size: clamp(1.65rem, 4vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.assessment-header h1 { margin-top: .15rem; }
+.assessment-header > p:last-child,
+.assessment-complete > p {
+  margin-top: .55rem;
+  color: var(--assessment-muted);
+  font-size: clamp(.92rem, 2vw, 1.02rem);
+  font-weight: 400;
+  line-height: 1.75;
+}
+
+.assessment-scale,
+.assessment-item,
+.assessment-complete {
+  border: 1px solid var(--assessment-border);
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 .65rem 1.8rem rgb(32 82 127 / 8%);
+}
+.assessment-scale { padding: clamp(1rem, 2.5vw, 1.35rem); border-radius: 1rem; }
+.assessment-scale__title { margin-bottom: .75rem; color: var(--assessment-blue-dark); font-weight: 600; }
+.assessment-scale__list { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+.assessment-scale__item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: .55rem;
+  padding: .65rem;
+  border: 1px solid #dfebf5;
+  border-radius: .75rem;
+  background: #f7fbff;
+  color: #405d78;
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.assessment-scale__item strong {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: #e3f1ff;
+  color: var(--assessment-blue);
+  font-weight: 700;
+}
+
+.assessment-form { display: flex; flex-direction: column; gap: 1rem; }
+.assessment-item { min-width: 0; padding: clamp(1rem, 2.5vw, 1.35rem); border-radius: 1rem; }
+.assessment-item__prompt {
+  width: 100%;
+  margin-bottom: .9rem;
+  padding: 0;
+  color: #213f60;
+  font-size: clamp(1rem, 2.2vw, 1.12rem);
+  font-weight: 600;
+  line-height: 1.7;
+}
+.assessment-item__prompt > span {
+  display: inline-grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-right: .45rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #e4f1ff;
+  color: var(--assessment-blue);
+  font-size: .85rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.assessment-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .6rem; }
+.assessment-choice {
+  display: grid;
+  min-height: 3.75rem;
+  place-items: center;
+  border: 1px solid #cbdff0;
+  border-radius: .8rem;
+  background: #f8fbff;
+  color: #25547e;
+  font-size: 1.12rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.assessment-choice:hover { border-color: #72a8df; background: #eef7ff; }
+.assessment-choice:focus-within { outline: 3px solid rgb(23 105 223 / 20%); outline-offset: 2px; }
+.assessment-choice.is-selected {
+  border-color: #1769df;
+  background: linear-gradient(145deg, #2479eb, #155fc8);
+  box-shadow: 0 0 0 3px rgb(240 180 38 / 24%), 0 .45rem .9rem rgb(23 105 223 / 20%);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.assessment-item--reflection { padding-bottom: 1rem; }
+.assessment-textarea {
+  width: 100%;
+  resize: vertical;
+  padding: .85rem 1rem;
+  border: 1px solid #cbddeb;
+  border-radius: .8rem;
+  background: #fbfdff;
+  color: var(--assessment-ink);
+  font-family: inherit;
+  font-size: .95rem;
+  font-weight: 400;
+  line-height: 1.7;
+}
+.assessment-textarea::placeholder { color: #879aab; }
+.assessment-textarea:focus { border-color: var(--assessment-blue); outline: 3px solid rgb(23 105 223 / 16%); }
+.assessment-character-count { margin-top: .35rem; color: #71869a; font-size: .75rem; text-align: right; }
+.assessment-error {
+  padding: .7rem .85rem;
+  border: 1px solid #edb7bc;
+  border-radius: .75rem;
+  background: #fff3f4;
+  color: #a52b37;
+  font-size: .88rem;
+}
+
+.assessment-submit {
+  position: sticky;
+  z-index: 10;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .55rem;
+  padding: 1.1rem 0 max(.65rem, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, #edf6fd 72%, rgb(237 246 253 / 0));
+}
+.assessment-submit > p { color: #536e88; font-size: .88rem; font-weight: 500; }
+.assessment-primary-button {
+  width: 100%;
+  max-width: 22rem;
+  min-height: 3.65rem;
+  padding: .8rem 1.25rem;
+  border: 1px solid #0f5fc9;
+  border-radius: .9rem;
+  background: linear-gradient(180deg, #2c7cec, #145fce);
+  box-shadow: 0 .55rem 1rem rgb(23 105 223 / 22%), inset 0 1px rgb(255 255 255 / 32%);
+  color: white;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.assessment-primary-button:not(:disabled):hover { filter: brightness(1.05); transform: translateY(-1px); }
+.assessment-primary-button:focus-visible { outline: 3px solid rgb(23 105 223 / 24%); outline-offset: 3px; }
+.assessment-primary-button:disabled { cursor: not-allowed; filter: grayscale(.35); opacity: .48; }
+
+.assessment-complete {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .85rem;
+  padding: clamp(1.5rem, 5vw, 2.5rem);
+  border-radius: 1.15rem;
+  text-align: center;
+}
+.assessment-complete__icon {
+  display: grid;
+  width: 4.25rem;
+  height: 4.25rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #def5e7;
+  box-shadow: 0 0 0 .5rem rgb(51 166 95 / 9%);
+  color: #278c50;
+  font-size: 2rem;
+  font-weight: 700;
+}
+.assessment-complete .assessment-primary-button { margin-top: .4rem; }
+
+@media (min-width: 640px) {
+  .assessment-scale__list { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .assessment-scale__item { flex-direction: column; justify-content: center; text-align: center; }
+}
+
+@media (max-width: 480px) {
+  .our-city-page.assessment-page { background-attachment: scroll; }
+  .assessment-topbar { align-items: flex-start; gap: .75rem; }
+  .assessment-room-badge { padding: .34rem .62rem; font-size: .7rem; }
+  .assessment-choices { gap: .38rem; }
+  .assessment-choice { min-height: 3.5rem; border-radius: .68rem; }
+  .assessment-submit { padding-top: .85rem; }
 }
 
