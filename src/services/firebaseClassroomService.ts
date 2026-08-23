@@ -1085,11 +1085,17 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
   }
 
   async endActivity(roomId: string, teacherSessionId: string): Promise<void> {
-    const room = await requireRoom(roomId)
-    assertTeacher(room, teacherSessionId)
-    if (room.status === 'finished') throw new Error('ผู้ใช้:ห้องนี้ถูกยุติแล้ว')
-    await updateDoc(doc(db, classroomPaths.room(roomId)), {
-      status: 'finished', questionStartedAt: null, questionDeadlineAt: null, updatedAt: serverTimestamp(),
+    const roomRef = doc(db, classroomPaths.room(roomId))
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(roomRef)
+      if (!snapshot.exists()) throw new Error('ผู้ใช้:ไม่พบห้องนี้')
+      const room = mapRoom(snapshot.data())
+      assertTeacher(room, teacherSessionId)
+      if (room.status === 'finished') return
+      if (room.status !== 'game-result') throw new Error('ผู้ใช้:จบกิจกรรมได้จากหน้าสรุปผลเกมเท่านั้น')
+      transaction.update(roomRef, {
+        status: 'finished', questionStartedAt: null, questionDeadlineAt: null, updatedAt: serverTimestamp(),
+      })
     })
   }
 }

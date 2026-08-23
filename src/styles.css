@@ -4140,15 +4140,15 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   filter: brightness(.76) saturate(.72) contrast(1.04) sepia(.1);
 }
 .city-scene.is-scene-degraded .city-scene__building-aura.is-integrity {
-  opacity: .14;
-  mix-blend-mode: soft-light;
-  filter: brightness(.82) saturate(.72) sepia(.24) blur(3px) drop-shadow(0 0 5px rgb(255 211 111 / 35%));
-  animation: city-model-degraded-integrity-aura 4.8s ease-in-out infinite;
+  opacity: .62;
+  mix-blend-mode: screen;
+  filter: brightness(1.55) saturate(1.55) sepia(.2) blur(5px) drop-shadow(0 0 14px rgb(255 214 82 / 98%));
+  animation: city-model-integrity-aura 3.4s ease-in-out infinite;
 }
 .city-scene.is-scene-degraded .city-scene__building.has-integrity-effect {
-  filter: brightness(.8) saturate(.76) contrast(1.04) sepia(.12)
-    drop-shadow(0 0 2px rgb(255 237 173 / 48%))
-    drop-shadow(0 0 5px rgb(216 163 67 / 24%));
+  filter: brightness(1.08) saturate(1.18) contrast(1.02) sepia(.08)
+    drop-shadow(0 0 6px rgb(255 246 180 / 92%))
+    drop-shadow(0 0 15px rgb(255 193 52 / 78%));
 }
 .city-scene.is-scene-degraded .city-scene__building-aura.is-corruption {
   opacity: .44;
@@ -4158,11 +4158,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   filter: brightness(.65) saturate(.58) contrast(1.06) sepia(.08) drop-shadow(0 5px 8px rgb(20 19 28 / 72%));
 }
 .city-stage__canvas.is-scene-degraded.is-zoomed .city-scene__building-aura.is-integrity {
-  opacity: .08;
-  animation: none;
+  opacity: .55;
+  animation: city-model-integrity-aura 3.4s ease-in-out infinite;
 }
 .city-stage__canvas.is-scene-degraded.is-zoomed .city-scene__building.has-integrity-effect {
-  filter: brightness(.78) saturate(.72) contrast(1.04) sepia(.13) drop-shadow(0 0 2px rgb(255 229 154 / 28%));
+  filter: brightness(1.05) saturate(1.15) drop-shadow(0 0 6px rgb(255 241 168 / 88%)) drop-shadow(0 0 13px rgb(255 190 43 / 72%));
 }
 @keyframes city-model-integrity-aura {
   0%, 100% { opacity: .38; transform: scale(1.002); }
@@ -4233,13 +4233,13 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 }
 
 .city-stage__canvas.is-scene-degraded .city-stage__building-effect.is-integrity {
-  mix-blend-mode: soft-light;
-  filter: brightness(.76) saturate(.62) sepia(.18);
-  animation: city-building-degraded-integrity-aura 4.8s ease-in-out infinite;
+  mix-blend-mode: screen;
+  filter: brightness(1.25) saturate(1.35) sepia(.08);
+  animation: city-building-integrity-aura 3.4s ease-in-out infinite;
 }
 .city-stage__canvas.is-scene-degraded.is-zoomed .city-stage__building-effect.is-integrity {
-  opacity: .14;
-  animation: none;
+  opacity: .72;
+  animation: city-building-integrity-aura 3.4s ease-in-out infinite;
 }
 
 .city-stage__building-effect.is-corruption {
@@ -6348,12 +6348,12 @@ img.game-home-cast {
   position: absolute;
   z-index: 16;
   top: .55rem;
-  left: .55rem;
+  left: clamp(4.55rem, 5.8vw, 6.25rem);
   pointer-events: auto;
 }
 
 .city-stage__utility-controls .teacher-audio-controls {
-  position: static;
+  position: static !important;
   grid-template-columns: 38px 32px 52px 32px;
   min-height: 48px;
   padding: 5px 8px;
@@ -6362,6 +6362,19 @@ img.game-home-cast {
 
 .city-stage__utility-controls .teacher-audio-controls__status { display: none; }
 .city-stage__utility-controls .teacher-audio-controls__meter { width: 52px; }
+.city-stage:has(.city-stage__utility-controls) .city-stage__topbar {
+  padding-left: clamp(16.8rem, 23vw, 20rem);
+}
+
+@media (max-width: 767px), (orientation: portrait) {
+  .city-stage__utility-controls { top: .7rem; left: 4.55rem; }
+  .city-stage:has(.city-stage__utility-controls) .city-stage__topbar { padding: 4.8rem .7rem .7rem; }
+}
+
+@media (max-width: 360px) {
+  .city-stage__utility-controls { top: 4.45rem; left: .7rem; }
+  .city-stage:has(.city-stage__utility-controls) .city-stage__topbar { padding-top: 8.2rem; }
+}
 
 @media (max-width: 720px) {
   .teacher-audio-controls {

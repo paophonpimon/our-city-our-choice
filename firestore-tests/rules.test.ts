@@ -447,13 +447,13 @@ describe('POST assessment and Reflection — Phase B1, same rule shape as PRE', 
     submittedAt: serverTimestamp(),
   })
 
-  it('accepts a valid POST submission from the owning student', async () => {
+  it('accepts a valid POST submission from the owning student while the room is finished', async () => {
     await setUpRoomAndPlayer('POST1')
     const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
     await assertSucceeds(setDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), validPostDoc()))
   })
 
-  it('accepts a valid Reflection submission from the owning student', async () => {
+  it('accepts a valid Reflection submission from the owning student while the room is finished', async () => {
     await setUpRoomAndPlayer('POST1')
     const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
     await assertSucceeds(setDoc(doc(studentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`), validReflectionDoc()))
@@ -465,7 +465,7 @@ describe('POST assessment and Reflection — Phase B1, same rule shape as PRE', 
     await assertSucceeds(setDoc(doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`), validPostDoc()))
   })
 
-  it('rejects a POST/Reflection submission for a player the caller does not own', async () => {
+  it('rejects a POST/Reflection submission from the wrong owner while the room is finished', async () => {
     await setUpRoomAndPlayer('POST1')
     const otherUid = 'someone-else'
     const otherDb = testEnv.authenticatedContext(otherUid).firestore()
@@ -503,7 +503,7 @@ describe('POST assessment and Reflection — Phase B1, same rule shape as PRE', 
     await assertFails(setDoc(doc(studentDb, `rooms/POST1/assessments/reflection::${STUDENT_UID}`), { ...validReflectionDoc(), nickname: 'leaked nickname' }))
   })
 
-  it('is immutable: overwrite/update is rejected for both POST and Reflection, and the original content survives', async () => {
+  it('keeps finished-room POST and Reflection immutable and preserves the original content', async () => {
     await setUpRoomAndPlayer('POST1')
     const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
     const postRef = doc(studentDb, `rooms/POST1/assessments/post::${STUDENT_UID}`)

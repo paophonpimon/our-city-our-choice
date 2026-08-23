@@ -54,17 +54,25 @@ describe('classroom UI contracts', () => {
     expect(teacherPage).toContain('service.finishGame')
   })
 
-  it('lets the teacher terminate a lobby before creating a fresh room', () => {
+  it('keeps a valid finished teacher session attached and routes /teacher back to Result evidence', () => {
     const teacherPage = readSource('../pages/TeacherPage.tsx')
     const resultPage = readSource('../pages/ResultPage.tsx')
-    expect(teacherPage).toContain('ยุติห้องเดิมและเริ่มห้องใหม่')
-    expect(teacherPage).toContain("room.status !== 'finished' && room.teacherSessionId === uid")
-    expect(teacherPage).toContain('await service.endActivity(room.roomId, uid)')
-    expect(teacherPage).toContain('clearTeacherSnapshot(roomId)')
-    expect(teacherPage).toContain('disabled={busy}')
-    expect(teacherPage).toContain("setRoomId('')")
-    expect(resultPage).toContain("roomState.data?.status !== 'finished'")
-    expect(resultPage).toContain('clearClassroomStudentSession()')
+    expect(teacherPage).toContain("room?.status === 'game-result' || room?.status === 'finished'")
+    const restoreStart = teacherPage.indexOf("if (!roomId || roomState.identityKey !== roomId || roomState.loading) return")
+    const restoreEnd = teacherPage.indexOf('const closeCurrentQuestion', restoreStart)
+    const restoreEffect = teacherPage.slice(restoreStart, restoreEnd)
+    expect(restoreEffect).toContain('room.teacherSessionId !== uid')
+    expect(restoreEffect).not.toContain("room.status === 'finished'")
+    expect(resultPage).toContain('<TeacherEvidenceSummarySection')
+    expect(resultPage).toContain('<TeacherObservationSection')
+  })
+
+  it('starts assessment-complete finished only from ResultPage, never active question or crisis controls', () => {
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    expect(teacherPage).not.toContain('setIsEndActivityDialogOpen')
+    expect(teacherPage).not.toContain('city-stage__action-button--end')
+    expect(resultPage).toContain("if (room.status === 'game-result') await service.endActivity(roomId, uid)")
   })
 
   it('shows a one-year teacher cutscene before each next question', () => {
@@ -215,11 +223,30 @@ describe('classroom UI contracts', () => {
     expect(styles).toContain('font-family: "Mitr"')
   })
 
+  it('positions embedded teacher audio beside the menu with reserved tablet and portrait space', () => {
+    const styles = readSource('../styles.css')
+    expect(styles).toContain('left: clamp(4.55rem, 5.8vw, 6.25rem)')
+    expect(styles).toContain('position: static !important')
+    expect(styles).toContain('.city-stage:has(.city-stage__utility-controls) .city-stage__topbar')
+    expect(styles).toContain('padding-left: clamp(16.8rem, 23vw, 20rem)')
+    expect(styles).toContain('padding: 4.8rem .7rem .7rem')
+  })
+
   it('renders honest light and corrupt gloom from real latest building averages', () => {
     const cityStage = readSource('./CityStage.tsx')
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    const styles = readSource('../styles.css')
     expect(cityStage).toContain('summary.participantCount === 0 || summary.scoreAverage === 0')
     expect(cityStage).toContain("summary.scoreAverage > 0 ? 'is-integrity' : 'is-corruption'")
     expect(cityStage).toContain('city-stage__building-effects')
+    expect(teacherPage).toContain("locationImpacts={room.status === 'round-result' ? currentRound?.locationSummaries ?? null : null}")
+    expect(teacherPage).not.toContain('locationImpacts={latestRound?.locationSummaries')
+    const degradedIntegrityStart = styles.indexOf('.city-scene.is-scene-degraded .city-scene__building-aura.is-integrity')
+    const degradedCorruptionStart = styles.indexOf('.city-scene.is-scene-degraded .city-scene__building-aura.is-corruption')
+    const degradedIntegrityCss = styles.slice(degradedIntegrityStart, degradedCorruptionStart)
+    expect(degradedIntegrityCss).toContain('mix-blend-mode: screen')
+    expect(degradedIntegrityCss).toContain('brightness(1.55)')
+    expect(degradedIntegrityCss).not.toContain('soft-light')
   })
 
   it('opens real per-building score history from repositioned map labels', () => {

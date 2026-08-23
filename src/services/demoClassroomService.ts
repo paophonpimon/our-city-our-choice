@@ -772,7 +772,8 @@ export class DemoClassroomGameService implements ClassroomGameService {
     const state = readState()
     const roomState = getRoomState(state, roomId)
     assertTeacher(roomState.room, teacherSessionId)
-    if (roomState.room.status === 'finished') throw new Error('ผู้ใช้:ห้องนี้ถูกยุติแล้ว')
+    if (roomState.room.status === 'finished') return
+    if (roomState.room.status !== 'game-result') throw new Error('ผู้ใช้:จบกิจกรรมได้จากหน้าสรุปผลเกมเท่านั้น')
     roomState.room.status = 'finished'
     roomState.room.questionStartedAt = null
     roomState.room.questionDeadlineAt = null

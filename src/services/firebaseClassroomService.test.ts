@@ -65,3 +65,18 @@ describe('firebaseClassroomService.closeQuestion — critical-path fix must not 
     expect(closeQuestionSource).not.toMatch(/Promise\.all\(\[\s*writePersonalResults/)
   })
 })
+
+describe('firebaseClassroomService.endActivity — assessment lifecycle guard', () => {
+  const source = readSource('./firebaseClassroomService.ts')
+  const start = source.indexOf('async endActivity(')
+  const endActivitySource = source.slice(start)
+
+  it('allows only game-result → finished and treats an already-finished room as a safe no-op', () => {
+    expect(start).toBeGreaterThan(-1)
+    expect(endActivitySource).toContain("if (room.status === 'finished') return")
+    expect(endActivitySource).toContain("if (room.status !== 'game-result') throw new Error")
+    expect(endActivitySource).toContain('await runTransaction(db, async (transaction) => {')
+    expect(endActivitySource).toContain('transaction.update(roomRef, {')
+    expect(endActivitySource).toContain("status: 'finished'")
+  })
+})

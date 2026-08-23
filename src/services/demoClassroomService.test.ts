@@ -172,16 +172,23 @@ describe('Continue City Progress setup and role draw', () => {
     await expect(service.joinRoom(joinInput(room.roomId, 'คนใหม่'), 'owner-3')).rejects.toThrow('เกมเริ่มแล้ว')
   })
 
-  it('lets the teacher terminate a lobby and blocks the old room from being reused', async () => {
+  it('allows only game-result → finished and keeps repeated finished calls idempotent', async () => {
     const service = new DemoClassroomGameService()
     const room = await service.createRoom(teacherUid, 30)
     await service.joinRoom(joinInput(room.roomId, 'Player one'), 'owner-1')
 
+    for (const status of ['lobby', 'playing', 'round-result', 'crisis-intro', 'crisis-playing', 'crisis-result'] as const) {
+      setRoomFieldsForTests(room.roomId, { status })
+      await expect(service.endActivity(room.roomId, teacherUid)).rejects.toThrow('หน้าสรุปผลเกมเท่านั้น')
+      expect(currentRoom(service, room.roomId).status).toBe(status)
+    }
+
+    setRoomFieldsForTests(room.roomId, { status: 'game-result' })
     await service.endActivity(room.roomId, teacherUid)
 
     expect(currentRoom(service, room.roomId).status).toBe('finished')
     await expect(service.joinRoom(joinInput(room.roomId, 'Player two', 2), 'owner-2')).rejects.toThrow('ห้องนี้ถูกยุติแล้ว')
-    await expect(service.endActivity(room.roomId, teacherUid)).rejects.toThrow('ห้องนี้ถูกยุติแล้ว')
+    await expect(service.endActivity(room.roomId, teacherUid)).resolves.toBeUndefined()
     const replacement = await service.createRoom(teacherUid, 30)
     expect(replacement.roomId).not.toBe(room.roomId)
     expect(replacement.status).toBe('lobby')
@@ -849,6 +856,7 @@ describe('continue in the same room', () => {
     const service = new DemoClassroomGameService()
     const oldRoom = await service.createRoom(teacherUid, 30)
     setRoomFieldsForTests(oldRoom.roomId, {
+      status: 'game-result',
       cityScore: 100,
       buildingLevels: { municipality: -2, hospital: -2, police: -2, construction: -2, market: -2, school: -2, newsAgency: -2 },
       buildingScores: { municipality: 100, hospital: 100, police: 100, construction: 100, market: 100, school: 100, newsAgency: 100 },
