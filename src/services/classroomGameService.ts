@@ -1,6 +1,7 @@
 import type { RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import type {
   ClassroomAnswerRecord,
+  ClassroomAssessmentRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
   ClassroomPostAssessment,
@@ -15,6 +16,11 @@ import type {
   PublicRoomQuestion,
 } from '../types/classroomGame'
 import type { ReflectionInput, TeacherObservationInput } from '../domain/assessment'
+
+export const isKnownAssessmentRecordType = (
+  value: unknown,
+): value is ClassroomAssessmentRecord['recordType'] =>
+  value === 'pre' || value === 'post' || value === 'reflection' || value === 'observation'
 
 export interface ClassroomGameService {
   readonly isDemo: boolean
@@ -61,6 +67,12 @@ export interface ClassroomGameService {
   subscribeObservation(
     roomId: string,
     listener: (observation: ClassroomTeacherObservation | null) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
+  /** Teacher-only, room-wide realtime evidence for the finished-room summary. */
+  subscribeAssessmentEvidence(
+    roomId: string,
+    listener: (records: ClassroomAssessmentRecord[]) => void,
     onError: (message: string) => void,
   ): ClassroomUnsubscribe
   subscribeRoom(

@@ -44,6 +44,7 @@ import {
 import { compareClassroomPlayersByStudentNumber, isClassSection } from '../types/classroomGame'
 import type {
   ClassroomAnswerRecord,
+  ClassroomAssessmentRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
   ClassroomPostAssessment,
@@ -65,7 +66,7 @@ import {
   OBSERVATION_ASSESSMENT_ID,
   toPublicQuestionDocument,
 } from './classroomFirestore'
-import { classroomFriendlyError, type ClassroomGameService } from './classroomGameService'
+import { classroomFriendlyError, isKnownAssessmentRecordType, type ClassroomGameService } from './classroomGameService'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, normalizeBuildingLevels, normalizeBuildingScores, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent, type CrisisEventId, type CrisisEventIndex } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
@@ -318,6 +319,16 @@ const mapObservation = (data: DocumentData): ClassroomTeacherObservation => ({
   notes: String(data.notes ?? ''),
   submittedAt: toMillis(data.submittedAt) ?? Date.now(),
 })
+
+const mapAssessmentEvidence = (data: DocumentData): ClassroomAssessmentRecord | null => {
+  if (!isKnownAssessmentRecordType(data.recordType)) return null
+  switch (data.recordType) {
+    case 'pre': return mapPreAssessment(data)
+    case 'post': return mapPostAssessment(data)
+    case 'reflection': return mapReflection(data)
+    case 'observation': return mapObservation(data)
+  }
+}
 
 
 const fnvHash = (value: string): string => {
@@ -622,6 +633,20 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
         if (snapshot.metadata.hasPendingWrites) return
         listener(snapshot.exists() ? mapObservation(snapshot.data()) : null)
       },
+      onErrorMessage(onError),
+    )
+  }
+
+  subscribeAssessmentEvidence(roomId: string, listener: (records: ClassroomAssessmentRecord[]) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(
+      collection(db, `${classroomPaths.room(roomId)}/assessments`),
+      { includeMetadataChanges: true },
+      (snapshot) => listener(
+        snapshot.docs
+          .filter((item) => !item.metadata.hasPendingWrites)
+          .map((item) => mapAssessmentEvidence(item.data()))
+          .filter((record): record is ClassroomAssessmentRecord => record !== null),
+      ),
       onErrorMessage(onError),
     )
   }

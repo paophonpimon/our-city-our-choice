@@ -3,11 +3,16 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CityLoader } from '../components/CityLoader'
 import { CityScene } from '../components/CityScene'
 import { TeacherObservationSection } from '../components/TeacherObservationSection'
+import {
+  getTeacherObservationEvidence,
+  shouldShowTeacherObservationSection,
+  TeacherEvidenceSummarySection,
+} from '../components/TeacherEvidenceSummarySection'
 import { useGame } from '../context/GameContext'
 import { LOCATION_BUILDING, normalizeBuildingLevels, type BuildingId, type BuildingLevel } from '../domain/cityBuildings'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
 import { formatCityLevel, MAX_GAME_CYCLES, ROLES, type CityLevel } from '../domain/ourCity'
-import { useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
+import { useAssessmentEvidence, useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
 import { classroomFriendlyError } from '../services'
 import {
   clearClassroomStudentSession,
@@ -89,6 +94,10 @@ export const ResultPage = () => {
   const roundsState = useRounds(isTeacher ? roomId : '')
   const crisisResultsState = useCrisisResults(isTeacher ? roomId : '')
   const playersState = usePlayers(isTeacher ? roomId : '')
+  const assessmentEvidenceState = useAssessmentEvidence(
+    roomId,
+    isTeacher && roomState.data?.status === 'finished',
+  )
   const playerState = usePlayer(hasStudentSession ? roomId : '', studentPlayerId)
   const personalResultsState = usePersonalDecisionResults(hasStudentSession ? roomId : '', studentPlayerId, hasStudentSession ? uid : '')
   const [busy, setBusy] = useState(false)
@@ -145,6 +154,12 @@ export const ResultPage = () => {
     return { ...building, summary, average, level, direction: average > 0 ? 'กำลังดีขึ้น' : average < 0 ? 'กำลังถดถอย' : 'ทรงตัว' }
   })
   const activeBuilding = activeBuildingId ? buildingResults.find((building) => building.id === activeBuildingId) ?? null : null
+  const observationEvidence = getTeacherObservationEvidence(assessmentEvidenceState.data)
+  const showTeacherObservationSection = shouldShowTeacherObservationSection(
+    room.status === 'finished',
+    assessmentEvidenceState.loading,
+    observationEvidence,
+  )
 
   const continueCity = async (): Promise<void> => {
     setBusy(true); setError('')
@@ -204,7 +219,22 @@ export const ResultPage = () => {
           <section className="teacher-answer-summary" aria-labelledby="answer-summary-title"><h2 id="answer-summary-title">สรุปคำตอบรอบนี้</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{latestTotals.integrityCount}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{latestTotals.corruptionCount}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{latestTotals.timeoutCount}</strong></p></article></div></section>
           <section className="teacher-building-summary" aria-labelledby="building-summary-title"><div className="teacher-section-heading"><div><h2 id="building-summary-title">ภาพรวมอาคารทั้ง 7 แห่ง</h2><p>ผลกระทบเฉลี่ยจากคำตอบในรอบนี้</p></div></div><div className="teacher-building-summary__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>Lv.{building.level > 0 ? '+' : ''}{building.level} • {building.direction}</small></p><strong>{signed(building.average)}</strong></article>)}</div></section>
           <button className="teacher-result-expand" aria-expanded={detailsExpanded} onClick={() => setDetailsExpanded((current) => !current)} type="button"><span>{detailsExpanded ? 'ซ่อนรายละเอียดผลลัพธ์' : 'ดูรายละเอียดผลลัพธ์'}</span><b>{detailsExpanded ? '⌃' : '⌄'}</b></button>
-          <TeacherObservationSection isTeacher={isTeacher} roomId={roomId} />
+          {room.status === 'finished' ? (
+            <TeacherEvidenceSummarySection
+              error={assessmentEvidenceState.error}
+              loading={assessmentEvidenceState.loading}
+              players={playersState.data}
+              records={assessmentEvidenceState.data}
+            />
+          ) : null}
+          {showTeacherObservationSection ? (
+            <TeacherObservationSection
+              isTeacher={isTeacher}
+              providedObservation={observationEvidence}
+              roomId={roomId}
+              useProvidedObservation={room.status === 'finished'}
+            />
+          ) : null}
           <footer className="teacher-result-actions">{canContinue ? <button className="is-primary" disabled={busy} onClick={() => void continueCity()} type="button">▶ เล่นต่อเพื่อพัฒนาเมือง</button> : null}{room.status === 'game-result' ? <button disabled={busy} onClick={() => void endActivity(false)} type="button">จบกิจกรรม</button> : null}{!canContinue ? <button className="is-primary" disabled={busy} onClick={() => void endActivity(true)} type="button">เริ่มห้องใหม่</button> : null}</footer>
           {roleProgress >= MAX_GAME_CYCLES ? <strong className="teacher-result-complete">✓ นักเรียนได้ทดลองครบทั้ง 8 อาชีพแล้ว</strong> : null}{teacherError ? <output className="teacher-result-error">{teacherError}</output> : null}
         </article>

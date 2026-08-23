@@ -10,15 +10,23 @@ import {
 import { useObservation } from '../hooks/useGameData'
 import { useGame } from '../context/GameContext'
 import { classroomFriendlyError } from '../services'
+import type { ClassroomTeacherObservation } from '../types/classroomGame'
 
 interface TeacherObservationSectionProps {
   roomId: string
   isTeacher: boolean
+  providedObservation?: ClassroomTeacherObservation | null
+  useProvidedObservation?: boolean
 }
 
-export const TeacherObservationSection = ({ roomId, isTeacher }: TeacherObservationSectionProps) => {
+export const TeacherObservationSection = ({
+  roomId,
+  isTeacher,
+  providedObservation = null,
+  useProvidedObservation = false,
+}: TeacherObservationSectionProps) => {
   const { service, uid } = useGame()
-  const observationState = useObservation(roomId, isTeacher)
+  const observationState = useObservation(roomId, isTeacher && !useProvidedObservation)
   const [scores, setScores] = useState<Partial<Record<ObservationDimensionId, ObservationScaleValue>>>({})
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -48,16 +56,16 @@ export const TeacherObservationSection = ({ roomId, isTeacher }: TeacherObservat
   }
 
   // Reset submitting state when observation arrives from server
+  const existingObservation = useProvidedObservation ? providedObservation : observationState.data
+
   useEffect(() => {
-    if (observationState.data) {
+    if (existingObservation) {
       setSubmitting(false)
     }
-  }, [observationState.data])
+  }, [existingObservation])
 
   if (!isTeacher) return null
-  if (observationState.loading) return null
-
-  const existingObservation = observationState.data
+  if (!useProvidedObservation && observationState.loading) return null
 
   return (
     <section className="teacher-observation-section" aria-labelledby="teacher-observation-title">

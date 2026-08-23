@@ -6680,3 +6680,202 @@ img.game-home-cast {
   cursor: not-allowed;
 }
 
+/* Teacher Evidence Summary (Phase B2c) */
+.teacher-evidence-summary {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid #c9deeb;
+  border-radius: 1rem;
+  background: #f7fbfe;
+  color: #173d5d;
+}
+
+.teacher-evidence-summary__interpretation {
+  margin: 0;
+  padding: .8rem 1rem;
+  border-left: 4px solid #2f80b7;
+  border-radius: .65rem;
+  background: #e8f4fb;
+  color: #245678;
+  font-size: .9rem;
+}
+
+.teacher-evidence-summary__state,
+.teacher-evidence-summary__error,
+.teacher-evidence-summary__empty {
+  margin: 0;
+  padding: .75rem 1rem;
+  border-radius: .65rem;
+  background: #edf4f8;
+  color: #587083;
+  font-size: .88rem;
+}
+
+.teacher-evidence-summary__error {
+  background: #fff0f0;
+  color: #a13434;
+}
+
+.teacher-evidence-summary__matched,
+.teacher-evidence-summary__observation,
+.teacher-evidence-summary__reflections {
+  display: grid;
+  gap: .8rem;
+  padding: 1rem;
+  border: 1px solid #d2e2ec;
+  border-radius: .85rem;
+  background: #fff;
+}
+
+.teacher-evidence-summary__matched > header,
+.teacher-evidence-summary__observation > header,
+.teacher-evidence-summary__reflections > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.teacher-evidence-summary h3 {
+  margin: 0;
+  color: #164f83;
+  font-size: 1rem;
+}
+
+.teacher-evidence-summary section header p {
+  margin: .15rem 0 0;
+  color: #6b8191;
+  font-size: .82rem;
+}
+
+.teacher-evidence-summary section > header > strong {
+  flex: 0 0 auto;
+  padding: .3rem .7rem;
+  border-radius: 999px;
+  background: #e7f2f8;
+  color: #1f658f;
+  font-size: .82rem;
+}
+
+.teacher-evidence-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .6rem;
+}
+
+.teacher-evidence-metrics article {
+  display: grid;
+  gap: .25rem;
+  min-height: 75px;
+  align-content: center;
+  padding: .7rem;
+  border: 1px solid #d9e6ed;
+  border-radius: .7rem;
+  background: #f8fbfd;
+}
+
+.teacher-evidence-metrics span {
+  color: #647d8e;
+  font-size: .76rem;
+  line-height: 1.25;
+}
+
+.teacher-evidence-metrics strong {
+  color: #164f83;
+  font-size: 1.25rem;
+}
+
+.teacher-evidence-metrics .is-improved strong { color: #16784a; }
+.teacher-evidence-metrics .is-decreased strong { color: #b14b43; }
+
+.teacher-evidence-observation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+}
+
+.teacher-evidence-observation-grid article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .65rem;
+  padding: .7rem;
+  border: 1px solid #d9e6ed;
+  border-radius: .7rem;
+  background: #f8fbfd;
+}
+
+.teacher-evidence-observation-grid article > span {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8f3fa;
+  color: #246b96;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.teacher-evidence-observation-grid div { display: grid; }
+.teacher-evidence-observation-grid div strong { font-size: .85rem; }
+.teacher-evidence-observation-grid small { color: #6b8191; font-size: .75rem; }
+.teacher-evidence-observation-grid b { color: #164f83; white-space: nowrap; }
+
+.teacher-evidence-summary__notes {
+  padding: .8rem;
+  border-radius: .7rem;
+  background: #f4f8fa;
+}
+
+.teacher-evidence-summary__notes strong { color: #164f83; font-size: .82rem; }
+.teacher-evidence-summary__notes p { margin: .3rem 0 0; white-space: pre-wrap; }
+
+.teacher-evidence-reflection-list {
+  display: grid;
+  gap: .5rem;
+}
+
+.teacher-evidence-reflection-list details {
+  border: 1px solid #d9e6ed;
+  border-radius: .7rem;
+  background: #f8fbfd;
+}
+
+.teacher-evidence-reflection-list summary {
+  padding: .7rem .85rem;
+  color: #164f83;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.teacher-evidence-reflection-list dl {
+  display: grid;
+  gap: .65rem;
+  margin: 0;
+  padding: 0 .85rem .85rem;
+}
+
+.teacher-evidence-reflection-list dl div {
+  padding: .65rem;
+  border-radius: .55rem;
+  background: #fff;
+}
+
+.teacher-evidence-reflection-list dt { color: #557083; font-size: .78rem; }
+.teacher-evidence-reflection-list dd { margin: .25rem 0 0; white-space: pre-wrap; }
+
+@media (max-width: 900px) {
+  .teacher-evidence-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .teacher-evidence-summary { padding: .8rem; }
+  .teacher-evidence-observation-grid { grid-template-columns: 1fr; }
+  .teacher-evidence-summary__matched > header,
+  .teacher-evidence-summary__observation > header,
+  .teacher-evidence-summary__reflections > header { flex-direction: column; }
+}
+

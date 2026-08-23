@@ -7,6 +7,7 @@ import { createTrustedQuestions } from '../test/classroomFixtures'
 import type {
   ClassSection,
   ClassroomAnswerRecord,
+  ClassroomAssessmentRecord,
   ClassroomPlayer,
   ClassroomRoom,
   ClassroomRoundResult,
@@ -15,6 +16,7 @@ import type {
 } from '../types/classroomGame'
 import { isQuestionAnswerRecord } from '../types/classroomGame'
 import { DemoClassroomGameService, resetDemoClassroomStateForTests, setRoomFieldsForTests } from './demoClassroomService'
+import { isKnownAssessmentRecordType } from './classroomGameService'
 
 const teacherUid = 'teacher-uid'
 
@@ -509,6 +511,42 @@ const currentObservation = (service: DemoClassroomGameService, roomId: string) =
 }
 
 const VALID_OBSERVATION = { o1: 3, o2: 4, o3: 3, o4: 2, notes: 'สังเกตพฤติกรรมระหว่างการอภิปราย' } as const
+
+describe('room-wide assessment evidence subscription (Phase B2c)', () => {
+  it('returns PRE, POST, Reflection, and Observation while safely rejecting unknown record types', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+    const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียนหลักฐาน'), 'owner-evidence')
+    let records: ClassroomAssessmentRecord[] = []
+    let unsubscribe = service.subscribeAssessmentEvidence(
+      room.roomId,
+      (nextRecords) => { records = nextRecords },
+      () => undefined,
+    )
+
+    expect(records).toEqual([])
+    unsubscribe()
+    await service.submitPreAssessment(room.roomId, player.playerId, 'owner-evidence', VALID_PRE_RESPONSES)
+    await service.submitPostAssessment(room.roomId, player.playerId, 'owner-evidence', VALID_POST_RESPONSES)
+    await service.submitReflection(room.roomId, player.playerId, 'owner-evidence', VALID_REFLECTION)
+    await service.submitObservation(room.roomId, teacherUid, VALID_OBSERVATION)
+
+    unsubscribe = service.subscribeAssessmentEvidence(
+      room.roomId,
+      (nextRecords) => { records = nextRecords },
+      () => undefined,
+    )
+    expect(records.map((record) => record.recordType).sort()).toEqual([
+      'observation',
+      'post',
+      'pre',
+      'reflection',
+    ])
+    expect(isKnownAssessmentRecordType('future-evidence')).toBe(false)
+    expect(isKnownAssessmentRecordType(undefined)).toBe(false)
+    unsubscribe()
+  })
+})
 
 describe('PRE roster subscription is not polluted by POST/Reflection/Observation records in the same assessments map', () => {
   it('subscribeAssessments (teacher PRE roster) only ever reports recordType pre, even after POST, Reflection, and Observation are submitted', async () => {

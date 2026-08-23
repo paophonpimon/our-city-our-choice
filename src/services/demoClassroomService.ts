@@ -32,7 +32,7 @@ import type {
   ClassroomPersonalDecisionResult,
   PublicRoomQuestion,
 } from '../types/classroomGame'
-import type { ClassroomGameService } from './classroomGameService'
+import { isKnownAssessmentRecordType, type ClassroomGameService } from './classroomGameService'
 import {
   createClassroomAnswerId,
   createClassroomRoundId,
@@ -400,6 +400,17 @@ export class DemoClassroomGameService implements ClassroomGameService {
     void onError
     const emit = (): void => emitNow(
       (readState().rooms[roomId.toUpperCase()]?.assessments[OBSERVATION_ASSESSMENT_ID] as ClassroomTeacherObservation | undefined) ?? null,
+      listener,
+    )
+    emit()
+    return listen(emit)
+  }
+
+  subscribeAssessmentEvidence(roomId: string, listener: (records: ClassroomAssessmentRecord[]) => void, onError: (message: string) => void): () => void {
+    void onError
+    const emit = (): void => emitNow(
+      Object.values(readState().rooms[roomId.toUpperCase()]?.assessments ?? {})
+        .filter((record) => isKnownAssessmentRecordType(record.recordType)),
       listener,
     )
     emit()

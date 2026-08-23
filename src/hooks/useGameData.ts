@@ -7,6 +7,7 @@ import { debugLog, isDebugMode } from '../debug/useDebugLog'
 import { tapSubscribe } from '../debug/flightRecorder'
 import type {
   ClassroomAnswerRecord,
+  ClassroomAssessmentRecord,
   ClassroomPlayer,
   ClassroomPostAssessment,
   ClassroomPreAssessment,
@@ -138,6 +139,21 @@ export const useObservation = (roomId: string, enabled = true): Loadable<Classro
     return subscribeWithIdentityGuard<ClassroomTeacherObservation | null>(
       (listener, onError) => service.subscribeObservation(roomId, listener, onError),
       (data) => setState({ data, loading: false, error: '', identityKey }),
+      (error) => setState((current) => ({ ...current, loading: false, error })),
+    )
+  }, [enabled, roomId, service])
+  return state
+}
+
+export const useAssessmentEvidence = (roomId: string, enabled: boolean): Loadable<ClassroomAssessmentRecord[]> => {
+  const { service } = useGame()
+  const [state, setState] = useState(initial<ClassroomAssessmentRecord[]>([]))
+  useEffect(() => {
+    if (!roomId || !enabled) return setState({ data: [], loading: false, error: '', identityKey: '' }), undefined
+    setState(initial([], roomId))
+    return subscribeWithIdentityGuard<ClassroomAssessmentRecord[]>(
+      (listener, onError) => service.subscribeAssessmentEvidence(roomId, listener, onError),
+      (data) => setState({ data, loading: false, error: '', identityKey: roomId }),
       (error) => setState((current) => ({ ...current, loading: false, error })),
     )
   }, [enabled, roomId, service])
