@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CityLoader } from '../components/CityLoader'
 import { CityScene } from '../components/CityScene'
+import { TeacherObservationSection } from '../components/TeacherObservationSection'
 import { useGame } from '../context/GameContext'
 import { LOCATION_BUILDING, normalizeBuildingLevels, type BuildingId, type BuildingLevel } from '../domain/cityBuildings'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
@@ -203,6 +204,7 @@ export const ResultPage = () => {
           <section className="teacher-answer-summary" aria-labelledby="answer-summary-title"><h2 id="answer-summary-title">สรุปคำตอบรอบนี้</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{latestTotals.integrityCount}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{latestTotals.corruptionCount}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{latestTotals.timeoutCount}</strong></p></article></div></section>
           <section className="teacher-building-summary" aria-labelledby="building-summary-title"><div className="teacher-section-heading"><div><h2 id="building-summary-title">ภาพรวมอาคารทั้ง 7 แห่ง</h2><p>ผลกระทบเฉลี่ยจากคำตอบในรอบนี้</p></div></div><div className="teacher-building-summary__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>Lv.{building.level > 0 ? '+' : ''}{building.level} • {building.direction}</small></p><strong>{signed(building.average)}</strong></article>)}</div></section>
           <button className="teacher-result-expand" aria-expanded={detailsExpanded} onClick={() => setDetailsExpanded((current) => !current)} type="button"><span>{detailsExpanded ? 'ซ่อนรายละเอียดผลลัพธ์' : 'ดูรายละเอียดผลลัพธ์'}</span><b>{detailsExpanded ? '⌃' : '⌄'}</b></button>
+          <TeacherObservationSection isTeacher={isTeacher} roomId={roomId} />
           <footer className="teacher-result-actions">{canContinue ? <button className="is-primary" disabled={busy} onClick={() => void continueCity()} type="button">▶ เล่นต่อเพื่อพัฒนาเมือง</button> : null}{room.status === 'game-result' ? <button disabled={busy} onClick={() => void endActivity(false)} type="button">จบกิจกรรม</button> : null}{!canContinue ? <button className="is-primary" disabled={busy} onClick={() => void endActivity(true)} type="button">เริ่มห้องใหม่</button> : null}</footer>
           {roleProgress >= MAX_GAME_CYCLES ? <strong className="teacher-result-complete">✓ นักเรียนได้ทดลองครบทั้ง 8 อาชีพแล้ว</strong> : null}{teacherError ? <output className="teacher-result-error">{teacherError}</output> : null}
         </article>

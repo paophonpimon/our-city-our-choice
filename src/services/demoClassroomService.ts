@@ -1,7 +1,14 @@
 import { scoreClassroomRound } from '../domain/cityScoring'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { randomRoomId } from '../domain/roomCode'
-import { isValidAssessmentResponses, isValidReflection, type ReflectionInput } from '../domain/assessment'
+import {
+  isValidAssessmentResponses,
+  isValidObservationInput,
+  isValidReflection,
+  OBSERVATION_NOTES_MAX_LENGTH,
+  type ReflectionInput,
+  type TeacherObservationInput,
+} from '../domain/assessment'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import {
   assignRolesForCycle,
@@ -21,11 +28,19 @@ import type {
   ClassroomReflection,
   ClassroomRoom,
   ClassroomRoundResult,
+  ClassroomTeacherObservation,
   ClassroomPersonalDecisionResult,
   PublicRoomQuestion,
 } from '../types/classroomGame'
 import type { ClassroomGameService } from './classroomGameService'
-import { createClassroomAnswerId, createClassroomRoundId, createPostAssessmentId, createPreAssessmentId, createReflectionId } from './classroomFirestore'
+import {
+  createClassroomAnswerId,
+  createClassroomRoundId,
+  createPostAssessmentId,
+  createPreAssessmentId,
+  createReflectionId,
+  OBSERVATION_ASSESSMENT_ID,
+} from './classroomFirestore'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
@@ -357,6 +372,40 @@ export class DemoClassroomGameService implements ClassroomGameService {
     emit()
     return listen(emit)
   }
+
+  async submitObservation(roomId: string, teacherSessionId: string, input: TeacherObservationInput): Promise<void> {
+    if (!isValidObservationInput(input)) throw new Error('ผู้ใช้:กรุณาประเมินการสังเกตพฤติกรรมให้ครบทั้ง 4 ด้าน')
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    assertTeacher(roomState.room, teacherSessionId)
+    const assessmentId = OBSERVATION_ASSESSMENT_ID
+    // Immutable: a resubmission is a safe no-op.
+    if (roomState.assessments[assessmentId]) return
+    roomState.assessments[assessmentId] = {
+      schemaVersion: 1,
+      recordType: 'observation',
+      roomId: roomState.room.roomId,
+      teacherSessionId,
+      o1: input.o1,
+      o2: input.o2,
+      o3: input.o3,
+      o4: input.o4,
+      notes: (input.notes ?? '').slice(0, OBSERVATION_NOTES_MAX_LENGTH),
+      submittedAt: Date.now(),
+    }
+    writeState(state)
+  }
+
+  subscribeObservation(roomId: string, listener: (observation: ClassroomTeacherObservation | null) => void, onError: (message: string) => void): () => void {
+    void onError
+    const emit = (): void => emitNow(
+      (readState().rooms[roomId.toUpperCase()]?.assessments[OBSERVATION_ASSESSMENT_ID] as ClassroomTeacherObservation | undefined) ?? null,
+      listener,
+    )
+    emit()
+    return listen(emit)
+  }
+
 
   // Server-side equivalent of Firebase's `where('recordType', '==', 'pre')`
   // query: the assessments map now also holds post/reflection records under

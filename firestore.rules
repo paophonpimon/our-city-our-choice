@@ -61,6 +61,17 @@ service cloud.firestore {
         && value.matches('.*\\S.*');
     }
 
+    // Teacher observation dimensions (O1-O4, Phase B2a) accept integer 1..4.
+    function isValidObservationScore(value) {
+      return value is int && value in [1, 2, 3, 4];
+    }
+
+    // Optional bounded notes for teacher observation — bounded at 1000 chars.
+    function isValidObservationNotes(value) {
+      return value is string && value.size() <= 1000;
+    }
+
+
     match /rooms/{roomId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -286,71 +297,98 @@ service cloud.firestore {
         // (only a full page reload re-subscribes and sees the truth). This
         // mirrors the same fix already applied to /answers.
         allow read: if isTeacher(roomId)
-          || (signedIn() && (
+          || (signedIn() && assessmentId != 'observation' && (
             !exists(/databases/$(database)/documents/rooms/$(roomId)/assessments/$(assessmentId))
             || resource.data.ownerUid == request.auth.uid
           ));
         // Fields shared by every record type are checked once here; each
         // record type then adds its own id-prefix, shape, and content
-        // checks in its own branch below. This is a pure refactor of the
-        // original PRE-only rule — PRE's own requirements are unchanged,
-        // just no longer duplicated for POST/Reflection.
+        // checks in its own branch below. Covers Teacher Observation
+        // (Phase B2a) and Student Assessments (PRE, POST, Reflection).
         allow create: if signedIn()
           && request.resource.data.schemaVersion == 1
           && request.resource.data.roomId == roomId
-          && request.resource.data.ownerUid == request.auth.uid
-          && isPlayerOwnerAfter(roomId, request.resource.data.playerId)
           && request.resource.data.submittedAt == request.time
           && (
             (
-              request.resource.data.recordType == 'pre'
-              && assessmentId == 'pre::' + request.resource.data.playerId
-              && isValidPreResponses(request.resource.data.responses)
+              // Teacher Observation (Phase B2a, room-level, teacher-owned)
+              isTeacher(roomId)
+              && assessmentId == 'observation'
+              && request.resource.data.recordType == 'observation'
+              && request.resource.data.teacherSessionId == request.auth.uid
+              && isValidObservationScore(request.resource.data.o1)
+              && isValidObservationScore(request.resource.data.o2)
+              && isValidObservationScore(request.resource.data.o3)
+              && isValidObservationScore(request.resource.data.o4)
+              && isValidObservationNotes(request.resource.data.notes)
               && request.resource.data.keys().hasOnly([
                 'schemaVersion',
                 'recordType',
                 'roomId',
-                'playerId',
-                'ownerUid',
-                'responses',
+                'teacherSessionId',
+                'o1',
+                'o2',
+                'o3',
+                'o4',
+                'notes',
                 'submittedAt'
               ])
             ) || (
-              request.resource.data.recordType == 'post'
-              && assessmentId == 'post::' + request.resource.data.playerId
-              && isValidPostResponses(request.resource.data.responses)
-              && request.resource.data.keys().hasOnly([
-                'schemaVersion',
-                'recordType',
-                'roomId',
-                'playerId',
-                'ownerUid',
-                'responses',
-                'submittedAt'
-              ])
-            ) || (
-              request.resource.data.recordType == 'reflection'
-              && assessmentId == 'reflection::' + request.resource.data.playerId
-              && isMeaningfulReflectionText(request.resource.data.r1)
-              && isMeaningfulReflectionText(request.resource.data.r2)
-              && isMeaningfulReflectionText(request.resource.data.r3)
-              && request.resource.data.keys().hasOnly([
-                'schemaVersion',
-                'recordType',
-                'roomId',
-                'playerId',
-                'ownerUid',
-                'r1',
-                'r2',
-                'r3',
-                'submittedAt'
-              ])
+              // Student Assessments (PRE, POST, Reflection)
+              request.resource.data.ownerUid == request.auth.uid
+              && isPlayerOwnerAfter(roomId, request.resource.data.playerId)
+              && (
+                (
+                  request.resource.data.recordType == 'pre'
+                  && assessmentId == 'pre::' + request.resource.data.playerId
+                  && isValidPreResponses(request.resource.data.responses)
+                  && request.resource.data.keys().hasOnly([
+                    'schemaVersion',
+                    'recordType',
+                    'roomId',
+                    'playerId',
+                    'ownerUid',
+                    'responses',
+                    'submittedAt'
+                  ])
+                ) || (
+                  request.resource.data.recordType == 'post'
+                  && assessmentId == 'post::' + request.resource.data.playerId
+                  && isValidPostResponses(request.resource.data.responses)
+                  && request.resource.data.keys().hasOnly([
+                    'schemaVersion',
+                    'recordType',
+                    'roomId',
+                    'playerId',
+                    'ownerUid',
+                    'responses',
+                    'submittedAt'
+                  ])
+                ) || (
+                  request.resource.data.recordType == 'reflection'
+                  && assessmentId == 'reflection::' + request.resource.data.playerId
+                  && isMeaningfulReflectionText(request.resource.data.r1)
+                  && isMeaningfulReflectionText(request.resource.data.r2)
+                  && isMeaningfulReflectionText(request.resource.data.r3)
+                  && request.resource.data.keys().hasOnly([
+                    'schemaVersion',
+                    'recordType',
+                    'roomId',
+                    'playerId',
+                    'ownerUid',
+                    'r1',
+                    'r2',
+                    'r3',
+                    'submittedAt'
+                  ])
+                )
+              )
             )
           );
         // Firestore evaluates a setDoc() over an existing document as an
         // update, not a create — so this alone is what makes every record
         // type immutable after creation; no separate "already exists"
-        // check needed. Covers PRE, POST, and Reflection alike.
+        // check needed. Covers Observation, PRE, POST, and Reflection alike.
         allow update, delete: if false;
       }
     }

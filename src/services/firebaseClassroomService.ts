@@ -20,7 +20,14 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 import { getCityLevel, scoreClassroomRound } from '../domain/cityScoring'
-import { isValidAssessmentResponses, isValidReflection, type ReflectionInput } from '../domain/assessment'
+import {
+  isValidAssessmentResponses,
+  isValidObservationInput,
+  isValidReflection,
+  OBSERVATION_NOTES_MAX_LENGTH,
+  type ReflectionInput,
+  type TeacherObservationInput,
+} from '../domain/assessment'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import { assertStagingBuildNotUsingProduction, resolveFirebaseEnvironmentName } from '../domain/firebaseEnvironment'
@@ -44,10 +51,20 @@ import type {
   ClassroomReflection,
   ClassroomRoom,
   ClassroomRoundResult,
+  ClassroomTeacherObservation,
   ClassroomPersonalDecisionResult,
+  ObservationScaleValue,
   PublicRoomQuestion,
 } from '../types/classroomGame'
-import { createClassroomAnswerId, createPostAssessmentId, createPreAssessmentId, createReflectionId, classroomPaths, toPublicQuestionDocument } from './classroomFirestore'
+import {
+  createClassroomAnswerId,
+  createPostAssessmentId,
+  createPreAssessmentId,
+  createReflectionId,
+  classroomPaths,
+  OBSERVATION_ASSESSMENT_ID,
+  toPublicQuestionDocument,
+} from './classroomFirestore'
 import { classroomFriendlyError, type ClassroomGameService } from './classroomGameService'
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, normalizeBuildingLevels, normalizeBuildingScores, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent, type CrisisEventId, type CrisisEventIndex } from '../domain/cityCrisisEvents'
@@ -289,6 +306,20 @@ const mapReflection = (data: DocumentData): ClassroomReflection => ({
   submittedAt: toMillis(data.submittedAt) ?? Date.now(),
 })
 
+const mapObservation = (data: DocumentData): ClassroomTeacherObservation => ({
+  schemaVersion: 1,
+  recordType: 'observation',
+  roomId: String(data.roomId ?? ''),
+  teacherSessionId: String(data.teacherSessionId ?? ''),
+  o1: Number(data.o1) as ObservationScaleValue,
+  o2: Number(data.o2) as ObservationScaleValue,
+  o3: Number(data.o3) as ObservationScaleValue,
+  o4: Number(data.o4) as ObservationScaleValue,
+  notes: String(data.notes ?? ''),
+  submittedAt: toMillis(data.submittedAt) ?? Date.now(),
+})
+
+
 const fnvHash = (value: string): string => {
   let hash = 0x811c9dc5
   for (let index = 0; index < value.length; index += 1) {
@@ -510,6 +541,31 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
     }
   }
 
+  async submitObservation(roomId: string, teacherSessionId: string, input: TeacherObservationInput): Promise<void> {
+    if (!isValidObservationInput(input)) throw new Error('ผู้ใช้:กรุณาประเมินการสังเกตพฤติกรรมให้ครบทั้ง 4 ด้าน')
+    const initialRoom = await requireRoom(roomId)
+    assertTeacher(initialRoom, teacherSessionId)
+    const assessmentRef = doc(db, classroomPaths.assessment(roomId, OBSERVATION_ASSESSMENT_ID))
+    try {
+      await setDoc(assessmentRef, {
+        schemaVersion: 1,
+        recordType: 'observation',
+        roomId,
+        teacherSessionId,
+        o1: input.o1,
+        o2: input.o2,
+        o3: input.o3,
+        o4: input.o4,
+        notes: (input.notes ?? '').slice(0, OBSERVATION_NOTES_MAX_LENGTH),
+        submittedAt: serverTimestamp(),
+      })
+    } catch (error) {
+      const existing = await getDoc(assessmentRef).catch(() => null)
+      if (existing?.exists() && existing.data().teacherSessionId === teacherSessionId) return
+      throw error
+    }
+  }
+
   subscribeRoom(roomId: string, listener: (room: ClassroomRoom | null) => void, onError: (message: string) => void): () => void {
     return onSnapshot(doc(db, classroomPaths.room(roomId)), (snapshot) => listener(snapshot.exists() ? mapRoom(snapshot.data()) : null), onErrorMessage(onError))
   }
@@ -558,6 +614,18 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       onErrorMessage(onError),
     )
   }
+  subscribeObservation(roomId: string, listener: (observation: ClassroomTeacherObservation | null) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(
+      doc(db, classroomPaths.assessment(roomId, OBSERVATION_ASSESSMENT_ID)),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return
+        listener(snapshot.exists() ? mapObservation(snapshot.data()) : null)
+      },
+      onErrorMessage(onError),
+    )
+  }
+
   subscribeAssessments(roomId: string, listener: (assessments: ClassroomPreAssessment[]) => void, onError: (message: string) => void): () => void {
     return onSnapshot(
       query(collection(db, `${classroomPaths.room(roomId)}/assessments`), where('recordType', '==', 'pre')),

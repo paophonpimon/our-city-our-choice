@@ -13,6 +13,7 @@ import type {
   ClassroomReflection,
   ClassroomRoom,
   ClassroomRoundResult,
+  ClassroomTeacherObservation,
   ClassroomCrisisResult,
   ClassroomPersonalDecisionResult,
   PublicRoomQuestion,
@@ -126,6 +127,23 @@ export const useReflection = (roomId: string, playerId: string): Loadable<Classr
   }, [playerId, roomId, service])
   return state
 }
+
+export const useObservation = (roomId: string, enabled = true): Loadable<ClassroomTeacherObservation | null> => {
+  const { service } = useGame()
+  const [state, setState] = useState(initial<ClassroomTeacherObservation | null>(null))
+  useEffect(() => {
+    if (!roomId || !enabled) return setState({ data: null, loading: false, error: '', identityKey: '' }), undefined
+    const identityKey = `${roomId}:observation`
+    setState(initial(null, identityKey))
+    return subscribeWithIdentityGuard<ClassroomTeacherObservation | null>(
+      (listener, onError) => service.subscribeObservation(roomId, listener, onError),
+      (data) => setState({ data, loading: false, error: '', identityKey }),
+      (error) => setState((current) => ({ ...current, loading: false, error })),
+    )
+  }, [enabled, roomId, service])
+  return state
+}
+
 
 /**
  * Teacher-only, room-wide PRE roster. `enabled` gates whether this hook

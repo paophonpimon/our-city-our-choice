@@ -501,8 +501,17 @@ describe('Reflection (Phase B1, R1-R3, unscored)', () => {
   })
 })
 
-describe('PRE roster subscription is not polluted by POST/Reflection records in the same assessments map', () => {
-  it('subscribeAssessments (teacher PRE roster) only ever reports recordType pre, even after POST and Reflection are submitted for the same player', async () => {
+const currentObservation = (service: DemoClassroomGameService, roomId: string) => {
+  let value: unknown = undefined
+  const unsubscribe = service.subscribeObservation(roomId, (observation) => { value = observation }, () => undefined)
+  unsubscribe()
+  return value as { o1: number; o2: number; o3: number; o4: number; notes: string; teacherSessionId: string; roomId: string } | null
+}
+
+const VALID_OBSERVATION = { o1: 3, o2: 4, o3: 3, o4: 2, notes: 'สังเกตพฤติกรรมระหว่างการอภิปราย' } as const
+
+describe('PRE roster subscription is not polluted by POST/Reflection/Observation records in the same assessments map', () => {
+  it('subscribeAssessments (teacher PRE roster) only ever reports recordType pre, even after POST, Reflection, and Observation are submitted', async () => {
     const service = new DemoClassroomGameService()
     const room = await service.createRoom(teacherUid, 30)
     const player = await service.joinRoom(joinInput(room.roomId, 'นักเรียน'), 'owner-1')
@@ -512,14 +521,66 @@ describe('PRE roster subscription is not polluted by POST/Reflection records in 
 
     await service.submitPostAssessment(room.roomId, player.playerId, 'owner-1', VALID_POST_RESPONSES)
     await service.submitReflection(room.roomId, player.playerId, 'owner-1', VALID_REFLECTION)
+    await service.submitObservation(room.roomId, teacherUid, VALID_OBSERVATION)
 
-    // Still exactly the one PRE record - POST/Reflection must never be
+    // Still exactly the one PRE record - POST/Reflection/Observation must never be
     // miscounted as PRE completion on the teacher's roster.
     const roster = currentAssessments(service, room.roomId)
     expect(roster).toHaveLength(1)
     expect(roster[0]?.playerId).toBe(player.playerId)
   })
 })
+
+describe('Teacher Observation (Phase B2a, 4 dimensions, 1-4 scale, teacher-owned)', () => {
+  it('is null before submission, then returns exactly what was submitted', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+
+    expect(currentObservation(service, room.roomId)).toBeNull()
+
+    await service.submitObservation(room.roomId, teacherUid, VALID_OBSERVATION)
+
+    const stored = currentObservation(service, room.roomId)
+    expect(stored?.o1).toBe(3)
+    expect(stored?.o2).toBe(4)
+    expect(stored?.o3).toBe(3)
+    expect(stored?.o4).toBe(2)
+    expect(stored?.notes).toBe('สังเกตพฤติกรรมระหว่างการอภิปราย')
+    expect(stored?.teacherSessionId).toBe(teacherUid)
+    expect(stored?.roomId).toBe(room.roomId)
+  })
+
+  it('never overwrites an existing submission - a resubmit is a silent no-op', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+
+    await service.submitObservation(room.roomId, teacherUid, VALID_OBSERVATION)
+    await service.submitObservation(room.roomId, teacherUid, { o1: 1, o2: 1, o3: 1, o4: 1, notes: 'คำตอบใหม่' })
+
+    const stored = currentObservation(service, room.roomId)
+    expect(stored?.o1).toBe(3)
+    expect(stored?.o2).toBe(4)
+    expect(stored?.notes).toBe('สังเกตพฤติกรรมระหว่างการอภิปราย')
+  })
+
+  it('rejects submission from someone who is not the room teacher', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+
+    await expect(service.submitObservation(room.roomId, 'other-teacher', VALID_OBSERVATION)).rejects.toThrow('ไม่มีสิทธิ์ควบคุมห้องนี้')
+  })
+
+  it('rejects invalid scores or missing dimensions', async () => {
+    const service = new DemoClassroomGameService()
+    const room = await service.createRoom(teacherUid, 30)
+
+    // @ts-expect-error test invalid score
+    await expect(service.submitObservation(room.roomId, teacherUid, { o1: 5, o2: 4, o3: 3, o4: 2 })).rejects.toThrow('4 ด้าน')
+    // @ts-expect-error test missing dimension
+    await expect(service.submitObservation(room.roomId, teacherUid, { o1: 3, o2: 4, o3: 3 })).rejects.toThrow('4 ด้าน')
+  })
+})
+
 
 describe('cycle-aware answers, rounds, and scoring', () => {
   it('does not let a question N answer disable question N+1', async () => {

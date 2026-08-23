@@ -88,6 +88,10 @@ export const createReflectionId = (playerId: string): string => {
   return `reflection::${playerId}`
 }
 
+export const OBSERVATION_ASSESSMENT_ID = 'observation'
+export const createObservationAssessmentId = (): string => OBSERVATION_ASSESSMENT_ID
+
+
 export const createPersonalDecisionId = (
   gameCycle: number,
   source: 'question' | 'crisis',

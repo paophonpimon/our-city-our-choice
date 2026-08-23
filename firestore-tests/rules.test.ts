@@ -560,6 +560,139 @@ describe('POST assessment and Reflection — Phase B1, same rule shape as PRE', 
   })
 })
 
+describe('Teacher Observation — Phase B2a, room-level teacher evidence', () => {
+  const setUpObservationRoom = async (roomId = 'OBS1') => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `rooms/${roomId}`), minimalRoomDoc(roomId))
+    })
+  }
+
+  const validObservationDoc = (roomId = 'OBS1') => ({
+    schemaVersion: 1,
+    recordType: 'observation',
+    roomId,
+    teacherSessionId: TEACHER_UID,
+    o1: 3,
+    o2: 4,
+    o3: 3,
+    o4: 2,
+    notes: 'นักเรียนให้ความร่วมมือและอภิปรายอย่างสร้างสรรค์',
+    submittedAt: serverTimestamp(),
+  })
+
+  it('accepts a valid Observation submission from the owning teacher', async () => {
+    await setUpObservationRoom('OBS1')
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    await assertSucceeds(setDoc(doc(teacherDb, 'rooms/OBS1/assessments/observation'), validObservationDoc('OBS1')))
+  })
+
+  it('accepts an Observation submission with empty notes', async () => {
+    await setUpObservationRoom('OBS1')
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    await assertSucceeds(setDoc(doc(teacherDb, 'rooms/OBS1/assessments/observation'), {
+      ...validObservationDoc('OBS1'),
+      notes: '',
+    }))
+  })
+
+  it('rejects an Observation submission from a student', async () => {
+    await setUpObservationRoom('OBS1')
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(setDoc(doc(studentDb, 'rooms/OBS1/assessments/observation'), {
+      ...validObservationDoc('OBS1'),
+      teacherSessionId: STUDENT_UID,
+    }))
+  })
+
+  it('rejects an Observation submission from a teacher of a different room', async () => {
+    await setUpObservationRoom('OBS1')
+    const otherTeacherDb = testEnv.authenticatedContext('other-teacher').firestore()
+    await assertFails(setDoc(doc(otherTeacherDb, 'rooms/OBS1/assessments/observation'), {
+      ...validObservationDoc('OBS1'),
+      teacherSessionId: 'other-teacher',
+    }))
+  })
+
+  it.each([
+    ['score 0 below range', { o1: 0 }],
+    ['score 5 above range', { o2: 5 }],
+    ['non-integer score 2.5', { o3: 2.5 }],
+    ['string score "3"', { o4: '3' }],
+    ['missing o4 dimension', { o4: undefined }],
+  ])('rejects an invalid observation dimension score: %s', async (_label, override) => {
+    await setUpObservationRoom('OBS1')
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    const docData = { ...validObservationDoc('OBS1'), ...override }
+    if (docData.o4 === undefined) delete (docData as Record<string, unknown>).o4
+    await assertFails(setDoc(doc(teacherDb, 'rooms/OBS1/assessments/observation'), docData))
+  })
+
+  it('rejects an Observation document carrying extra arbitrary fields', async () => {
+    await setUpObservationRoom('OBS1')
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    await assertFails(setDoc(doc(teacherDb, 'rooms/OBS1/assessments/observation'), {
+      ...validObservationDoc('OBS1'),
+      averageScore: 3.0,
+    }))
+    await assertFails(setDoc(doc(teacherDb, 'rooms/OBS1/assessments/observation'), {
+      ...validObservationDoc('OBS1'),
+      studentRanking: ['p1', 'p2'],
+    }))
+  })
+
+  it('is immutable: overwrite/update is rejected and original observation survives', async () => {
+    await setUpObservationRoom('OBS1')
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    const observationRef = doc(teacherDb, 'rooms/OBS1/assessments/observation')
+
+    await assertSucceeds(setDoc(observationRef, validObservationDoc('OBS1')))
+    await assertFails(setDoc(observationRef, {
+      ...validObservationDoc('OBS1'),
+      o1: 1,
+      notes: 'พยายามแก้ไขข้อมูลเดิม',
+    }))
+
+    let storedNotes: unknown
+    let storedO1: unknown
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const privilegedDb = context.firestore()
+      const snapshot = await getDoc(doc(privilegedDb, 'rooms/OBS1/assessments/observation'))
+      storedNotes = snapshot.data()?.notes
+      storedO1 = snapshot.data()?.o1
+    })
+    expect(storedO1).toBe(3)
+    expect(storedNotes).toBe(validObservationDoc('OBS1').notes)
+  })
+
+  it('lets the owning teacher read the observation record', async () => {
+    await setUpObservationRoom('OBS1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'rooms/OBS1/assessments/observation'), validObservationDoc('OBS1'))
+    })
+    const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore()
+    await assertSucceeds(getDoc(doc(teacherDb, 'rooms/OBS1/assessments/observation')))
+  })
+
+  it('denies a student reading the observation record', async () => {
+    await setUpObservationRoom('OBS1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'rooms/OBS1/assessments/observation'), validObservationDoc('OBS1'))
+    })
+    const studentDb = testEnv.authenticatedContext(STUDENT_UID).firestore()
+    await assertFails(getDoc(doc(studentDb, 'rooms/OBS1/assessments/observation')))
+  })
+
+  it('denies a teacher of an unrelated room reading the observation record', async () => {
+    await setUpObservationRoom('OBS1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'rooms/OBS1/assessments/observation'), validObservationDoc('OBS1'))
+    })
+    const otherTeacherDb = testEnv.authenticatedContext('other-teacher').firestore()
+    await assertFails(getDoc(doc(otherTeacherDb, 'rooms/OBS1/assessments/observation')))
+  })
+})
+
+
 describe('preAssessmentOpened — teacher-controlled room field', () => {
   it('lets the teacher set preAssessmentOpened while lobby', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {

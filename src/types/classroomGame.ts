@@ -181,8 +181,31 @@ export interface ClassroomReflection {
   submittedAt: number
 }
 
-/** Any record stored under a room's `assessments` collection/map, keyed by a recordType-prefixed id (`pre::`/`post::`/`reflection::`). */
-export type ClassroomAssessmentRecord = ClassroomPreAssessment | ClassroomPostAssessment | ClassroomReflection
+export type ObservationScaleValue = 1 | 2 | 3 | 4
+
+/**
+ * Teacher-owned classroom observation evidence (O1-O4, Phase B2a).
+ * Room-level single record, created once and immutable.
+ */
+export interface ClassroomTeacherObservation {
+  schemaVersion: 1
+  recordType: 'observation'
+  roomId: string
+  teacherSessionId: string
+  o1: ObservationScaleValue
+  o2: ObservationScaleValue
+  o3: ObservationScaleValue
+  o4: ObservationScaleValue
+  notes: string
+  submittedAt: number
+}
+
+/** Any record stored under a room's `assessments` collection/map. */
+export type ClassroomAssessmentRecord =
+  | ClassroomPreAssessment
+  | ClassroomPostAssessment
+  | ClassroomReflection
+  | ClassroomTeacherObservation
 
 export interface ClassroomJoinInput {
   roomId: string

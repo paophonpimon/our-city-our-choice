@@ -108,3 +108,63 @@ export const isValidReflection = (value: unknown): value is ReflectionInput => {
   return typeof r1 === 'string' && typeof r2 === 'string' && typeof r3 === 'string'
     && isMeaningfulReflectionAnswer(r1) && isMeaningfulReflectionAnswer(r2) && isMeaningfulReflectionAnswer(r3)
 }
+
+// ── Teacher Observation (4 dimensions, 1-4 scale, Phase B2a) ────────────────
+
+export type ObservationDimensionId = 'o1' | 'o2' | 'o3' | 'o4'
+
+export interface ObservationDimension {
+  id: ObservationDimensionId
+  code: string
+  title: string
+}
+
+export const OBSERVATION_DIMENSIONS: readonly ObservationDimension[] = [
+  { id: 'o1', code: 'O1', title: 'การใช้เหตุผล' },
+  { id: 'o2', code: 'O2', title: 'การคำนึงถึงประโยชน์ส่วนรวม' },
+  { id: 'o3', code: 'O3', title: 'การเคารพกติกาและขั้นตอน' },
+  { id: 'o4', code: 'O4', title: 'การรับฟังและทำงานร่วมกับผู้อื่น' },
+] as const
+
+export type ObservationScaleValue = 1 | 2 | 3 | 4
+
+export interface ObservationScaleOption {
+  value: ObservationScaleValue
+  label: string
+}
+
+export const OBSERVATION_SCALE: readonly ObservationScaleOption[] = [
+  { value: 1, label: 'ควรส่งเสริมเพิ่มเติม' },
+  { value: 2, label: 'เริ่มแสดงพฤติกรรม' },
+  { value: 3, label: 'แสดงพฤติกรรมได้ดี' },
+  { value: 4, label: 'แสดงพฤติกรรมได้ชัดเจนและสม่ำเสมอ' },
+] as const
+
+export const OBSERVATION_NOTES_MAX_LENGTH = 1000
+
+export interface TeacherObservationInput {
+  o1: ObservationScaleValue
+  o2: ObservationScaleValue
+  o3: ObservationScaleValue
+  o4: ObservationScaleValue
+  notes?: string
+}
+
+export const isValidObservationScaleValue = (value: unknown): value is ObservationScaleValue =>
+  Number.isInteger(value) && (value === 1 || value === 2 || value === 3 || value === 4)
+
+export const isValidObservationInput = (value: unknown): value is TeacherObservationInput => {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  const validScores =
+    isValidObservationScaleValue(candidate.o1)
+    && isValidObservationScaleValue(candidate.o2)
+    && isValidObservationScaleValue(candidate.o3)
+    && isValidObservationScaleValue(candidate.o4)
+  if (!validScores) return false
+  if (candidate.notes !== undefined && candidate.notes !== null) {
+    if (typeof candidate.notes !== 'string' || candidate.notes.length > OBSERVATION_NOTES_MAX_LENGTH) return false
+  }
+  return true
+}
+

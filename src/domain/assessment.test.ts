@@ -4,8 +4,13 @@ import {
   ASSESSMENT_ITEMS,
   ASSESSMENT_SCALE,
   isValidAssessmentResponses,
+  isValidObservationInput,
+  isValidObservationScaleValue,
   isValidReflection,
   meanAssessmentResponses,
+  OBSERVATION_DIMENSIONS,
+  OBSERVATION_NOTES_MAX_LENGTH,
+  OBSERVATION_SCALE,
   PRE_ASSESSMENT_ITEM_COUNT,
   PRE_ASSESSMENT_ITEMS,
   REFLECTION_ANSWER_MAX_LENGTH,
@@ -121,3 +126,59 @@ describe('pure scoring helpers (no aggregate persisted - for future use only)', 
     expect(meanAssessmentResponses([])).toBe(0)
   })
 })
+
+describe('Teacher Observation (Phase B2a, 4 dimensions, 1-4 scale)', () => {
+  it('has exactly 4 observation dimensions with expected codes and titles', () => {
+    expect(OBSERVATION_DIMENSIONS).toHaveLength(4)
+    expect(OBSERVATION_DIMENSIONS.map((dim) => ({ id: dim.id, code: dim.code, title: dim.title }))).toEqual([
+      { id: 'o1', code: 'O1', title: 'การใช้เหตุผล' },
+      { id: 'o2', code: 'O2', title: 'การคำนึงถึงประโยชน์ส่วนรวม' },
+      { id: 'o3', code: 'O3', title: 'การเคารพกติกาและขั้นตอน' },
+      { id: 'o4', code: 'O4', title: 'การรับฟังและทำงานร่วมกับผู้อื่น' },
+    ])
+  })
+
+  it('has a 4-point scale from 1 to 4 with expected Thai labels', () => {
+    expect(OBSERVATION_SCALE).toEqual([
+      { value: 1, label: 'ควรส่งเสริมเพิ่มเติม' },
+      { value: 2, label: 'เริ่มแสดงพฤติกรรม' },
+      { value: 3, label: 'แสดงพฤติกรรมได้ดี' },
+      { value: 4, label: 'แสดงพฤติกรรมได้ชัดเจนและสม่ำเสมอ' },
+    ])
+  })
+
+  it('validates observation scale values strictly between 1 and 4', () => {
+    expect(isValidObservationScaleValue(1)).toBe(true)
+    expect(isValidObservationScaleValue(2)).toBe(true)
+    expect(isValidObservationScaleValue(3)).toBe(true)
+    expect(isValidObservationScaleValue(4)).toBe(true)
+    expect(isValidObservationScaleValue(0)).toBe(false)
+    expect(isValidObservationScaleValue(5)).toBe(false)
+    expect(isValidObservationScaleValue(2.5)).toBe(false)
+    expect(isValidObservationScaleValue('3')).toBe(false)
+    expect(isValidObservationScaleValue(null)).toBe(false)
+    expect(isValidObservationScaleValue(undefined)).toBe(false)
+  })
+
+  it('accepts valid observation input with or without notes', () => {
+    expect(isValidObservationInput({ o1: 1, o2: 2, o3: 3, o4: 4 })).toBe(true)
+    expect(isValidObservationInput({ o1: 4, o2: 4, o3: 4, o4: 4, notes: 'นักเรียนให้ความร่วมมือดีมาก' })).toBe(true)
+    expect(isValidObservationInput({ o1: 2, o2: 3, o3: 3, o4: 2, notes: '' })).toBe(true)
+  })
+
+  it('rejects observation input with missing or invalid scores', () => {
+    expect(isValidObservationInput({ o1: 1, o2: 2, o3: 3 })).toBe(false)
+    expect(isValidObservationInput({ o1: 1, o2: 2, o3: 3, o4: 5 })).toBe(false)
+    expect(isValidObservationInput({ o1: 0, o2: 2, o3: 3, o4: 4 })).toBe(false)
+    expect(isValidObservationInput(null)).toBe(false)
+    expect(isValidObservationInput('invalid')).toBe(false)
+  })
+
+  it('enforces max length on observation notes', () => {
+    const atMax = 'ก'.repeat(OBSERVATION_NOTES_MAX_LENGTH)
+    const overMax = 'ก'.repeat(OBSERVATION_NOTES_MAX_LENGTH + 1)
+    expect(isValidObservationInput({ o1: 1, o2: 2, o3: 3, o4: 4, notes: atMax })).toBe(true)
+    expect(isValidObservationInput({ o1: 1, o2: 2, o3: 3, o4: 4, notes: overMax })).toBe(false)
+  })
+})
+

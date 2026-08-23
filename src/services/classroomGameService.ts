@@ -7,13 +7,14 @@ import type {
   ClassroomPreAssessment,
   ClassroomReflection,
   ClassroomRoom,
+  ClassroomTeacherObservation,
   ClassroomCrisisResult,
   ClassroomPersonalDecisionResult,
   ClassroomRoundResult,
   ClassroomUnsubscribe,
   PublicRoomQuestion,
 } from '../types/classroomGame'
-import type { ReflectionInput } from '../domain/assessment'
+import type { ReflectionInput, TeacherObservationInput } from '../domain/assessment'
 
 export interface ClassroomGameService {
   readonly isDemo: boolean
@@ -49,6 +50,17 @@ export interface ClassroomGameService {
     roomId: string,
     playerId: string,
     listener: (reflection: ClassroomReflection | null) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
+  /** Teacher-owned classroom observation (Phase B2a). Room-level, create-once, immutable. */
+  submitObservation(
+    roomId: string,
+    teacherSessionId: string,
+    input: TeacherObservationInput,
+  ): Promise<void>
+  subscribeObservation(
+    roomId: string,
+    listener: (observation: ClassroomTeacherObservation | null) => void,
     onError: (message: string) => void,
   ): ClassroomUnsubscribe
   subscribeRoom(
