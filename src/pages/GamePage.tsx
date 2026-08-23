@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useGame } from '../context/GameContext'
 import { CityLoader } from '../components/CityLoader'
+import { FullscreenToggle } from '../components/FullscreenToggle'
 import { getRoleQuestion } from '../domain/classroomGameLoop'
 import { orderChoicesForPlayer } from '../domain/classroomQuestions'
 import { ROLES } from '../domain/ourCity'
@@ -150,7 +151,7 @@ export const GamePage = () => {
     return (
       <main className="our-city-page crisis-student-page min-h-dvh px-4 py-5 md:px-7 md:py-7">
         <section className="crisis-student-shell mx-auto flex min-h-[calc(100dvh-2.5rem)] w-full max-w-4xl flex-col">
-          <div className="game-play-brandbar"><Link className="game-brand" to="/"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b></strong></Link><span>ห้อง {roomId}</span></div>
+          <div className="game-play-brandbar"><Link className="game-brand" to="/"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b></strong></Link><div className="game-play-brandbar__actions"><span>ห้อง {roomId}</span><FullscreenToggle className="game-play-fullscreen-button" /></div></div>
           <header className="crisis-student-header">
             <p>เหตุการณ์วิกฤตเมือง {crisisEvent.index}/2</p>
             <h1>{crisisEvent.title}</h1>

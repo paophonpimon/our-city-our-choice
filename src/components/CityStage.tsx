@@ -23,6 +23,7 @@ import {
 } from '../domain/cityBuildings'
 import { CityBirdsAnimation } from './CityBirdsAnimation'
 import { CityCloudsAnimation } from './CityCloudsAnimation'
+import { FullscreenToggle } from './FullscreenToggle'
 import {
   clearLayoutPlacement,
   clearLayoutScene,
@@ -739,6 +740,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, remaini
           >
             พอดีจอ
           </button>
+          <FullscreenToggle className="city-stage__zoom-fit" />
         </div>
         {room.status === 'round-result' && roundImpact !== null && roundImpact !== undefined ? (
           <div className={`city-stage__round-impact ${roundImpact >= 0 ? 'is-positive' : 'is-negative'}`} aria-live="polite">

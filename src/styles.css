@@ -3356,7 +3356,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .game-play-brandbar { display: flex; min-height: 3.7rem; flex: none; align-items: center; justify-content: space-between; padding: .35rem .65rem; }
 .game-play-brandbar .game-brand__mark { width: 2.55rem; height: 2.55rem; border-radius: .75rem; font-size: 1.15rem; }
 .game-play-brandbar .game-brand > strong { font-size: .68rem; }
-.game-play-brandbar > span { padding: .4rem .7rem; border: 1px solid #d0e2ef; border-radius: 999px; background: rgb(255 255 255 / 82%); color: #3e6285; font-size: .62rem; font-weight: 700; }
+.game-play-brandbar__actions { display: flex; align-items: center; gap: .4rem; }
+.game-play-brandbar__actions > span { padding: .4rem .7rem; border: 1px solid #d0e2ef; border-radius: 999px; background: rgb(255 255 255 / 82%); color: #3e6285; font-size: .62rem; font-weight: 700; }
+.game-play-fullscreen-button { display: inline-flex; align-items: center; gap: .3rem; padding: .4rem .7rem; border: 1px solid #d0e2ef; border-radius: 999px; background: rgb(255 255 255 / 82%); color: #3e6285; font-size: .62rem; font-weight: 700; cursor: pointer; }
+.game-play-fullscreen-button:hover { background: rgb(255 255 255 / 96%); }
+.fullscreen-toggle-unsupported { max-width: 11rem; padding: .35rem .65rem; border: 1px solid #d0e2ef; border-radius: .8rem; background: rgb(255 255 255 / 70%); color: #5c7086; font-size: .52rem; font-weight: 600; line-height: 1.35; }
 .game-play-header { border: 1px solid #d2e3ef !important; background: rgb(255 255 255 / 94%) !important; box-shadow: 0 .55rem 1.4rem rgb(36 86 128 / 9%) !important; color: var(--game-ink); backdrop-filter: blur(12px); }
 .game-play-header p { color: #1872d5 !important; }
 .game-play-header > div:last-child { border: 1px solid #cfe2ed; background: #eef8ff !important; color: #174e80; }
