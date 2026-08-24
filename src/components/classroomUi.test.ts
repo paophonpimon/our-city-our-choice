@@ -617,4 +617,15 @@ describe('POST and Reflection active submit acknowledgements', () => {
     expect(styles).toContain('.teacher-lobby-page--create {')
     expect(styles).toContain('.teacher-lobby-create-hero {')
   })
+
+  it('attempts fullscreen on create-room gesture and exposes fallback control in lobby header', () => {
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    const styles = readSource('../styles.css')
+    // createRoom immediately calls enterFullscreenSafely from user gesture
+    expect(teacherPage).toContain('void enterFullscreenSafely()')
+    expect(teacherPage).toContain("import { enterFullscreenSafely } from '../hooks/useFullscreen'")
+    // Lobby header contains fallback FullscreenToggle
+    expect(teacherPage).toContain('{roomId ? <FullscreenToggle className="teacher-lobby-fullscreen" /> : null}')
+    expect(styles).toContain('.teacher-lobby-fullscreen.fullscreen-toggle-button {')
+  })
 })

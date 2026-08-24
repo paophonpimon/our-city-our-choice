@@ -6,6 +6,7 @@ import { CityBirdsAnimation } from '../components/CityBirdsAnimation'
 import { CityLoader } from '../components/CityLoader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { createClassroomJoinUrl, LOCATION_POSITIONS } from '../components/classroomUi'
+import { FullscreenToggle } from '../components/FullscreenToggle'
 import { JoinQrCode } from '../components/JoinQrCode'
 import { LiveAnswerImpacts } from '../components/LiveAnswerImpacts'
 import { TeacherSoundtrack, type TeacherSoundtrackHandle, type TeacherSoundtrackMode } from '../components/TeacherSoundtrack'
@@ -20,6 +21,7 @@ import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { BUILDING_IDS, BUILDING_LOCATION, INITIAL_BUILDING_LEVELS, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
 import { useAnswers, useCrisisResults, usePlayers, usePreAssessments, useRoom, useRounds } from '../hooks/useGameData'
 import { useCountdown } from '../hooks/useCountdown'
+import { enterFullscreenSafely } from '../hooks/useFullscreen'
 import { classroomFriendlyError } from '../services'
 import { loadGoogleSheetsQuestions } from '../services/googleSheetsQuestions'
 import {
@@ -701,6 +703,7 @@ export const TeacherPage = () => {
       setActionError('กรุณาโหลดคำถามให้ครบก่อนสร้างห้อง')
       return
     }
+    void enterFullscreenSafely()
     setBusy(true)
     setActionError('')
     teacherSoundtrackRef.current?.playLobby()
@@ -1134,6 +1137,7 @@ export const TeacherPage = () => {
           <p>{roomId ? 'ทำความรู้จัก 8 อาชีพ แล้วร่วมกันสร้างเมืองที่โปร่งใส ไร้ทุจริต' : 'เตรียมพื้นที่เรียนรู้ความสุจริตและการตัดสินใจเพื่อส่วนรวมสำหรับชั้นเรียน'}</p>
         </div>
         <TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />
+        {roomId ? <FullscreenToggle className="teacher-lobby-fullscreen" /> : null}
         <Link className="teacher-lobby-home" to="/"><span aria-hidden="true">⌂</span> หน้าหลัก</Link>
       </header>
 

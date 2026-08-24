@@ -30,8 +30,31 @@ export const requestFullscreenToggle = async (doc: FullscreenCapableDocument): P
   else await doc.documentElement.requestFullscreen?.()
 }
 
+/**
+ * Best-effort helper to enter fullscreen if supported and not already active.
+ * Catches rejections and platform denials so caller flow is never interrupted.
+ */
+export const requestEnterFullscreen = async (doc: FullscreenCapableDocument): Promise<void> => {
+  if (!isFullscreenSupported(doc) || doc.fullscreenElement) return
+  try {
+    await doc.documentElement.requestFullscreen?.()
+  } catch {
+    // Best-effort only - browser denial, gesture expiry, or platform restriction is safely ignored
+  }
+}
+
 const getDocument = (): FullscreenCapableDocument | null =>
   typeof document === 'undefined' ? null : (document as unknown as FullscreenCapableDocument)
+
+/**
+ * Best-effort global helper to enter fullscreen from a click/gesture handler.
+ * Safe no-op when document is unavailable, unsupported, or if the request rejects.
+ */
+export const enterFullscreenSafely = async (): Promise<void> => {
+  const doc = getDocument()
+  if (!doc) return
+  await requestEnterFullscreen(doc)
+}
 
 export interface UseFullscreenResult {
   /** True only while the browser reports an active fullscreen element - always kept in sync with the native `fullscreenchange` event, never assumed from the last toggle call. */

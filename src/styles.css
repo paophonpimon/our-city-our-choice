@@ -1467,7 +1467,8 @@ option { font-family: "Chakra Petch", sans-serif; }
 .teacher-lobby-title { padding-left: clamp(1rem, 2.1vw, 2.3rem); border-left: 2px solid #d4deea; }
 .teacher-lobby-title h1 { color: #17243b; font-size: clamp(1.5rem, 2.3vw, 2.25rem); font-weight: 700; line-height: 1.15; }
 .teacher-lobby-title p { margin-top: .38rem; color: #3e5068; font-size: clamp(.72rem, .95vw, .92rem); }
-.teacher-lobby-home {
+.teacher-lobby-home,
+.teacher-lobby-fullscreen.fullscreen-toggle-button {
   display: flex;
   min-height: 3.45rem;
   align-items: center;
@@ -1480,8 +1481,18 @@ option { font-family: "Chakra Petch", sans-serif; }
   color: #17243b;
   font-size: .92rem;
   font-weight: 600;
+  cursor: pointer;
 }
-.teacher-lobby-home span { font-size: 1.5rem; line-height: 1; }
+.teacher-lobby-fullscreen.fullscreen-toggle-button:hover {
+  background: #ffffff;
+  border-color: #bcd4ec;
+  color: #0b60b4;
+}
+.teacher-lobby-fullscreen.fullscreen-toggle-unsupported {
+  display: none;
+}
+.teacher-lobby-home span,
+.teacher-lobby-fullscreen span { font-size: 1.5rem; line-height: 1; }
 .teacher-lobby-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.14fr) minmax(25rem, .96fr);
@@ -5201,8 +5212,10 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-lobby-title { padding-left: 1rem; }
   .teacher-lobby-title h1 { font-size: 1.42rem; }
   .teacher-lobby-title p { margin-top: .16rem; font-size: .65rem; }
-  .teacher-lobby-home { min-height: 2.85rem; padding: .5rem .9rem; border-radius: .7rem; font-size: .74rem; }
-  .teacher-lobby-home span { font-size: 1.15rem; }
+  .teacher-lobby-home,
+  .teacher-lobby-fullscreen.fullscreen-toggle-button { min-height: 2.85rem; padding: .5rem .9rem; border-radius: .7rem; font-size: .74rem; }
+  .teacher-lobby-home span,
+  .teacher-lobby-fullscreen span { font-size: 1.15rem; }
 
   .teacher-lobby-page > .teacher-lobby-layout {
     width: 100%;
@@ -5329,8 +5342,10 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-lobby-title { padding-left: .75rem; }
   .teacher-lobby-title h1 { font-size: 1.12rem; }
   .teacher-lobby-title p { margin-top: .08rem; font-size: .52rem; }
-  .teacher-lobby-home { min-height: 2.3rem; padding: .38rem .7rem; font-size: .62rem; }
-  .teacher-lobby-home span { font-size: .95rem; }
+  .teacher-lobby-home,
+  .teacher-lobby-fullscreen.fullscreen-toggle-button { min-height: 2.3rem; padding: .38rem .7rem; font-size: .62rem; }
+  .teacher-lobby-home span,
+  .teacher-lobby-fullscreen span { font-size: .95rem; }
 
   .teacher-lobby-page > .teacher-lobby-layout { gap: .5rem; }
   .teacher-lobby-roster,
