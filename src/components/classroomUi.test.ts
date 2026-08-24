@@ -628,4 +628,21 @@ describe('POST and Reflection active submit acknowledgements', () => {
     expect(teacherPage).toContain('{roomId ? <FullscreenToggle className="teacher-lobby-fullscreen" /> : null}')
     expect(styles).toContain('.teacher-lobby-fullscreen.fullscreen-toggle-button {')
   })
+
+  it('makes teacher lobby room code the visual hero and provides secondary Home exit on ResultPage', () => {
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    const styles = readSource('../styles.css')
+
+    // Room code expanded hero layout with vertical and horizontal centering
+    expect(styles).toContain('.teacher-lobby-page .teacher-join-card__details {')
+    expect(styles).toContain('text-align: center')
+    expect(styles).toContain('clamp(4rem, 7vw, 6rem)')
+
+    // Result page secondary Home action alongside primary actions
+    expect(resultPage).toContain('className="teacher-result-home-button"')
+    expect(resultPage).toContain('กลับหน้าหลัก')
+    expect(resultPage).toContain('เริ่มห้องใหม่')
+    expect(resultPage).toContain('onClick={goHome}')
+    expect(styles).toContain('.teacher-result-home-button {')
+  })
 })
