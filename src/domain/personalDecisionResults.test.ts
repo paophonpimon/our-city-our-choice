@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createRoomQuestionSnapshot } from './classroomQuestions'
 import { CITY_CRISIS_EVENTS } from './cityCrisisEvents'
-import { assertPersonalOutcomeTotals, countPersonalDecisionOutcomes, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from './personalDecisionResults'
+import { assertPersonalOutcomeTotals, countPersonalDecisionOutcomes, derivePersonalImpactNarrative, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from './personalDecisionResults'
 import { createTrustedQuestions } from '../test/classroomFixtures'
 
 const players = [
@@ -66,5 +66,23 @@ describe('trusted personal decision results', () => {
       ['crisis', 'timeout'],
     ])
     assertPersonalOutcomeTotals(results, { integrityCount: 1, corruptionCount: 1, timeoutCount: 1 })
+  })
+})
+
+describe('personal impact narrative', () => {
+  it.each([
+    [{ integrity: 6, corruption: 2, timeout: 1 }, 'integrity-majority'],
+    [{ integrity: 2, corruption: 6, timeout: 1 }, 'corruption-majority'],
+    [{ integrity: 4, corruption: 4, timeout: 1 }, 'balanced'],
+    [{ integrity: 2, corruption: 1, timeout: 4 }, 'high-timeout'],
+  ] as const)('derives %s from finalized personal counts', (totals, expectedKind) => {
+    expect(derivePersonalImpactNarrative(totals, 'neutral').kind).toBe(expectedKind)
+  })
+
+  it('adds city context without assigning a moral trait or claiming causality', () => {
+    const narrative = derivePersonalImpactNarrative({ integrity: 5, corruption: 1, timeout: 0 }, 'improving')
+    const text = `${narrative.decisionMessage} ${narrative.cityMessage}`
+    expect(text).toContain('เมืองจำลอง')
+    expect(text).not.toMatch(/คนสุจริต|คนทุจริต|เป็นคน|นิสัย|ตัวตน|พิสูจน์|ทำให้เมืองดีขึ้นเพราะคุณ/)
   })
 })

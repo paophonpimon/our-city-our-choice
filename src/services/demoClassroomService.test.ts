@@ -779,7 +779,7 @@ describe('cycle-aware answers, rounds, and scoring', () => {
       if (question < 4) await service.openNextQuestion(roomId, teacherUid)
     }
     const intro = await service.openNextQuestion(roomId, teacherUid)
-    expect(intro).toMatchObject({ status: 'crisis-intro', currentQuestionNumber: 4, currentCrisisEventIndex: 1, currentCrisisEventId: 'construction-audit' })
+    expect(intro).toMatchObject({ status: 'crisis-intro', currentQuestionNumber: 4, currentCrisisEventIndex: 1, currentCrisisEventId: 'construction-audit', questionStartedAt: null, questionDeadlineAt: null })
     await service.beginCrisisEvent(roomId, teacherUid)
     for (const player of currentPlayers(service, roomId)) {
       if (!player.roleId) throw new Error('missing role')

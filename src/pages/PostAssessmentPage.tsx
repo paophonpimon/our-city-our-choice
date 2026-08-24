@@ -42,9 +42,20 @@ export const PostAssessmentPage = () => {
   const [reflectionWriteAcknowledged, setReflectionWriteAcknowledged] = useState(false)
   const [error, setError] = useState('')
 
+  const step = resolveAssessmentFlowStep(
+    Boolean(postAssessmentState.data),
+    Boolean(reflectionState.data),
+    postWriteAcknowledged,
+    reflectionWriteAcknowledged,
+  )
+
   useEffect(() => {
     saveClassroomViewerRole('student')
   }, [])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [step])
 
   useEffect(() => {
     if (!submitting) return
@@ -69,13 +80,6 @@ export const PostAssessmentPage = () => {
     const guardRoute = resolvePostAssessmentGuardRoute(roomState.data?.status, roomId)
     if (guardRoute) return <Navigate replace to={guardRoute} />
   }
-
-  const step = resolveAssessmentFlowStep(
-    Boolean(postAssessmentState.data),
-    Boolean(reflectionState.data),
-    postWriteAcknowledged,
-    reflectionWriteAcknowledged,
-  )
 
   const answeredPostCount = Object.keys(postResponses).length
   const allPostAnswered = answeredPostCount === ASSESSMENT_ITEM_COUNT
@@ -140,18 +144,6 @@ export const PostAssessmentPage = () => {
               <p>ตอบตามความรู้สึกจริงของคุณ ไม่มีคำตอบถูกหรือผิด และไม่มีผลต่อคะแนนในเกม</p>
             </header>
 
-            <div className="assessment-scale" aria-label="คำอธิบายระดับความคิดเห็น">
-              <p className="assessment-scale__title">ระดับความคิดเห็น</p>
-              <ul className="assessment-scale__list">
-                {ASSESSMENT_SCALE.map((option) => (
-                  <li className="assessment-scale__item" key={option.value}>
-                    <strong>{option.value}</strong>
-                    <span>{option.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
             <form aria-busy={submitting} className="assessment-form" onSubmit={(event) => void submitPost(event)}>
               {ASSESSMENT_ITEMS.map((statement, index) => (
                 <fieldset className="assessment-item" key={index}>
@@ -168,7 +160,6 @@ export const PostAssessmentPage = () => {
                           className={`assessment-choice${selected ? ' is-selected' : ''}`}
                           htmlFor={inputId}
                           key={option.value}
-                          title={option.label}
                         >
                           <input
                             checked={selected}
@@ -179,7 +170,8 @@ export const PostAssessmentPage = () => {
                             type="radio"
                             value={option.value}
                           />
-                          {option.value}
+                          <strong>{option.value}</strong>
+                          <span>{option.label}</span>
                         </label>
                       )
                     })}
@@ -210,6 +202,8 @@ export const PostAssessmentPage = () => {
               <h1>สะท้อนความคิดของฉัน</h1>
               <p>ไม่มีคำตอบถูกหรือผิด เขียนตามความคิดและความรู้สึกจริงของคุณ</p>
             </header>
+
+            <p className="assessment-reflection-hint">ตอบสั้น ๆ ตามความคิดของคุณได้ ข้อละ 1–2 ประโยคก็เพียงพอ</p>
 
             <form aria-busy={submitting} className="assessment-form" onSubmit={(event) => void submitReflection(event)}>
               {REFLECTION_PROMPTS.map((prompt, index) => {

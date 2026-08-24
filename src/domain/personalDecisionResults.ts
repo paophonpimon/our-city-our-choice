@@ -1,6 +1,6 @@
 import type { RoomQuestionSnapshot } from './classroomQuestions'
 import { getCrisisEvent, type CityCrisisEvent } from './cityCrisisEvents'
-import type { RoleId } from './ourCity'
+import type { CityLevel, RoleId } from './ourCity'
 import type {
   ClassroomCrisisAnswerRecord,
   ClassroomPersonalDecisionResult,
@@ -19,6 +19,51 @@ export const countPersonalDecisionOutcomes = (results: readonly ClassroomPersona
   (totals, result) => ({ ...totals, [result.outcome]: totals[result.outcome] + 1 }),
   { integrity: 0, corruption: 0, timeout: 0 } satisfies Record<PersonalDecisionOutcome, number>,
 )
+
+export type PersonalImpactNarrativeKind = 'integrity-majority' | 'corruption-majority' | 'balanced' | 'high-timeout'
+
+export interface PersonalImpactNarrative {
+  kind: PersonalImpactNarrativeKind
+  decisionMessage: string
+  cityMessage: string
+}
+
+const CITY_IMPACT_MESSAGES: Record<CityLevel, string> = {
+  critical: 'เมืองจำลองอยู่ในภาวะที่ต้องเร่งฟื้นฟูร่วมกัน',
+  declining: 'เมืองจำลองกำลังถดถอยและต้องอาศัยการตัดสินใจร่วมกันเพื่อฟื้นตัว',
+  neutral: 'เมืองจำลองยังทรงตัว และการตัดสินใจในรอบต่อไปยังเปลี่ยนทิศทางได้',
+  improving: 'ผลสะสมของทั้งห้องทำให้เมืองจำลองมีแนวโน้มพัฒนาดีขึ้น',
+  prosperous: 'ผลสะสมของทั้งห้องช่วยให้เมืองจำลองพัฒนาอย่างมั่นคงในรอบนี้',
+}
+
+/** Presentation-only interpretation of already-finalized private counts. */
+export const derivePersonalImpactNarrative = (
+  totals: Readonly<Record<PersonalDecisionOutcome, number>>,
+  cityLevel: CityLevel,
+): PersonalImpactNarrative => {
+  const answered = totals.integrity + totals.corruption
+  const total = answered + totals.timeout
+  const highTimeout = total > 0 && totals.timeout >= Math.max(totals.integrity, totals.corruption)
+
+  const kind: PersonalImpactNarrativeKind = highTimeout
+    ? 'high-timeout'
+    : totals.integrity > totals.corruption
+      ? 'integrity-majority'
+      : totals.corruption > totals.integrity
+        ? 'corruption-majority'
+        : 'balanced'
+
+  const decisionMessage: Record<PersonalImpactNarrativeKind, string> = {
+    'integrity-majority': 'รอบนี้คุณเลือกทางสุจริตมากกว่า ตัวเลือกเหล่านี้มีส่วนช่วยลดผลกระทบด้านลบต่อเมืองจำลอง',
+    'corruption-majority': 'รอบนี้คุณเลือกทางทุจริตมากกว่า ตัวเลือกเหล่านี้มีส่วนเพิ่มแรงกดดันต่อบริการและอาคารของเมืองจำลอง',
+    balanced: answered === 0
+      ? 'รอบนี้ยังไม่มีคำตอบที่สรุปผลได้ จึงยังไม่เห็นแนวโน้มจากการตัดสินใจของคุณ'
+      : 'รอบนี้การเลือกสองแนวทางมีจำนวนเท่ากัน จึงสะท้อนผลกระทบต่อเมืองจำลองที่ผสมกัน',
+    'high-timeout': 'การไม่ตอบหลายข้อในรอบนี้มีส่วนทำให้เมืองจำลองเสียโอกาสจากการมีส่วนร่วม และมีข้อมูลอธิบายแนวโน้มน้อยลง',
+  }
+
+  return { kind, decisionMessage: decisionMessage[kind], cityMessage: CITY_IMPACT_MESSAGES[cityLevel] }
+}
 
 export const assertPersonalOutcomeTotals = (
   results: readonly ClassroomPersonalDecisionResult[],

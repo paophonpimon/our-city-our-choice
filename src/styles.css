@@ -1,12 +1,11 @@
 @import "tailwindcss";
-@import "@fontsource/mitr/300.css";
-@import "@fontsource/mitr/400.css";
-@import "@fontsource/mitr/500.css";
-@import "@fontsource/mitr/600.css";
-@import "@fontsource/mitr/700.css";
+@import "@fontsource/chakra-petch/400.css";
+@import "@fontsource/chakra-petch/500.css";
+@import "@fontsource/chakra-petch/600.css";
+@import "@fontsource/chakra-petch/700.css";
 
 :root {
-  font-family: "Leelawadee UI", Tahoma, "Noto Sans Thai", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Chakra Petch", sans-serif;
   color: #fff7df;
   background: #080b23;
   font-synthesis: none;
@@ -17,6 +16,14 @@
   --gold: #e2bd65;
   --cream: #fff7df;
 }
+
+html,
+body,
+button,
+input,
+textarea,
+select,
+option { font-family: "Chakra Petch", sans-serif; }
 
 .our-city-panel {
   border: 1px solid rgb(255 255 255 / 14%);
@@ -1030,7 +1037,7 @@
   overflow: hidden;
   background: linear-gradient(135deg, #d7ecff, #eef8ff 55%, #dceeff);
   color: #142b4f;
-  font-family: "Mitr", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  font-family: "Chakra Petch", sans-serif;
 }
 
 .city-stage--critical {
@@ -1388,7 +1395,7 @@
     linear-gradient(rgb(255 255 255 / 96%), rgb(248 252 255 / 96%)),
     url('/images/new-city/backgrounds/city-overview-normal.webp') center / cover fixed;
   color: var(--lobby-navy);
-  font-family: "Leelawadee UI", Tahoma, "Noto Sans Thai", system-ui, sans-serif;
+  font-family: "Chakra Petch", sans-serif;
   line-height: 1.5;
 }
 .teacher-lobby-birds {
@@ -1747,7 +1754,7 @@
   background:
     linear-gradient(rgb(5 22 43 / 72%), rgb(3 14 31 / 88%)),
     url('/images/new-city/backgrounds/city-overview-normal.webp') center / cover fixed;
-  font-family: "Mitr", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  font-family: "Chakra Petch", sans-serif;
 }
 .role-draw-panel { overflow: hidden; }
 .role-draw-panel.is-player-revealed { max-width: 58rem; }
@@ -2176,7 +2183,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .eyebrow { color: #e5c16b; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
 .hero-title {
-  font-family: "Th Sarabun New", "Leelawadee UI", serif;
+  font-family: "Chakra Petch", sans-serif;
   font-size: clamp(4.4rem, 14vw, 7.8rem);
   line-height: 0.88;
   font-weight: 700;
@@ -2246,7 +2253,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .result-hero-copy { position: relative; z-index: 2; min-width: 0; }
 .result-title {
   color: #fff8e6;
-  font-family: "Th Sarabun New", "Leelawadee UI", serif;
+  font-family: "Chakra Petch", sans-serif;
   font-size: clamp(3rem, 5vw, 4.8rem);
   font-weight: 700;
   line-height: 0.98;
@@ -2326,7 +2333,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   overflow: hidden;
   background: #11151b;
   color: #edf1f4;
-  font-family: "Leelawadee UI", Tahoma, sans-serif;
+  font-family: "Chakra Petch", sans-serif;
 }
 .city-composer-page button,
 .city-composer-page input,
@@ -2480,7 +2487,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .congratulations-title {
   margin-top: 0.65rem;
   color: #fff8e6;
-  font-family: "Th Sarabun New", "Leelawadee UI", serif;
+  font-family: "Chakra Petch", sans-serif;
   font-size: clamp(2.7rem, 4vw, 4.4rem);
   font-weight: 700;
   line-height: 0.98;
@@ -2618,7 +2625,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .scoreboard-crown { display: grid; place-items: center; width: 5rem; height: 5rem; border: 1px solid rgba(250,218,132,0.62); border-radius: 50%; color: #ffe091; background: radial-gradient(circle at 35% 30%, rgba(255,224,133,0.35), rgba(118,64,24,0.5)); box-shadow: 0 0 0 0.5rem rgba(239,190,71,0.08), 0 0 2rem rgba(239,190,71,0.32); font-family: Georgia, serif; font-size: 2.5rem; text-shadow: 0 0 1.2rem rgba(255,215,112,0.65); }
 .scoreboard-spotlight small, .scoreboard-spotlight strong, .scoreboard-spotlight div > span { display: block; }
 .scoreboard-spotlight small { color: #dac99f; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; }
-.scoreboard-spotlight strong { margin-top: 0.15rem; overflow-wrap: anywhere; color: #fff0b0; font-family: "Th Sarabun New", "Leelawadee UI", serif; font-size: clamp(2.6rem, 5vw, 4.8rem); line-height: 0.95; text-shadow: 0 0 2rem rgba(241,192,72,0.35); }
+.scoreboard-spotlight strong { margin-top: 0.15rem; overflow-wrap: anywhere; color: #fff0b0; font-family: "Chakra Petch", sans-serif; font-size: clamp(2.6rem, 5vw, 4.8rem); line-height: 0.95; text-shadow: 0 0 2rem rgba(241,192,72,0.35); }
 .scoreboard-spotlight div > span { margin-top: 0.3rem; color: #ded3c2; font-size: 0.78rem; }
 .scoreboard-spotlight-score { min-width: 7.5rem; border-left: 1px solid rgba(255,255,255,0.13); padding-left: 1.5rem; text-align: right; }
 .scoreboard-spotlight b { color: #ffdd78; font-size: clamp(3.4rem, 5vw, 4.8rem); font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 0 1.8rem rgba(241,192,72,0.32); }
@@ -2676,7 +2683,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 }
 .victory-stage-content { position: relative; z-index: 3; display: flex; min-height: 36rem; flex-direction: column; align-items: center; justify-content: center; padding: 2.2rem clamp(1rem, 4vw, 4rem); text-align: center; }
 .victory-kicker { color: #f3cf75; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
-.teacher-victory-stage h2 { margin-top: 0.55rem; color: #fff4d4; font-family: "Th Sarabun New", "Leelawadee UI", serif; font-size: clamp(2.2rem, 4vw, 3.7rem); font-weight: 700; line-height: 1; text-shadow: 0 0 2rem rgba(255,216,118,0.2); }
+.teacher-victory-stage h2 { margin-top: 0.55rem; color: #fff4d4; font-family: "Chakra Petch", sans-serif; font-size: clamp(2.2rem, 4vw, 3.7rem); font-weight: 700; line-height: 1; text-shadow: 0 0 2rem rgba(255,216,118,0.2); }
 .champion-medal { position: relative; display: grid; place-items: center; width: 5.3rem; height: 5.3rem; margin-top: 1.1rem; border: 2px solid #ffe49a; border-radius: 50%; color: #4c2810; background: radial-gradient(circle at 35% 30%, #fff0aa, #dc9e34 58%, #8d4d17); box-shadow: 0 0 0 0.45rem rgba(244,199,87,0.12), 0 0 2.5rem rgba(246,194,65,0.5); }
 .champion-medal::before, .champion-medal::after { content: ""; position: absolute; top: 3.7rem; z-index: -1; width: 1.65rem; height: 3.2rem; background: linear-gradient(#8b234f, #dc557c); clip-path: polygon(0 0,100% 0,82% 100%,50% 73%,18% 100%); }
 .champion-medal::before { left: 0.25rem; transform: rotate(18deg); }
@@ -2687,7 +2694,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .champion-team-list-tied { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
 .champion-team { min-width: 0; }
 .champion-team strong, .champion-team span { display: block; overflow-wrap: anywhere; }
-.champion-team strong { color: #ffe18b; font-family: "Th Sarabun New", "Leelawadee UI", serif; font-size: clamp(3.5rem, 7vw, 6.5rem); font-weight: 700; letter-spacing: -0.035em; line-height: 0.9; text-shadow: 0 0 2.5rem rgba(245,193,61,0.42), 0 0.4rem 1rem rgba(7,3,15,0.5); }
+.champion-team strong { color: #ffe18b; font-family: "Chakra Petch", sans-serif; font-size: clamp(3.5rem, 7vw, 6.5rem); font-weight: 700; letter-spacing: -0.035em; line-height: 0.9; text-shadow: 0 0 2.5rem rgba(245,193,61,0.42), 0 0.4rem 1rem rgba(7,3,15,0.5); }
 .champion-team-list-tied .champion-team strong { font-size: clamp(2.7rem, 5vw, 4.6rem); }
 .champion-team span { margin-top: 0.55rem; color: #f5ead4; font-size: 0.9rem; }
 .champion-score { display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.6rem; }
@@ -2744,7 +2751,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-final-dashboard .scoreboard-row-leading .team-rank-emblem { width: 5rem; height: 5.6rem; }
 .teacher-final-dashboard .scoreboard-row-leading .scoreboard-team strong {
   color: #ffe49a;
-  font-family: "Th Sarabun New", "Leelawadee UI", serif;
+  font-family: "Chakra Petch", sans-serif;
   font-size: clamp(2.4rem, 4vw, 3.6rem);
   line-height: 1;
   text-shadow: 0 0 1.8rem rgba(238,192,81,0.32);
@@ -2873,7 +2880,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .timer-setting select option { color: #171027; background: #fff7df; }
 .timer-setting small { display: block; margin-top: 0.55rem; color: #aaa198; font-size: 0.7rem; line-height: 1.45; }
 
-.winner-name { margin-top: 0.1rem; color: #f5d47d; font-family: "Th Sarabun New", "Leelawadee UI", serif; font-size: clamp(3rem, 5vw, 5.2rem); font-weight: 700; line-height: 1; letter-spacing: -0.025em; text-shadow: 0 0 2rem rgba(236,187,83,0.42), 0 0.5rem 2rem rgba(20,6,12,0.5); }
+.winner-name { margin-top: 0.1rem; color: #f5d47d; font-family: "Chakra Petch", sans-serif; font-size: clamp(3rem, 5vw, 5.2rem); font-weight: 700; line-height: 1; letter-spacing: -0.025em; text-shadow: 0 0 2rem rgba(236,187,83,0.42), 0 0.5rem 2rem rgba(20,6,12,0.5); }
 .winner-name, .lobby-identity dd, .team-row strong, .team-row small { overflow-wrap: anywhere; }
 .winner-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 1.5rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); border-radius: 0.85rem; background: rgba(8,7,24,0.4); }
 .winner-stats div { padding: 0.9rem 0.4rem; }
@@ -3210,7 +3217,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
     radial-gradient(circle at 90% 70%, rgb(109 218 159 / 17%), transparent 30rem),
     linear-gradient(155deg, #fafdff, #edf7ff 55%, #f8fcff);
   color: var(--game-ink);
-  font-family: "Mitr", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  font-family: "Chakra Petch", sans-serif;
 }
 .game-home-page__city {
   position: absolute;
@@ -3362,7 +3369,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 /* Student question + crisis */
 .game-play-page,
-.crisis-student-page { color: var(--game-ink); background: linear-gradient(rgb(244 251 255 / 92%), rgb(235 247 255 / 96%)), url('/images/new-city/backgrounds/city-overview-normal.webp') center / cover fixed !important; font-family: "Mitr", "Noto Sans Thai", sans-serif; }
+.crisis-student-page { color: var(--game-ink); background: linear-gradient(rgb(244 251 255 / 92%), rgb(235 247 255 / 96%)), url('/images/new-city/backgrounds/city-overview-normal.webp') center / cover fixed !important; font-family: "Chakra Petch", sans-serif; }
 .game-play-shell,
 .crisis-student-shell { max-width: 72rem !important; }
 .game-play-brandbar { display: flex; min-height: 3.7rem; flex: none; align-items: center; justify-content: space-between; padding: .35rem .65rem; }
@@ -4704,7 +4711,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   overflow: hidden;
   background: #d8edfb;
   color: #17365e;
-  font-family: "Mitr", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  font-family: "Chakra Petch", sans-serif;
 }
 .city-result-page.is-critical { --result-accent: #e95850; --result-accent-dark: #bc2929; --result-accent-soft: #ffe3df; }
 .city-result-page.is-declining { --result-accent: #f3a022; --result-accent-dark: #d66d13; --result-accent-soft: #fff0d2; }
@@ -5635,7 +5642,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   padding: clamp(1rem, 3vw, 2.5rem);
   background: #eaf6ff;
   color: var(--teacher-crisis-navy);
-  font-family: "Mitr", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  font-family: "Chakra Petch", sans-serif;
 }
 .teacher-crisis-city { position: absolute; inset: 0; opacity: .6; filter: saturate(.82) brightness(1.08); }
 .teacher-crisis-city .city-scene { width: 100%; height: 100%; object-fit: cover; }
@@ -5746,7 +5753,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-crisis-actions { flex-direction: column; }
 }
 
-/* Teacher cycle result: summary first -> expanded details -> building drill-down. */
+/* Teacher cycle result: one-screen summary -> tabbed details -> building drill-down. */
 .teacher-result-page,
 .student-cycle-result {
   --result-blue: #126ed4;
@@ -5758,8 +5765,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   overflow-x: hidden;
   background: #e6f4ff;
   color: var(--result-ink);
-  font-family: "Mitr", "Noto Sans Thai", "Leelawadee UI", sans-serif;
+  font-family: "Chakra Petch", sans-serif;
 }
+.teacher-result-page { height: 100dvh; overflow: hidden; }
 .result-city-art,
 .result-city-veil { position: fixed; inset: 0; }
 .result-city-art { z-index: 0; opacity: .7; }
@@ -5790,15 +5798,48 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-result-topbar p { display: grid; margin: 0; color: var(--result-muted); font-size: 14px; line-height: 1.1; }
 .teacher-result-topbar strong { margin-top: 4px; color: var(--result-ink); font-size: 22px; white-space: nowrap; }
 
-.teacher-result-shell { position: relative; z-index: 2; width: min(1600px, calc(100% - 32px)); margin: 0 auto; padding-bottom: 28px; }
+.teacher-result-shell {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: min(1600px, calc(100% - 32px));
+  height: calc(100dvh - 110px);
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  margin: 0 auto;
+  padding-bottom: 12px;
+}
+.teacher-result-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 6px;
+  border: 1px solid #c8ddea;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 9px 24px rgb(27 73 111 / 12%);
+}
+.teacher-result-tabs button {
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #4b6983;
+  font: 600 15px/1.2 "Chakra Petch", sans-serif;
+  cursor: pointer;
+}
+.teacher-result-tabs button.is-active { border-color: #8fbfe2; background: #e9f6ff; color: #125c9d; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%); }
+.teacher-result-panels { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .teacher-result-summary,
-.teacher-result-details {
+.teacher-result-details,
+.teacher-result-evidence-panel {
   border: 1px solid #c8ddea;
   border-radius: 24px;
   background: rgb(255 255 255 / 96%);
   box-shadow: 0 18px 50px rgb(27 73 111 / 16%);
 }
-.teacher-result-summary { display: grid; gap: 12px; padding: 16px; }
+.teacher-result-summary { display: grid; gap: 12px; min-height: 100%; padding: 16px; }
 .teacher-result-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(180px, .72fr) minmax(190px, .72fr);
@@ -5855,9 +5896,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-building-summary__grid .is-negative > strong { color: #d8443e; }
 .teacher-building-summary__grid .is-neutral > strong { color: #687f92; }
 
-.teacher-result-expand { display: flex; min-height: 44px; align-items: center; justify-content: center; gap: 10px; border: 1px solid #91bfe1; border-radius: 13px; background: #eff8ff; color: #145c9d; font: 700 16px/1.2 inherit; cursor: pointer; }
-.teacher-result-expand b { font-size: 22px; }
-.teacher-result-actions { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr); gap: 10px; }
+.teacher-result-actions { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr); gap: 10px; padding: 8px; border: 1px solid #c8ddea; border-radius: 16px; background: rgb(255 255 255 / 96%); box-shadow: 0 10px 28px rgb(27 73 111 / 14%); }
 .teacher-result-actions button,
 .teacher-result-details button,
 .teacher-building-modal button,
@@ -5869,7 +5908,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-result-complete { background: #e5f8ed; color: #177b4d; }
 .teacher-result-error { background: #fff0ee; color: #bf3f39; }
 
-.teacher-result-details { display: grid; gap: 16px; margin-top: 14px; padding: 18px; }
+.teacher-result-details { display: grid; gap: 16px; padding: 18px; }
+.teacher-result-evidence-panel { display: grid; gap: 14px; min-height: 100%; padding: 18px; }
 .teacher-result-details > section { padding: 15px; border: 1px solid #cfe1ed; border-radius: 18px; background: rgb(249 252 255 / 92%); }
 .teacher-result-levels__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .teacher-result-levels__grid article { display: grid; min-height: 105px; place-items: center; padding: 10px; border: 1px solid #ccdeea; border-radius: 14px; background: white; text-align: center; }
@@ -5942,6 +5982,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .student-cycle-result__total span,
 .student-cycle-result__total small { color: var(--result-muted); font-size: 14px; }
 .student-cycle-result__total strong { color: #145890; font-size: 24px; }
+.student-personal-impact { display: grid; gap: .35rem; padding: 13px 16px; border: 1px solid #c9dfec; border-radius: 15px; background: #f4faff; }
+.student-personal-impact h2 { margin: 0; color: #155b93; font-size: 18px; }
+.student-personal-impact p { margin: 0; color: #294f70; font-size: 15px; line-height: 1.55; }
+.student-personal-impact small { color: #617d93; font-size: 13px; }
+.student-personal-impact.is-high-timeout { border-color: #ead7ad; background: #fffaf0; }
 .student-cycle-result__secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .student-cycle-result__secondary article { display: grid; padding: 14px 17px; border: 1px solid #d0e1ec; border-radius: 15px; background: white; }
 .student-cycle-result__secondary span,
@@ -5963,7 +6008,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-result-topbar > div { gap: 8px; padding: 6px 10px; }
   .teacher-result-topbar span { font-size: 24px; }
   .teacher-result-topbar strong { font-size: 18px; }
-  .teacher-result-shell { width: calc(100% - 18px); padding-bottom: 14px; }
+  .teacher-result-shell { width: calc(100% - 18px); height: calc(100dvh - 82px); gap: 7px; padding-bottom: 7px; }
+  .teacher-result-tabs { padding: 4px; }
+  .teacher-result-tabs button { min-height: 34px; }
   .teacher-result-summary { gap: 8px; padding: 10px; border-radius: 18px; }
   .teacher-result-hero { gap: 9px; padding: 9px 13px; }
   .teacher-result-hero__level > span { width: 58px; height: 58px; font-size: 28px; }
@@ -5979,11 +6026,14 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-building-summary { padding: 8px 10px; }
   .teacher-building-summary__grid { gap: 6px; }
   .teacher-building-summary__grid article { min-height: 58px; padding: 6px 9px; }
-  .teacher-result-expand { min-height: 40px; }
   .teacher-result-actions button { min-height: 46px; }
+  .teacher-result-actions { padding: 5px; }
 }
 
 @media (max-width: 820px), (orientation: portrait) {
+  .teacher-result-page { height: auto; min-height: 100dvh; overflow-x: hidden; overflow-y: auto; }
+  .teacher-result-shell { height: auto; min-height: 0; grid-template-rows: auto auto auto; }
+  .teacher-result-panels { overflow: visible; }
   .teacher-result-topbar { grid-template-columns: repeat(2, 1fr); }
   .teacher-result-topbar > div:nth-child(3)::before { display: none; }
   .teacher-result-hero { grid-template-columns: 1fr 1fr; }
@@ -7028,14 +7078,14 @@ img.game-home-cast {
   .teacher-evidence-summary__reflections > header { flex-direction: column; }
 }
 
-/* UX-P1: readable Thai body typography with Mitr reserved for display text. */
+/* Global bundled Chakra Petch typography for consistent cross-device rendering. */
 .teacher-lobby-brand strong,
 .teacher-lobby-title h1,
 .teacher-lobby-section-heading h2,
 .teacher-lobby-create-card h2,
 .teacher-lobby-card-heading strong,
 .teacher-lobby-rules-dialog h2 {
-  font-family: "Mitr", "Leelawadee UI", Tahoma, sans-serif;
+  font-family: "Chakra Petch", sans-serif;
   font-weight: 600;
 }
 
@@ -7050,15 +7100,21 @@ img.game-home-cast {
     linear-gradient(rgb(250 253 255 / 95%), rgb(239 247 254 / 97%)),
     url('/images/new-city/backgrounds/city-overview-normal.webp') center / cover fixed;
   color: var(--assessment-ink);
-  font-family: "Leelawadee UI", Tahoma, "Noto Sans Thai", system-ui, sans-serif;
+  font-family: "Chakra Petch", sans-serif;
   line-height: 1.65;
 }
 
 .assessment-shell { padding-bottom: 1rem; }
 .assessment-topbar { padding-bottom: 1rem; border-bottom: 1px solid #cfdfee; }
 .assessment-page .game-brand > strong {
-  font-family: "Mitr", "Leelawadee UI", Tahoma, sans-serif;
+  font-family: "Chakra Petch", sans-serif;
   font-weight: 600;
+}
+.assessment-page button,
+.assessment-page .assessment-kicker,
+.assessment-page .assessment-room-badge,
+.assessment-page .assessment-scale__title {
+  font-family: "Chakra Petch", sans-serif;
 }
 .assessment-page .game-brand > strong b { font-weight: 600; }
 .assessment-room-badge {
@@ -7082,7 +7138,7 @@ img.game-home-cast {
 .assessment-header h1,
 .assessment-complete h1 {
   color: #153d6b;
-  font-family: "Mitr", "Leelawadee UI", Tahoma, sans-serif;
+  font-family: "Chakra Petch", sans-serif;
   font-size: clamp(1.65rem, 4vw, 2.25rem);
   font-weight: 600;
   line-height: 1.35;
@@ -7120,6 +7176,15 @@ img.game-home-cast {
   font-size: .82rem;
   line-height: 1.45;
 }
+.assessment-scale__item > span {
+  display: flex;
+  min-width: 0;
+  min-height: 2.9em;
+  align-items: center;
+  justify-content: center;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
 .assessment-scale__item strong {
   display: grid;
   width: 1.8rem;
@@ -7132,9 +7197,12 @@ img.game-home-cast {
   font-weight: 700;
 }
 
-.assessment-form { display: flex; flex-direction: column; gap: 1rem; }
+.assessment-form { display: flex; flex-direction: column; gap: 1rem; padding-bottom: 2.5rem; }
 .assessment-item { min-width: 0; padding: clamp(1rem, 2.5vw, 1.35rem); border-radius: 1rem; }
 .assessment-item__prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
   width: 100%;
   margin-bottom: .9rem;
   padding: 0;
@@ -7147,37 +7215,82 @@ img.game-home-cast {
   display: inline-grid;
   width: 1.9rem;
   height: 1.9rem;
-  margin-right: .45rem;
+  margin-top: .08rem;
   place-items: center;
   border-radius: 50%;
   background: #e4f1ff;
   color: var(--assessment-blue);
   font-size: .85rem;
   font-weight: 700;
-  vertical-align: middle;
 }
-.assessment-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .6rem; }
-.assessment-choice {
+.assessment-choices {
   display: grid;
-  min-height: 3.75rem;
-  place-items: center;
-  border: 1px solid #cbdff0;
-  border-radius: .8rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(.35rem, 1vw, .6rem);
+}
+.assessment-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 5.4rem;
+  padding: .6rem .35rem;
+  border: 1.5px solid #cbdff0;
+  border-radius: .85rem;
   background: #f8fbff;
   color: #25547e;
-  font-size: 1.12rem;
-  font-weight: 600;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
+  user-select: none;
 }
-.assessment-choice:hover { border-color: #72a8df; background: #eef7ff; }
-.assessment-choice:focus-within { outline: 3px solid rgb(23 105 223 / 20%); outline-offset: 2px; }
+.assessment-choice input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.assessment-choice strong {
+  display: block;
+  font-family: "Chakra Petch", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--assessment-blue);
+  margin-bottom: .25rem;
+}
+.assessment-choice span {
+  display: block;
+  font-size: .72rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #3b5f80;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.assessment-choice:hover {
+  border-color: #72a8df;
+  background: #eef7ff;
+}
+.assessment-choice:focus-within {
+  outline: 3px solid rgb(23 105 223 / 25%);
+  outline-offset: 2px;
+}
 .assessment-choice.is-selected {
   border-color: #1769df;
   background: linear-gradient(145deg, #2479eb, #155fc8);
-  box-shadow: 0 0 0 3px rgb(240 180 38 / 24%), 0 .45rem .9rem rgb(23 105 223 / 20%);
+  box-shadow: 0 0 0 3px rgb(240 180 38 / 28%), 0 .45rem .9rem rgb(23 105 223 / 20%);
   color: white;
   transform: translateY(-1px);
+}
+.assessment-choice.is-selected strong {
+  color: #ffffff;
+}
+.assessment-choice.is-selected span {
+  color: #f0f7ff;
+  font-weight: 600;
 }
 
 .assessment-item--reflection { padding-bottom: 1rem; }
@@ -7197,6 +7310,16 @@ img.game-home-cast {
 .assessment-textarea::placeholder { color: #879aab; }
 .assessment-textarea:focus { border-color: var(--assessment-blue); outline: 3px solid rgb(23 105 223 / 16%); }
 .assessment-character-count { margin-top: .35rem; color: #71869a; font-size: .75rem; text-align: right; }
+.assessment-reflection-hint {
+  margin: -.25rem 0 0;
+  padding: .8rem 1rem;
+  border: 1px solid #cfe1ef;
+  border-radius: .85rem;
+  background: #f4faff;
+  color: #426884;
+  font-size: .92rem;
+  text-align: center;
+}
 .assessment-error {
   padding: .7rem .85rem;
   border: 1px solid #edb7bc;
@@ -7259,9 +7382,42 @@ img.game-home-cast {
 }
 .assessment-complete .assessment-primary-button { margin-top: .4rem; }
 
+.assessment-waiting-page { display: grid; place-items: center; }
+.assessment-waiting {
+  display: grid;
+  width: min(42rem, 100%);
+  justify-items: center;
+  gap: .85rem;
+  padding: clamp(2rem, 6vw, 3.5rem);
+  border: 1px solid var(--assessment-border);
+  border-radius: 1.4rem;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 1.25rem 3.5rem rgb(32 82 127 / 14%);
+  text-align: center;
+}
+.assessment-waiting__icon {
+  display: grid;
+  width: 4.5rem;
+  height: 4.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #def5e7;
+  box-shadow: 0 0 0 .55rem rgb(51 166 95 / 9%);
+  color: #278c50;
+  font: 700 2.2rem/1 "Chakra Petch", sans-serif;
+}
+.assessment-waiting h1 { margin: 0; color: #153d6b; font: 600 clamp(1.65rem, 4vw, 2.25rem)/1.4 "Chakra Petch", sans-serif; }
+.assessment-waiting > strong { color: #237947; font-size: 1.05rem; }
+.assessment-waiting > p:not(.assessment-kicker) { max-width: 34rem; margin: 0; color: var(--assessment-muted); }
+.assessment-waiting__pulse { display: flex; gap: .45rem; margin-top: .35rem; }
+.assessment-waiting__pulse i { width: .55rem; height: .55rem; border-radius: 50%; background: var(--assessment-blue); animation: assessment-waiting-pulse 1.4s ease-in-out infinite; }
+.assessment-waiting__pulse i:nth-child(2) { animation-delay: 160ms; }
+.assessment-waiting__pulse i:nth-child(3) { animation-delay: 320ms; }
+@keyframes assessment-waiting-pulse { 0%, 70%, 100% { opacity: .28; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-.25rem); } }
+
 @media (min-width: 640px) {
   .assessment-scale__list { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .assessment-scale__item { flex-direction: column; justify-content: center; text-align: center; }
+  .assessment-scale__item { min-height: 6.25rem; flex-direction: column; justify-content: center; text-align: center; }
 }
 
 @media (max-width: 480px) {
@@ -7375,5 +7531,262 @@ body:has(.assessment-page),
   .teacher-emergency-end--stage { min-height: 2.5rem; padding: .45rem .6rem; }
   .role-draw-header__utilities { gap: .35rem; }
   .teacher-emergency-end--role-draw { min-height: 2.35rem; padding: .35rem .55rem; font-size: .62rem; }
+}
+
+/* Ambient bird animation positioning for Home & Create Room */
+.game-home-birds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* Collapsible teacher lobby 8 professions guide */
+details.teacher-lobby-role-guide summary.teacher-lobby-card-heading {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+details.teacher-lobby-role-guide summary.teacher-lobby-card-heading::-webkit-details-marker {
+  display: none;
+}
+details.teacher-lobby-role-guide summary.teacher-lobby-card-heading:hover strong {
+  color: #1c6edb;
+}
+
+/* Full-screen civic layout for Create Room */
+.teacher-lobby-page--create {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.teacher-lobby-layout--create {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(24rem, 0.95fr);
+  gap: clamp(1.2rem, 2.2vw, 2.5rem);
+  align-items: center;
+  margin-top: 1.5rem;
+  flex: 1;
+}
+.teacher-lobby-create-hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(1.5rem, 3vw, 2.8rem);
+  border-radius: 1.25rem;
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(8px);
+  border: 1px solid #dce8f5;
+  box-shadow: 0 1rem 2.5rem rgb(25 66 107 / 10%);
+}
+.teacher-lobby-create-hero__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  width: fit-content;
+  padding: .35rem .85rem;
+  border-radius: 2rem;
+  background: #eef6ff;
+  border: 1px solid #cde2f8;
+  color: #17529a;
+  font-size: .82rem;
+  font-weight: 700;
+  margin-bottom: 1.1rem;
+}
+.teacher-lobby-create-hero__tag img {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.teacher-lobby-create-hero h2 {
+  font-family: "Chakra Petch", sans-serif;
+  font-size: clamp(1.6rem, 2.4vw, 2.2rem);
+  font-weight: 700;
+  color: #162c46;
+  line-height: 1.25;
+  margin-bottom: .85rem;
+}
+.teacher-lobby-create-hero p {
+  color: #45627f;
+  font-size: clamp(.92rem, 1.1vw, 1.05rem);
+  line-height: 1.65;
+  max-width: 36rem;
+}
+.teacher-lobby-create-hero__features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .85rem;
+  margin-top: 1.8rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5eff8;
+}
+.teacher-lobby-create-hero__features article {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+}
+.teacher-lobby-create-hero__features article > span {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.teacher-lobby-create-hero__features article strong {
+  display: block;
+  font-size: .88rem;
+  color: #1b3858;
+}
+.teacher-lobby-create-hero__features article small {
+  display: block;
+  font-size: .74rem;
+  color: #637f9b;
+  margin-top: .15rem;
+}
+
+@media (max-width: 900px) {
+  .teacher-lobby-layout--create {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+/* Final pre-staging presentation refinements ---------------------------- */
+.game-home-page > .game-public-header {
+  background: rgb(255 255 255 / 80%);
+  backdrop-filter: blur(14px) saturate(115%);
+  -webkit-backdrop-filter: blur(14px) saturate(115%);
+}
+.game-home-page .game-home-page__city { top: 0; }
+@media (orientation: portrait), (max-width: 700px) {
+  .game-home-page .game-home-page__city { inset: 0 0 auto; height: 49.5rem; }
+}
+
+.teacher-lobby-page .teacher-join-card {
+  grid-template-columns: minmax(0, 1fr) 9.5rem;
+}
+.teacher-lobby-page .teacher-join-card__qr {
+  width: 9.5rem;
+  border-width: .32rem;
+}
+.teacher-join-card__expand {
+  grid-column: 1 / -1;
+  justify-self: end;
+  padding: .5rem .85rem;
+  border: 1px solid #9dc8ef;
+  border-radius: .7rem;
+  background: #f2f8ff;
+  color: #1457a5;
+  font-size: .8rem;
+  font-weight: 700;
+}
+.teacher-join-card__expand:hover { background: #e5f2ff; }
+.teacher-join-qr-modal {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(7 22 39 / 72%);
+  backdrop-filter: blur(5px);
+}
+.teacher-join-qr-modal > section {
+  position: relative;
+  display: grid;
+  width: min(35rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  justify-items: center;
+  overflow: auto;
+  gap: .65rem;
+  padding: 1.35rem;
+  border: 1px solid #cae0f3;
+  border-radius: 1.4rem;
+  background: white;
+  box-shadow: 0 1.7rem 5rem rgb(0 0 0 / 28%);
+  color: #163b65;
+  text-align: center;
+}
+.teacher-join-qr-modal h2 { padding-inline: 2rem; color: #174f93; font-size: 1.55rem; font-weight: 700; }
+.teacher-join-qr-modal__close {
+  position: absolute;
+  top: .65rem;
+  right: .65rem;
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid #cbddea;
+  border-radius: 50%;
+  background: #f4f8fb;
+  color: #173c63;
+  font-size: 1.7rem;
+  line-height: 1;
+}
+.teacher-join-qr-modal__code {
+  width: min(28.75rem, calc(100vw - 5rem), calc(100dvh - 12rem));
+  padding: .35rem;
+  border: 1px solid #d5e3ef;
+  border-radius: 1rem;
+  background: white;
+}
+.teacher-join-qr-modal__code svg { display: block; width: 100%; height: auto; }
+.teacher-join-qr-modal strong { color: #1659a5; font-size: 1.35rem; letter-spacing: .08em; }
+.teacher-join-qr-modal p { color: #5b7188; }
+@media (max-width: 1100px) and (orientation: landscape) {
+  .teacher-lobby-page .teacher-join-card { grid-template-columns: minmax(0, 1fr) 8.75rem; }
+  .teacher-lobby-page .teacher-join-card__qr { width: 8.75rem; }
+  .teacher-join-card__expand { padding: .35rem .65rem; font-size: .68rem; }
+}
+@media (max-width: 600px) {
+  .teacher-lobby-page .teacher-join-card { grid-template-columns: minmax(0, 1fr) 8.75rem; }
+  .teacher-lobby-page .teacher-join-card__qr { width: 8.75rem; }
+}
+
+.assessment-waiting { width: min(52rem, 100%); gap: .65rem; padding: clamp(1.2rem, 3vw, 2rem); }
+.assessment-waiting__city-preview { width: 100%; margin-top: .3rem; }
+.assessment-waiting__city-preview h2 { color: #174f82; font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 700; }
+.assessment-waiting__city-preview > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; margin-top: .65rem; }
+.assessment-waiting__city-preview figure { overflow: hidden; border: 1px solid #cddfec; border-radius: .85rem; background: #f7fbff; }
+.assessment-waiting__city-preview img { width: 100%; height: clamp(5.5rem, 12vw, 7.25rem); object-fit: cover; }
+.assessment-waiting__city-preview figcaption { padding: .35rem; color: #315a7c; font-size: .78rem; font-weight: 700; }
+
+.our-city-page.crisis-student-page {
+  background:
+    linear-gradient(135deg, rgb(75 10 8 / 92%), rgb(39 10 8 / 94%) 48%, rgb(88 37 5 / 92%)),
+    url('/images/new-city/backgrounds/city-overview-degraded.webp') center / cover;
+  color: #fff9ed;
+}
+.crisis-student-page .crisis-student-header {
+  border-color: #f1a737;
+  background: linear-gradient(135deg, rgb(92 14 10 / 98%), rgb(48 9 8 / 98%));
+  box-shadow: 0 1.1rem 2.8rem rgb(39 3 2 / 35%);
+  color: #fff9ed;
+}
+.crisis-student-page .crisis-student-header p { display: flex; align-items: center; gap: .45rem; color: #ffd36e; font-size: 1.1rem; }
+.crisis-student-page .crisis-student-header p > span { color: #ffd36e; font-size: 1.3rem; }
+.crisis-student-page .crisis-student-header p small { color: #ffe6ad; font-size: .72rem; letter-spacing: .05em; }
+.crisis-student-page .crisis-student-header h1 { color: white; }
+.crisis-student-meta { display: flex; grid-column: 1; align-items: center; gap: .65rem; color: #ffe8c4; font-weight: 700; }
+.crisis-student-page .crisis-student-meta span { color: #ffe8c4; }
+.crisis-student-meta b { padding: .25rem .65rem; border: 1px solid #ffc65b; border-radius: 999px; background: #ffb321; color: #401005; font-weight: 900; }
+.crisis-student-impact-note { grid-column: 1; color: #ffd7a0; font-weight: 600; }
+.crisis-student-page .crisis-student-header > strong { grid-row: 1 / 5; border-color: #ef9f31; background: rgb(126 22 13 / 85%); color: #fff2cf; }
+.crisis-student-page .crisis-student-header > strong.is-ending { background: #f4b21f; color: #451106; }
+.crisis-student-page .crisis-student-card { border-color: rgb(239 153 47 / 58%); background: linear-gradient(145deg, rgb(74 14 10 / 98%), rgb(35 10 8 / 98%)); box-shadow: 0 1.4rem 3.4rem rgb(31 3 1 / 30%); }
+.crisis-student-page .crisis-student-summary { border-left-color: #ffbd35; background: rgb(255 184 46 / 10%); color: #ffe7c2; }
+.crisis-student-page .crisis-student-kicker { color: #ffc84d; }
+.crisis-student-page .crisis-student-choices button { border-color: rgb(244 177 70 / 55%); background: rgb(255 245 226 / 96%); color: #431813; }
+.crisis-student-page .crisis-student-choices button:not(:disabled):hover { border-color: #ffc13c; background: white; }
+.crisis-student-page .crisis-student-choices button.is-selected { border-color: #ffbf32; background: #fff1c8; box-shadow: 0 0 0 .22rem rgb(255 187 43 / 24%); opacity: 1; }
+.crisis-student-page .crisis-student-choices button:disabled:not(.is-selected) { opacity: .46; }
+.crisis-student-page .crisis-student-feedback { color: #fff0ce; }
+.crisis-student-page .crisis-student-feedback p { border: 1px solid rgb(255 193 72 / 34%); background: rgb(167 55 15 / 36%); }
+.crisis-student-page .crisis-student-feedback small { color: #ffd8a4; }
+
+.teacher-crisis-intro > b { display: inline-flex; margin-left: .7rem; padding: .32rem .75rem; border-radius: 999px; background: #f3aa24; color: #452207; vertical-align: .55rem; }
+.teacher-crisis-result__heading { margin-top: 1.25rem; color: #315b7d; font-weight: 700; }
+.teacher-crisis-result__heading b { margin-left: .45rem; color: #b96c08; }
+
+@media (max-width: 720px) {
+  .crisis-student-meta { align-items: flex-start; flex-direction: column; }
+  .crisis-student-impact-note { font-size: .78rem; }
 }
 

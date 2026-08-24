@@ -104,7 +104,9 @@ describe('classroom UI contracts', () => {
     expect(prePage).toContain('await service.submitPreAssessment(roomId, session.playerId, uid, orderedResponses)')
     expect(postPage).toContain('await service.submitPostAssessment(roomId, session.playerId, uid, orderedResponses)')
     expect(postPage).toContain('await service.submitReflection(roomId, session.playerId, uid, reflectionInput)')
-    expect(prePage).toContain('if (assessmentState.data) return <Navigate replace')
+    expect(prePage).toContain('if (assessmentState.data) {')
+    expect(prePage).toContain("roomState.data?.status === 'lobby'")
+    expect(prePage).toContain('<PreAssessmentWaitingState roomId={roomId} />')
     expect(postPage).toContain('postWriteAcknowledged,')
     expect(postPage).toContain('reflectionWriteAcknowledged,')
     expect(postPage).toContain('setPostWriteAcknowledged(true)')
@@ -118,6 +120,15 @@ describe('classroom UI contracts', () => {
     expect(styles).toContain('.assessment-submit {')
     expect(styles).toContain('body:has(.assessment-page)')
     expect(styles).toContain('background-color: #edf6fd !important')
+    for (const weight of [400, 500, 600, 700]) {
+      expect(styles).toContain(`@import "@fontsource/chakra-petch/${weight}.css"`)
+    }
+    expect(styles).toContain('font-family: "Chakra Petch", sans-serif')
+    expect(styles).not.toMatch(/Mitr|Noto Sans Thai Looped|Leelawadee|Kanit|Th Sarabun/)
+    expect(styles).toContain('.assessment-scale__item > span {')
+    expect(styles).toContain('text-wrap: balance')
+    expect(styles).toContain('.assessment-item__prompt {\n  display: flex;')
+    expect(postPage).toContain('ตอบสั้น ๆ ตามความคิดของคุณได้ ข้อละ 1–2 ประโยคก็เพียงพอ')
   })
 
   it('keeps Teacher Lobby controls and gives the create-room card the full top-aligned control width', () => {
@@ -135,14 +146,12 @@ describe('classroom UI contracts', () => {
     expect(styles).toContain('.teacher-lobby-control { min-height: 0; }')
   })
 
-  it('finishes the grouped city reveal before opening the next stage or finishing Q10', () => {
+  it('finishes the grouped city reveal before ordinary progression or a manual Q4/Q8/Q10 checkpoint', () => {
     const teacherPage = readSource('../pages/TeacherPage.tsx')
     const flowStart = teacherPage.indexOf('const nextOrFinish = async')
     const flowEnd = teacherPage.indexOf('const hardRecoverStaleRoom', flowStart)
     const nextFlow = teacherPage.slice(flowStart, flowEnd)
     const revealSettledIndex = nextFlow.indexOf('setBuildingChangeStories([])')
-    const openNextIndex = nextFlow.indexOf("withActionTiming('openNextQuestion'")
-    const finishIndex = nextFlow.indexOf("withActionTiming('finishGame'")
     expect(teacherPage).toContain('cityYear: room.gameCycle * 10 + room.currentQuestionNumber')
     expect(teacherPage).toContain('<p className="teacher-year-cutscene__eyebrow">1 ปีต่อมา...</p>')
     expect(teacherPage).toContain('<h2>ปีที่ {yearCutscene.cityYear}</h2>')
@@ -150,11 +159,14 @@ describe('classroom UI contracts', () => {
     expect(nextFlow).toContain('await waitForPresentation(timing.settle)')
     expect(nextFlow).not.toContain('Promise.all([')
     expect(revealSettledIndex).toBeGreaterThan(0)
-    expect(openNextIndex).toBeGreaterThan(revealSettledIndex)
-    expect(finishIndex).toBeGreaterThan(revealSettledIndex)
-    expect(nextFlow).toContain('if (questionAtStart === 10)')
+    expect(nextFlow).toContain("resolvePostPresentationAction(questionAtStart) === 'open-next-question'")
+    expect(nextFlow.indexOf('setRoundCheckpointReadyKey(checkpointKey)')).toBeGreaterThan(revealSettledIndex)
+    expect(nextFlow).toContain("progressionAction === 'enter-crisis'")
+    expect(nextFlow).toContain("progressionAction === 'finish-game'")
     expect(nextFlow).toContain('service.finishGame(roomAtStart, uid)')
     expect(nextFlow).toContain('service.openNextQuestion(roomAtStart, uid)')
+    expect(teacherPage).toContain("? 'เข้าสู่เหตุการณ์วิกฤต'")
+    expect(teacherPage).toContain("? 'ดูผลรอบนี้'")
   })
 
   it('keeps live impacts readable for 2.5 seconds without changing their trusted score', () => {
@@ -335,7 +347,7 @@ describe('classroom UI contracts', () => {
     expect(cityStage).toContain('aria-controls="teacher-dashboard-menu"')
     expect(cityStage).toContain('aria-expanded={isSidebarOpen}')
     expect(styles).toContain('--city-sidebar-width: 0rem')
-    expect(styles).toContain('font-family: "Mitr"')
+    expect(styles).toContain('font-family: "Chakra Petch", sans-serif')
   })
 
   it('positions embedded teacher audio beside the menu with reserved tablet and portrait space', () => {
@@ -398,6 +410,23 @@ describe('classroom UI contracts', () => {
     expect(resultPage).toContain('เล่นต่อเพื่อพัฒนาเมือง')
     expect(resultPage).toContain('เริ่มห้องใหม่')
     expect(resultPage).not.toMatch(/winner|leaderboard|อันดับ/i)
+  })
+
+  it('uses a summary-first teacher Result with exclusive city and evidence panels plus persistent actions', () => {
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    const styles = readSource('../styles.css')
+    expect(resultPage).toContain("useState<TeacherResultTab>('summary')")
+    expect(resultPage).toContain("['summary', 'สรุป']")
+    expect(resultPage).toContain("['city', 'รายละเอียดเมือง']")
+    expect(resultPage).toContain("['evidence', 'หลักฐานครู']")
+    expect(resultPage).toContain("activeTeacherTab === 'summary' ?")
+    expect(resultPage).toContain("activeTeacherTab === 'city' ?")
+    expect(resultPage).toContain("activeTeacherTab === 'evidence' ?")
+    expect(resultPage.indexOf('className="teacher-result-actions"')).toBeGreaterThan(resultPage.indexOf('className="teacher-result-panels"'))
+    expect(styles).toContain('grid-template-rows: auto minmax(0, 1fr) auto')
+    expect(styles).toContain('.teacher-result-panels { min-height: 0; overflow: auto;')
+    expect(resultPage).toContain('<TeacherEvidenceSummarySection')
+    expect(resultPage).toContain('<TeacherObservationSection')
   })
 
   it('renders personal result numbers only from loaded records with explicit empty and read-error states', () => {
@@ -489,5 +518,103 @@ describe('POST and Reflection active submit acknowledgements', () => {
     expect(page).toContain('setError(classroomFriendlyError(reason))')
     expect(page).toContain('Boolean(postAssessmentState.data),')
     expect(page).toContain('Boolean(reflectionState.data),')
+  })
+
+  it('places scale numbers and meanings inside each choice button on PRE and POST assessments without a separate top scale legend', () => {
+    const prePage = readSource('../pages/PreAssessmentPage.tsx')
+    const postPage = readSource('../pages/PostAssessmentPage.tsx')
+    const styles = readSource('../styles.css')
+    // Top scale legend is removed from markup
+    expect(prePage).not.toContain('<div className="assessment-scale"')
+    expect(postPage).not.toContain('<div className="assessment-scale"')
+    // Number and description are rendered directly inside .assessment-choice
+    expect(prePage).toContain('<strong>{option.value}</strong>')
+    expect(prePage).toContain('<span>{option.label}</span>')
+    expect(postPage).toContain('<strong>{option.value}</strong>')
+    expect(postPage).toContain('<span>{option.label}</span>')
+    // Assessment scale text
+    const assessmentDomain = readSource('../domain/assessment.ts')
+    expect(prePage).toContain('ASSESSMENT_SCALE.map((option) =>')
+    expect(postPage).toContain('ASSESSMENT_SCALE.map((option) =>')
+    expect(assessmentDomain).toContain('ไม่เห็นด้วยเลย')
+    expect(assessmentDomain).toContain('ไม่ค่อยเห็นด้วย')
+    expect(assessmentDomain).toContain('ไม่แน่ใจ / เห็นด้วยปานกลาง')
+    expect(assessmentDomain).toContain('เห็นด้วย')
+    expect(assessmentDomain).toContain('เห็นด้วยมากที่สุด')
+    // Styles
+    expect(styles).toContain('.assessment-choice strong {')
+    expect(styles).toContain('.assessment-choice span {')
+    expect(styles).toContain('.assessment-choice.is-selected strong {')
+  })
+
+  it('scrolls to top on mount for assessment pages and result page without repeating on every render', () => {
+    const prePage = readSource('../pages/PreAssessmentPage.tsx')
+    const postPage = readSource('../pages/PostAssessmentPage.tsx')
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    expect(prePage).toContain("window.scrollTo({ top: 0, left: 0, behavior: 'instant' })")
+    expect(postPage).toContain("window.scrollTo({ top: 0, left: 0, behavior: 'instant' })")
+    expect(resultPage).toContain("window.scrollTo({ top: 0, left: 0, behavior: 'instant' })")
+  })
+
+  it('keeps teacher lobby CTA unconfused with single primary action and collapses 8 professions guide', () => {
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    // Collapsed 8 professions guide
+    expect(teacherPage).toContain('<details className="teacher-lobby-role-guide">')
+    expect(teacherPage).toContain('<summary className="teacher-lobby-card-heading">')
+    expect(teacherPage).toContain('8 อาชีพในเมือง')
+    expect(teacherPage).toContain('ระบบจะสุ่มและกระจายบทบาทให้สมดุล (แตะเพื่อดู)')
+    // Single primary CTA
+    expect(teacherPage).toContain('เริ่มแบบประเมินก่อนกิจกรรม')
+    expect(teacherPage).toContain('เริ่มกิจกรรม')
+    // When preAssessmentOpened is false, only openPreAssessment is shown, not a competing disabled start button
+    const preNotOpenedBranch = teacherPage.slice(
+      teacherPage.indexOf('{room?.preAssessmentOpened ? ('),
+      teacherPage.indexOf('</details>', teacherPage.indexOf('{room?.preAssessmentOpened ? (')),
+    )
+    expect(preNotOpenedBranch).toContain('เริ่มแบบประเมินก่อนกิจกรรม')
+  })
+
+  it('offers an explicit projector QR view while reusing the exact join URL and room code', () => {
+    const qr = readSource('./JoinQrCode.tsx')
+    const styles = readSource('../styles.css')
+    expect(qr).toContain('ขยาย QR สำหรับนักเรียน')
+    expect(qr).toContain('เข้าร่วมห้องเรียน')
+    expect(qr).toContain('สแกน QR หรือกรอกรหัสห้อง')
+    expect(qr.match(/value=\{joinUrl\}/g)).toHaveLength(2)
+    expect(qr.match(/\{roomId\}/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
+    expect(qr).toContain("event.key === 'Escape'")
+    expect(qr).toContain('event.target === event.currentTarget')
+    expect(styles).toContain('grid-template-columns: minmax(0, 1fr) 9.5rem')
+    expect(styles).toContain('width: min(28.75rem')
+  })
+
+  it('keeps Crisis presentation teacher-owned through pre/post cutscenes without starting Q5/Q9 behind them', () => {
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    const gamePage = readSource('../pages/GamePage.tsx')
+    const timing = readSource('../domain/cityPresentation.ts')
+    expect(teacherPage).toContain('สถานการณ์วิกฤต • เหตุการณ์')
+    expect(teacherPage).toContain('ผลกระทบ ×2')
+    expect(teacherPage).toContain("room.status === 'crisis-intro'")
+    expect(teacherPage).toContain("room.status === 'crisis-result'")
+    expect(teacherPage).toContain("crisisRevealPhase !== 'revealed'")
+    expect(gamePage).toContain('สถานการณ์วิกฤต')
+    expect(gamePage).toContain('ผลกระทบ ×2')
+    expect(timing).toContain('title: 2_750')
+    expect(timing).toContain('settle: 3_000')
+  })
+
+  it('provides full-screen civic create-room layout and bird ambience on home and create-room', () => {
+    const homePage = readSource('../pages/HomePage.tsx')
+    const teacherPage = readSource('../pages/TeacherPage.tsx')
+    const styles = readSource('../styles.css')
+    expect(homePage).toContain('<div className="game-home-birds"><CityBirdsAnimation /></div>')
+    expect(teacherPage).toContain('!roomId || room?.status === \'lobby\' ? (')
+    expect(teacherPage).toContain('<div className="teacher-lobby-birds"><CityBirdsAnimation /></div>')
+    expect(teacherPage).toContain('teacher-lobby-page--create')
+    expect(teacherPage).toContain('teacher-lobby-layout--create')
+    expect(teacherPage).toContain('teacher-lobby-create-hero')
+    expect(styles).toContain('.game-home-birds {')
+    expect(styles).toContain('.teacher-lobby-page--create {')
+    expect(styles).toContain('.teacher-lobby-create-hero {')
   })
 })

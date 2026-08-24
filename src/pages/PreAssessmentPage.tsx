@@ -19,6 +19,37 @@ import { getClassroomStudentSession, saveClassroomViewerRole } from '../services
  */
 const SUBMIT_CONFIRMATION_TIMEOUT_MS = 15_000
 
+const WAITING_CITY_PREVIEWS = [
+  { asset: '/images/new-city/backgrounds/city-overview-degraded.webp', label: 'เมืองวิกฤต' },
+  { asset: '/images/new-city/backgrounds/city-overview-normal.webp', label: 'เมืองปกติ' },
+  { asset: '/images/new-city/backgrounds/city-overview-developed.webp', label: 'เมืองรุ่งเรือง' },
+] as const
+
+export const PreAssessmentWaitingState = ({ roomId }: { roomId: string }) => (
+  <main className="our-city-page assessment-page assessment-waiting-page min-h-dvh px-4 py-6 md:px-8 md:py-8">
+    <section className="assessment-waiting" aria-live="polite">
+      <span className="assessment-waiting__icon" aria-hidden="true">✓</span>
+      <p className="assessment-kicker">ห้อง {roomId}</p>
+      <h1>ทำแบบประเมินก่อนกิจกรรมเสร็จแล้ว</h1>
+      <strong>บันทึกคำตอบของคุณเรียบร้อยแล้ว</strong>
+      <p>รอเพื่อนทำแบบประเมินให้ครบ และรอครูเริ่มกิจกรรมในขั้นตอนถัดไป</p>
+      <p>ไม่ต้องกดอะไรเพิ่มเติม หน้านี้จะเปลี่ยนอัตโนมัติเมื่อครูเริ่มกิจกรรม</p>
+      <section className="assessment-waiting__city-preview" aria-labelledby="waiting-city-preview-title">
+        <h2 id="waiting-city-preview-title">การตัดสินใจของทุกคนจะพาเมืองไปทางไหน?</h2>
+        <div>
+          {WAITING_CITY_PREVIEWS.map((preview) => (
+            <figure key={preview.label}>
+              <img alt={`ตัวอย่าง${preview.label}`} src={preview.asset} />
+              <figcaption>{preview.label}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+      <div className="assessment-waiting__pulse" aria-hidden="true"><i /><i /><i /></div>
+    </section>
+  </main>
+)
+
 export const PreAssessmentPage = () => {
   const roomId = (useParams().roomCode ?? '').toUpperCase()
   const session = getClassroomStudentSession()
@@ -31,6 +62,7 @@ export const PreAssessmentPage = () => {
 
   useEffect(() => {
     saveClassroomViewerRole('student')
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
   }, [])
 
   // Bounds every stall, whatever the cause: a write that never reaches the
@@ -48,11 +80,15 @@ export const PreAssessmentPage = () => {
 
   if (!session || session.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
   if (assessmentState.loading) return <CityLoader variant="full" message="กำลังตรวจสอบแบบสำรวจ..." />
-  // Already submitted (server-confirmed - see subscribePreAssessment) — a
-  // refresh, or a late teacher-side room advance that finished while this
-  // student was still answering, forwards straight to wherever the room
-  // actually is now, never back to this form.
-  if (assessmentState.data) return <Navigate replace to={resolveStudentRouteForStatus(roomState.data?.status, roomId)} />
+  // Already submitted (server-confirmed - see subscribePreAssessment). Keep
+  // the student on a dedicated waiting state while the room is still in the
+  // lobby; the live room subscription routes them automatically as soon as
+  // the teacher starts the existing role-draw flow.
+  if (assessmentState.data) {
+    if (roomState.loading) return <CityLoader variant="full" message="กำลังตรวจสอบสถานะห้อง..." />
+    if (roomState.data?.status === 'lobby') return <PreAssessmentWaitingState roomId={roomId} />
+    return <Navigate replace to={resolveStudentRouteForStatus(roomState.data?.status, roomId)} />
+  }
   // A finished room is a dead end for a student who has not submitted yet -
   // never trap them filling a now-pointless form. An in-flight submission is
   // left alone: it is status-independent and safe to let finish naturally,
@@ -113,18 +149,6 @@ export const PreAssessmentPage = () => {
           <p>ตอบตามความรู้สึกจริงของคุณ ไม่มีคำตอบถูกหรือผิด และไม่มีผลต่อคะแนนในเกม</p>
         </header>
 
-        <div className="assessment-scale" aria-label="คำอธิบายระดับความคิดเห็น">
-          <p className="assessment-scale__title">ระดับความคิดเห็น</p>
-          <ul className="assessment-scale__list">
-            {ASSESSMENT_SCALE.map((option) => (
-              <li className="assessment-scale__item" key={option.value}>
-                <strong>{option.value}</strong>
-                <span>{option.label}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
         <form aria-busy={submitting} className="assessment-form" onSubmit={(event) => void submit(event)}>
           {PRE_ASSESSMENT_ITEMS.map((statement, index) => (
             <fieldset className="assessment-item" key={index}>
@@ -141,7 +165,6 @@ export const PreAssessmentPage = () => {
                       className={`assessment-choice${selected ? ' is-selected' : ''}`}
                       htmlFor={inputId}
                       key={option.value}
-                      title={option.label}
                     >
                       <input
                         checked={selected}
@@ -152,7 +175,8 @@ export const PreAssessmentPage = () => {
                         type="radio"
                         value={option.value}
                       />
-                      {option.value}
+                      <strong>{option.value}</strong>
+                      <span>{option.label}</span>
                     </label>
                   )
                 })}

@@ -159,9 +159,10 @@ export const GamePage = () => {
         <section className="crisis-student-shell mx-auto flex min-h-[calc(100dvh-2.5rem)] w-full max-w-4xl flex-col">
           <div className="game-play-brandbar"><Link className="game-brand" to="/"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b></strong></Link><div className="game-play-brandbar__actions"><span>ห้อง {roomId}</span><FullscreenToggle className="game-play-fullscreen-button" /></div></div>
           <header className="crisis-student-header">
-            <p>เหตุการณ์วิกฤตเมือง {crisisEvent.index}/2</p>
+            <p><span aria-hidden="true">⚠</span> สถานการณ์วิกฤต <small>เหตุการณ์ {crisisEvent.index}/2</small></p>
             <h1>{crisisEvent.title}</h1>
-            <span>อาชีพของคุณ: {role?.label} • <b>ผลกระทบ ×2</b></span>
+            <div className="crisis-student-meta"><span>อาชีพของคุณ: {role?.label}</span><b>ผลกระทบ ×2</b></div>
+            <small className="crisis-student-impact-note">การตัดสินใจในวิกฤตส่งผลต่อเมืองรุนแรงกว่าคำถามปกติ</small>
             {active ? <strong className={remaining <= 5 ? 'is-ending' : ''}>{remaining} วินาที</strong> : null}
           </header>
           <article className="crisis-student-card">
@@ -177,7 +178,7 @@ export const GamePage = () => {
                 <h2>{crisisDilemma.prompt}</h2>
                 <div className="crisis-student-choices relative">
                   {orderedCrisisChoices.map((choice, index) => (
-                    <button disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId) || remaining <= 0} key={choice.id} onClick={() => void answerCrisis(choice.id)}>
+                    <button className={existingCrisisAnswer?.choiceId === choice.id ? 'is-selected' : ''} disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId) || remaining <= 0} key={choice.id} onClick={() => void answerCrisis(choice.id)}>
                       <span>{index === 0 ? 'ก.' : 'ข.'}</span>{choice.text}
                     </button>
                   ))}

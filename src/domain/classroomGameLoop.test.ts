@@ -161,15 +161,27 @@ describe('resolveLobbyGuardRoute — PRE only gates once the teacher has opened 
     expect(resolveLobbyGuardRoute('lobby', true, false, ROOM_ID)).toBe(`/assessment/pre/${ROOM_ID}`)
   })
 
+  it('derives the same gated route after refresh and never treats lobby status alone as PRE-open authority', () => {
+    const beforeTeacherAction = resolveLobbyGuardRoute('lobby', false, false, ROOM_ID)
+    const afterRefreshBeforeTeacherAction = resolveLobbyGuardRoute('lobby', false, false, ROOM_ID)
+    const afterTeacherAction = resolveLobbyGuardRoute('lobby', true, false, ROOM_ID)
+    const completedAfterRefresh = resolveLobbyGuardRoute('lobby', true, true, ROOM_ID)
+
+    expect(beforeTeacherAction).toBeNull()
+    expect(afterRefreshBeforeTeacherAction).toBe(beforeTeacherAction)
+    expect(afterTeacherAction).toBe(`/assessment/pre/${ROOM_ID}`)
+    expect(completedAfterRefresh).toBe(`/assessment/pre/${ROOM_ID}`)
+  })
+
   it('routes a completed-PRE student straight into the current game screen once the room has advanced', () => {
     expect(resolveLobbyGuardRoute('playing', true, true, ROOM_ID)).toBe(`/game/${ROOM_ID}`)
     expect(resolveLobbyGuardRoute('role-draw', true, true, ROOM_ID)).toBe(`/role-draw/${ROOM_ID}`)
     expect(resolveLobbyGuardRoute('game-result', true, true, ROOM_ID)).toBe(`/result/${ROOM_ID}`)
   })
 
-  // completed PRE + lobby → lobby (stay put: null means "render the lobby")
-  it('lets a completed-PRE student stay on the lobby page while the room is still in lobby', () => {
-    expect(resolveLobbyGuardRoute('lobby', true, true, ROOM_ID)).toBeNull()
+  // completed PRE + lobby → dedicated waiting state on the PRE route
+  it('routes a completed-PRE student to the dedicated waiting state while the room is still in lobby', () => {
+    expect(resolveLobbyGuardRoute('lobby', true, true, ROOM_ID)).toBe(`/assessment/pre/${ROOM_ID}`)
     expect(resolveLobbyGuardRoute(undefined, true, true, ROOM_ID)).toBeNull()
   })
 

@@ -162,6 +162,7 @@ export const resolveLobbyGuardRoute = (
 ): string | null => {
   if (status === 'finished') return resolveStudentRouteForStatus(status, roomId)
   if (preAssessmentOpened && !hasCompletedPreAssessment) return `/assessment/pre/${roomId}`
+  if (status === 'lobby' && hasCompletedPreAssessment) return `/assessment/pre/${roomId}`
   const statusRoute = resolveStudentRouteForStatus(status, roomId)
   return statusRoute === `/lobby/${roomId}` ? null : statusRoute
 }

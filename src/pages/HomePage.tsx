@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { CityBirdsAnimation } from '../components/CityBirdsAnimation'
 
 const HOME_VALUES = [
   ['/images/home/home-integrity.png', 'เรียนรู้', 'เรื่องความสุจริต'],
@@ -8,6 +9,7 @@ const HOME_VALUES = [
 
 export const HomePage = () => (
   <main className="game-home-page">
+    <div className="game-home-birds"><CityBirdsAnimation /></div>
     <div className="game-home-page__city" aria-hidden="true">
       <img src="/images/new-city/backgrounds/city-overview-normal.webp" alt="" />
     </div>

@@ -14,7 +14,7 @@ import { useGame } from '../context/GameContext'
 import { countAnswersForQuestion, countCompletedPreAssessments, countCrisisAnswersForEvent, getLiveCityScore, shouldAutoCloseCrisis, shouldCloseQuestion } from '../domain/classroomGameLoop'
 import { createRoomQuestionSnapshot, type ParsedQuestionSheet, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import type { LocationId } from '../domain/cityScoring'
-import { deriveBuildingLevelTransitions, getCrisisPresentationTiming, getNormalPresentationTiming, LIVE_ANSWER_IMPACT_DURATION_MS, type BuildingTransitionDirection } from '../domain/cityPresentation'
+import { deriveBuildingLevelTransitions, getCrisisPresentationTiming, getNormalPresentationTiming, LIVE_ANSWER_IMPACT_DURATION_MS, resolvePostPresentationAction, resolveTeacherRoundProgressionAction, type BuildingTransitionDirection } from '../domain/cityPresentation'
 import { resolveLiveAnswerImpact, type LiveAnswerImpact } from '../domain/liveAnswerImpact'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { BUILDING_IDS, BUILDING_LOCATION, INITIAL_BUILDING_LEVELS, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
@@ -197,6 +197,7 @@ export const TeacherPage = () => {
   const [restoringStoredRoom, setRestoringStoredRoom] = useState(Boolean(storedSession?.roomId))
   const [isHardRecoveryDialogOpen, setIsHardRecoveryDialogOpen] = useState(false)
   const [isPreAssessmentIncompleteDialogOpen, setIsPreAssessmentIncompleteDialogOpen] = useState(false)
+  const [roundCheckpointReadyKey, setRoundCheckpointReadyKey] = useState('')
   const closingRef = useRef(false)
   const roomBoundaryRef = useRef(0)
   const seenAnswerIdsRef = useRef(new Set<string>())
@@ -766,12 +767,44 @@ export const TeacherPage = () => {
     void startGame()
   }
 
+  const currentRoundProgressionKey = room ? `${room.roomId}:${room.gameCycle}:${room.currentQuestionNumber}` : ''
+  const isCheckpointReady = Boolean(room && roundCheckpointReadyKey === currentRoundProgressionKey)
+  const progressionAction = room
+    ? resolveTeacherRoundProgressionAction(room.status, room.currentQuestionNumber, isCheckpointReady)
+    : 'none'
+
   const nextOrFinish = async (): Promise<void> => {
     if (!room || !canAdvanceQuestion) return
+    const checkpointKey = `${room.roomId}:${room.gameCycle}:${room.currentQuestionNumber}`
+    const roomAtStart = room.roomId
+    if (progressionAction === 'enter-crisis') {
+      setBusy(true)
+      setActionError('')
+      try {
+        await withActionTiming('openNextQuestion', roomAtStart, () => service.openNextQuestion(roomAtStart, uid))
+      } catch (reason) {
+        setActionError(classroomFriendlyError(reason))
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+    if (progressionAction === 'finish-game') {
+      setBusy(true)
+      setActionError('')
+      try {
+        await withActionTiming('finishGame', roomAtStart, () => service.finishGame(roomAtStart, uid))
+        navigate(`/result/${roomAtStart}`)
+      } catch (reason) {
+        setActionError(classroomFriendlyError(reason))
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     cancelPresentationTimers()
     const run = ++presentationRunRef.current
     const boundary = roomBoundaryRef.current
-    const roomAtStart = room.roomId
     const questionAtStart = room.currentQuestionNumber
     const boundaryIsCurrent = (): boolean =>
       presentationRunRef.current === run
@@ -837,11 +870,10 @@ export const TeacherPage = () => {
       setBuildingTransitions({})
       setBuildingChangeStories([])
 
-      if (questionAtStart === 10) {
-        await withActionTiming('finishGame', roomAtStart, () => service.finishGame(roomAtStart, uid))
-        if (boundaryIsCurrent()) navigate(`/result/${roomAtStart}`)
-      } else {
+      if (resolvePostPresentationAction(questionAtStart) === 'open-next-question') {
         await withActionTiming('openNextQuestion', roomAtStart, () => service.openNextQuestion(roomAtStart, uid))
+      } else {
+        setRoundCheckpointReadyKey(checkpointKey)
       }
     } catch (reason) {
       setActionError(classroomFriendlyError(reason))
@@ -943,11 +975,11 @@ export const TeacherPage = () => {
           </div>
         ) : null}
         <section className="teacher-crisis-panel">
-          <p className="teacher-crisis-eyebrow">เหตุการณ์วิกฤตเมือง {event.index}/2</p>
+          <p className="teacher-crisis-eyebrow">สถานการณ์วิกฤต • เหตุการณ์ {event.index}/2</p>
           <h1>{event.title}</h1>
           <p className="teacher-crisis-subtitle">{event.subtitle}</p>
           {room.status === 'crisis-intro' ? (
-            <div className="teacher-crisis-intro"><span aria-hidden="true">⚠️</span><p>{event.situation}</p><strong>แต่ละอาชีพจะได้รับสถานการณ์ตัดสินใจที่ต่างกัน</strong></div>
+            <div className="teacher-crisis-intro"><span aria-hidden="true">⚠️</span><b>ผลกระทบ ×2</b><p>{event.situation}</p><strong>แต่ละอาชีพจะได้รับสถานการณ์ตัดสินใจที่ต่างกัน</strong></div>
           ) : null}
           {room.status === 'crisis-playing' ? (
             <div className="teacher-crisis-live">
@@ -959,6 +991,7 @@ export const TeacherPage = () => {
           ) : null}
           {room.status === 'crisis-result' && result ? (
             <div className="teacher-crisis-result">
+              <p className="teacher-crisis-result__heading">ผลกระทบหลังวิกฤต <b>คะแนน ×2 สรุปแล้ว</b></p>
               <div className="teacher-crisis-result__counts">
                 <article className="is-integrity"><span>สุจริต</span><strong>{result.integrityCount} คน</strong><small>{integrityPercent}%</small></article>
                 <article className="is-corruption"><span>ทุจริต</span><strong>{result.corruptionCount} คน</strong><small>{corruptionPercent}%</small></article>
@@ -983,6 +1016,13 @@ export const TeacherPage = () => {
 
   if (room && (room.status === 'playing' || room.status === 'round-result')) {
     const missingTrusted = !trustedSnapshot
+    const nextActionLabel = progressionAction === 'enter-crisis'
+      ? 'เข้าสู่เหตุการณ์วิกฤต'
+      : progressionAction === 'finish-game'
+        ? 'ดูผลรอบนี้'
+        : room.status === 'playing'
+          ? (room.currentQuestionNumber === 10 ? 'สรุปผลข้อสุดท้าย' : 'ไปข้อถัดไป')
+          : (room.currentQuestionNumber === 10 ? 'ดูผลรอบนี้' : 'ไปข้อถัดไป')
     return (
       <>
         <CityStage
@@ -1018,7 +1058,7 @@ export const TeacherPage = () => {
               onClick={() => void nextOrFinish()}
             >
               <span aria-hidden="true">{room.currentQuestionNumber === 10 ? '▣' : '▶'}</span>
-              {room.currentQuestionNumber === 10 ? ' ดูผลรอบนี้' : ' ไปข้อถัดไป'}
+              {' '}{nextActionLabel}
             </button>
             <button
               className="city-stage__action-button city-stage__action-button--continue"
@@ -1080,8 +1120,8 @@ export const TeacherPage = () => {
 
   return (
     <>
-    <main className="teacher-lobby-page">
-      {roomId && room?.status === 'lobby' ? (
+    <main className={`teacher-lobby-page${!roomId ? ' teacher-lobby-page--create' : ''}`}>
+      {!roomId || room?.status === 'lobby' ? (
         <div className="teacher-lobby-birds"><CityBirdsAnimation /></div>
       ) : null}
       <header className="teacher-lobby-header">
@@ -1090,55 +1130,44 @@ export const TeacherPage = () => {
           <span><strong>OUR CITY<br />OUR CHOICE</strong><small>เมืองนี้...อยู่ที่เรา</small></span>
         </Link>
         <div className="teacher-lobby-title">
-          <h1>เตรียมเมืองสำหรับชั้นเรียน</h1>
-          <p>ทำความรู้จัก 8 อาชีพ แล้วร่วมกันสร้างเมืองที่โปร่งใส ไร้ทุจริต</p>
+          <h1>{roomId ? 'เตรียมเมืองสำหรับชั้นเรียน' : 'สร้างห้องเรียนจำลอง'}</h1>
+          <p>{roomId ? 'ทำความรู้จัก 8 อาชีพ แล้วร่วมกันสร้างเมืองที่โปร่งใส ไร้ทุจริต' : 'เตรียมพื้นที่เรียนรู้ความสุจริตและการตัดสินใจเพื่อส่วนรวมสำหรับชั้นเรียน'}</p>
         </div>
         <TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />
         <Link className="teacher-lobby-home" to="/"><span aria-hidden="true">⌂</span> หน้าหลัก</Link>
       </header>
 
-      <div className="teacher-lobby-layout">
-        <section className="teacher-lobby-roles teacher-lobby-roster" aria-labelledby="lobby-roster-title">
-          <div className="teacher-lobby-section-heading">
-            <div>
-              <p className="teacher-lobby-kicker">สมาชิกของเมือง</p>
-              <h2 id="lobby-roster-title">รายชื่อนักเรียน</h2>
-              <p>เรียงตามเลขที่และชั้นเรียน พร้อมเริ่มกิจกรรมไปด้วยกัน</p>
+      {!roomId ? (
+        <div className="teacher-lobby-layout teacher-lobby-layout--create">
+          <section className="teacher-lobby-create-hero" aria-label="ข้อมูลกิจกรรมสร้างเมือง">
+            <div className="teacher-lobby-create-hero__content">
+              <span className="teacher-lobby-create-hero__tag">
+                <img alt="" aria-hidden="true" src="/images/home/home-classroom.png" />
+                กิจกรรมห้องเรียน · เมืองโปร่งใส ไร้ทุจริต
+              </span>
+              <h2>เปิดห้องเรียนเพื่อเริ่มกิจกรรม</h2>
+              <p>
+                ให้นักเรียนสวมบทบาท 8 อาชีพ ร่วมตัดสินใจในสถานการณ์จำลอง
+                และเรียนรู้ว่าทุกทางเลือกส่งผลต่อความเจริญและตึกรามบ้านช่องของเมืองอย่างไร
+              </p>
+              <div className="teacher-lobby-create-hero__features">
+                <article>
+                  <span aria-hidden="true">👥</span>
+                  <div><strong>รองรับ 40 คน</strong><small>กระจาย 8 บทบาทอย่างสมดุล</small></div>
+                </article>
+                <article>
+                  <span aria-hidden="true">📝</span>
+                  <div><strong>มีแบบประเมินในตัว</strong><small>วัดผลก่อน-หลังกิจกรรม</small></div>
+                </article>
+                <article>
+                  <span aria-hidden="true">📊</span>
+                  <div><strong>สรุปผลเรียลไทม์</strong><small>ดูภาพรวมเมืองและสถิติชั้นเรียน</small></div>
+                </article>
+              </div>
             </div>
-            <strong className="teacher-lobby-roster-count"><span>{participantCount}</span> / {classroomCapacity} คน</strong>
-          </div>
-          {playersState.data.length > 0 ? (
-            <ol className="teacher-lobby-roster-grid">
-              {playersState.data.map((player, index) => (
-                <li className="teacher-lobby-student-card" key={player.playerId}>
-                  <span className="teacher-lobby-student-card__number" aria-label={`ลำดับ ${index + 1}`}>{index + 1}</span>
-                  <span className="teacher-lobby-student-card__avatar" aria-hidden="true">{player.nickname.trim().charAt(0).toUpperCase() || 'น'}</span>
-                  <span className="teacher-lobby-student-card__identity">
-                    <strong title={player.nickname}>{player.nickname}</strong>
-                    <small>ชั้น {player.classSection ?? '–'} · เลขที่ {player.studentNumber ?? '–'}</small>
-                  </span>
-                  {room?.preAssessmentOpened ? (
-                    completedPreAssessmentPlayerIds.has(player.playerId)
-                      ? <span className="teacher-lobby-student-card__ready"><i aria-hidden="true" />ทำแบบประเมินแล้ว</span>
-                      : <span className="teacher-lobby-student-card__pending"><i aria-hidden="true" />ยังไม่ได้ทำแบบประเมิน</span>
-                  ) : (
-                    <span className="teacher-lobby-student-card__ready"><i aria-hidden="true" />พร้อม</span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <div className="teacher-lobby-roster-empty">
-              <span aria-hidden="true">👥</span>
-              <strong>{roomId ? 'กำลังรอนักเรียนเข้าห้อง' : 'สร้างห้องเพื่อรับนักเรียน'}</strong>
-              <p>{roomId ? 'สแกน QR หรือส่งลิงก์ให้นักเรียน รายชื่อจะปรากฏตรงนี้ทันที' : 'เมื่อสร้างห้องแล้ว นักเรียนที่เข้าร่วมจะแสดงเรียงอย่างเป็นระเบียบตรงนี้'}</p>
-            </div>
-          )}
-          <div className="teacher-lobby-roster-note"><span aria-hidden="true">✓</span><p><strong>รองรับนักเรียน 40 คน</strong> รายชื่ออัปเดตอัตโนมัติแบบเรียลไทม์</p></div>
-        </section>
+          </section>
 
-        <section className="teacher-lobby-control" aria-label="จัดการห้องเรียน">
-          {!roomId ? (
+          <section className="teacher-lobby-control" aria-label="จัดการห้องเรียน">
             <div className="teacher-lobby-create-card">
               <span className="teacher-lobby-create-card__icon" aria-hidden="true">⚙️</span>
               <p className="teacher-lobby-kicker">ตั้งค่าห้องเรียน</p>
@@ -1158,70 +1187,117 @@ export const TeacherPage = () => {
                 </button>
               </details>
             </div>
-          ) : (
-            <>
-              <div className="teacher-lobby-room-card">
-                <JoinQrCode joinUrl={joinLink} roomId={roomId} />
-                <div className="teacher-lobby-share-row"><span>{joinLink.replace(/^https?:\/\//, '')}</span><button onClick={() => void copyLink()} type="button">คัดลอก</button></div>
-                <p className="teacher-lobby-action-message" aria-live="polite">{actionMessage}</p>
+            {actionError || roomState.error || playersState.error ? <p className="teacher-lobby-error">{actionError || roomState.error || playersState.error}</p> : null}
+          </section>
+        </div>
+      ) : (
+        <div className="teacher-lobby-layout">
+          <section className="teacher-lobby-roles teacher-lobby-roster" aria-labelledby="lobby-roster-title">
+            <div className="teacher-lobby-section-heading">
+              <div>
+                <p className="teacher-lobby-kicker">สมาชิกของเมือง</p>
+                <h2 id="lobby-roster-title">รายชื่อนักเรียน</h2>
+                <p>เรียงตามเลขที่และชั้นเรียน พร้อมเริ่มกิจกรรมไปด้วยกัน</p>
               </div>
+              <strong className="teacher-lobby-roster-count"><span>{participantCount}</span> / {classroomCapacity} คน</strong>
+            </div>
+            {playersState.data.length > 0 ? (
+              <ol className="teacher-lobby-roster-grid">
+                {playersState.data.map((player, index) => (
+                  <li className="teacher-lobby-student-card" key={player.playerId}>
+                    <span className="teacher-lobby-student-card__number" aria-label={`ลำดับ ${index + 1}`}>{index + 1}</span>
+                    <span className="teacher-lobby-student-card__avatar" aria-hidden="true">{player.nickname.trim().charAt(0).toUpperCase() || 'น'}</span>
+                    <span className="teacher-lobby-student-card__identity">
+                      <strong title={player.nickname}>{player.nickname}</strong>
+                      <small>ชั้น {player.classSection ?? '–'} · เลขที่ {player.studentNumber ?? '–'}</small>
+                    </span>
+                    {room?.preAssessmentOpened ? (
+                      completedPreAssessmentPlayerIds.has(player.playerId)
+                        ? <span className="teacher-lobby-student-card__ready"><i aria-hidden="true" />ทำแบบประเมินแล้ว</span>
+                        : <span className="teacher-lobby-student-card__pending"><i aria-hidden="true" />ยังไม่ได้ทำแบบประเมิน</span>
+                    ) : (
+                      <span className="teacher-lobby-student-card__ready"><i aria-hidden="true" />พร้อม</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="teacher-lobby-roster-empty">
+                <span aria-hidden="true">👥</span>
+                <strong>กำลังรอนักเรียนเข้าห้อง</strong>
+                <p>สแกน QR หรือส่งลิงก์ให้นักเรียน รายชื่อจะปรากฏตรงนี้ทันที</p>
+              </div>
+            )}
+            <div className="teacher-lobby-roster-note"><span aria-hidden="true">✓</span><p><strong>รองรับนักเรียน 40 คน</strong> รายชื่ออัปเดตอัตโนมัติแบบเรียลไทม์</p></div>
+          </section>
 
+          <section className="teacher-lobby-control" aria-label="จัดการห้องเรียน">
+            <div className="teacher-lobby-room-card">
+              <JoinQrCode joinUrl={joinLink} roomId={roomId} />
+              <div className="teacher-lobby-share-row"><span>{joinLink.replace(/^https?:\/\//, '')}</span><button onClick={() => void copyLink()} type="button">คัดลอก</button></div>
+              <p className="teacher-lobby-action-message" aria-live="polite">{actionMessage}</p>
+            </div>
+
+            <div className="teacher-lobby-summary">
+              <div><span className="teacher-lobby-summary__icon" aria-hidden="true">👥</span><p>ผู้เข้าร่วม<strong>{participantCount} / {classroomCapacity} <small>คน</small></strong></p></div>
+              <div><span className="teacher-lobby-summary__icon" aria-hidden="true">⏱</span><p>เวลาต่อคำถาม<strong>{room?.questionDurationSec ?? questionDurationSec} <small>วินาที</small></strong></p></div>
+              <div className={roomReady ? 'is-ready' : 'is-waiting'}><span className="teacher-lobby-summary__icon" aria-hidden="true">{roomReady ? '✓' : '…'}</span><p>สถานะห้อง<strong>{roomReady ? 'พร้อมเริ่มเกม' : 'รอผู้เล่น'}</strong></p></div>
+            </div>
+
+            {room?.preAssessmentOpened ? (
               <div className="teacher-lobby-summary">
-                <div><span className="teacher-lobby-summary__icon" aria-hidden="true">👥</span><p>ผู้เข้าร่วม<strong>{participantCount} / {classroomCapacity} <small>คน</small></strong></p></div>
-                <div><span className="teacher-lobby-summary__icon" aria-hidden="true">⏱</span><p>เวลาต่อคำถาม<strong>{room?.questionDurationSec ?? questionDurationSec} <small>วินาที</small></strong></p></div>
-                <div className={roomReady ? 'is-ready' : 'is-waiting'}><span className="teacher-lobby-summary__icon" aria-hidden="true">{roomReady ? '✓' : '…'}</span><p>สถานะห้อง<strong>{roomReady ? 'พร้อมเริ่มเกม' : 'รอผู้เล่น'}</strong></p></div>
-              </div>
-
-              {room?.preAssessmentOpened ? (
-                <div className="teacher-lobby-summary">
-                  <div className={completedPreAssessmentCount === participantCount && participantCount > 0 ? 'is-ready' : 'is-waiting'}>
-                    <span className="teacher-lobby-summary__icon" aria-hidden="true">📝</span>
-                    <p>แบบประเมินก่อนกิจกรรม<strong>ทำเสร็จ {completedPreAssessmentCount} / {participantCount} <small>คน</small></strong></p>
-                  </div>
-                </div>
-              ) : (
-                <button className="teacher-lobby-primary-button" disabled={busy || room?.status !== 'lobby'} onClick={() => void openPreAssessment()} type="button">
-                  <span aria-hidden="true">📝</span> เริ่มแบบประเมินก่อนกิจกรรม
-                </button>
-              )}
-
-              <div className="teacher-lobby-role-guide">
-                <div className="teacher-lobby-card-heading"><div><strong>8 อาชีพในเมือง</strong><p>ระบบจะสุ่มและกระจายบทบาทให้สมดุล</p></div><span aria-hidden="true">⚄</span></div>
-                <div className="teacher-lobby-role-guide__grid">
-                  {ROLES.map((role) => (
-                    <article className={`teacher-lobby-role-guide__item teacher-lobby-role-guide__item--${role.id}`} key={role.id}>
-                      <span aria-hidden="true">{ROLE_ICONS[role.id]}</span>
-                      <div><strong>{role.label}</strong><p>{ROLE_CIVIC_GUIDANCE[role.id].influence}</p></div>
-                    </article>
-                  ))}
+                <div className={completedPreAssessmentCount === participantCount && participantCount > 0 ? 'is-ready' : 'is-waiting'}>
+                  <span className="teacher-lobby-summary__icon" aria-hidden="true">📝</span>
+                  <p>แบบประเมินก่อนกิจกรรม<strong>ทำเสร็จ {completedPreAssessmentCount} / {participantCount} <small>คน</small></strong></p>
                 </div>
               </div>
-
-              <button
-                aria-haspopup="dialog"
-                className="teacher-lobby-rules-button"
-                onClick={() => setIsLobbyRulesOpen(true)}
-                type="button"
-              >
-                <span aria-hidden="true">📋</span>
-                <span><strong>กติกาการสร้างเมือง</strong><small>แตะเพื่อดูกติกาทั้งหมด</small></span>
-                <b aria-hidden="true">›</b>
+            ) : (
+              <button className="teacher-lobby-primary-button" disabled={busy || room?.status !== 'lobby'} onClick={() => void openPreAssessment()} type="button">
+                <span aria-hidden="true">📝</span> เริ่มแบบประเมินก่อนกิจกรรม
               </button>
+            )}
 
-              {sheetStatus === 'error' ? <div className="teacher-lobby-error"><p>{sheetError}</p><button onClick={() => void loadQuestions()}>ลองโหลดข้อมูลอีกครั้ง</button></div> : null}
-              <button className="teacher-lobby-primary-button teacher-lobby-primary-button--start" disabled={busy || participantCount === 0 || sheetStatus !== 'ready' || room?.status !== 'lobby' || !room?.preAssessmentOpened} onClick={requestStartGame}>
-                <span aria-hidden="true">▶</span> เริ่มเกม
-                <small>{participantCount === 0 ? 'รอให้นักเรียนเข้าห้องก่อน' : !room?.preAssessmentOpened ? 'กรุณาเปิดแบบประเมินก่อนกิจกรรมก่อน' : 'เริ่มสร้างเมืองของเรากันเลย!'}</small>
+            <details className="teacher-lobby-role-guide">
+              <summary className="teacher-lobby-card-heading">
+                <div><strong>8 อาชีพในเมือง</strong><p>ระบบจะสุ่มและกระจายบทบาทให้สมดุล (แตะเพื่อดู)</p></div>
+                <span aria-hidden="true">⚄</span>
+              </summary>
+              <div className="teacher-lobby-role-guide__grid">
+                {ROLES.map((role) => (
+                  <article className={`teacher-lobby-role-guide__item teacher-lobby-role-guide__item--${role.id}`} key={role.id}>
+                    <span aria-hidden="true">{ROLE_ICONS[role.id]}</span>
+                    <div><strong>{role.label}</strong><p>{ROLE_CIVIC_GUIDANCE[role.id].influence}</p></div>
+                  </article>
+                ))}
+              </div>
+            </details>
+
+            <button
+              aria-haspopup="dialog"
+              className="teacher-lobby-rules-button"
+              onClick={() => setIsLobbyRulesOpen(true)}
+              type="button"
+            >
+              <span aria-hidden="true">📋</span>
+              <span><strong>กติกาการสร้างเมือง</strong><small>แตะเพื่อดูกติกาทั้งหมด</small></span>
+              <b aria-hidden="true">›</b>
+            </button>
+
+            {sheetStatus === 'error' ? <div className="teacher-lobby-error"><p>{sheetError}</p><button onClick={() => void loadQuestions()}>ลองโหลดข้อมูลอีกครั้ง</button></div> : null}
+            {room?.preAssessmentOpened ? (
+              <button className="teacher-lobby-primary-button teacher-lobby-primary-button--start" disabled={busy || participantCount === 0 || sheetStatus !== 'ready' || room?.status !== 'lobby'} onClick={requestStartGame}>
+                <span aria-hidden="true">▶</span> เริ่มกิจกรรม
+                <small>{participantCount === 0 ? 'รอให้นักเรียนเข้าห้องก่อน' : 'เริ่มสร้างเมืองของเรากันเลย!'}</small>
               </button>
-              <details className="teacher-lobby-more-options">
-                <summary>ตัวเลือกเพิ่มเติม</summary>
-                <button className="teacher-lobby-reset-room-button" disabled={busy} onClick={() => setIsHardRecoveryDialogOpen(true)} type="button"><span aria-hidden="true">↺</span> แก้ปัญหาห้องค้าง</button>
-              </details>
-            </>
-          )}
-          {actionError || roomState.error || playersState.error ? <p className="teacher-lobby-error">{actionError || roomState.error || playersState.error}</p> : null}
-        </section>
-      </div>
+            ) : null}
+            <details className="teacher-lobby-more-options">
+              <summary>ตัวเลือกเพิ่มเติม</summary>
+              <button className="teacher-lobby-reset-room-button" disabled={busy} onClick={() => setIsHardRecoveryDialogOpen(true)} type="button"><span aria-hidden="true">↺</span> แก้ปัญหาห้องค้าง</button>
+            </details>
+            {actionError || roomState.error || playersState.error ? <p className="teacher-lobby-error">{actionError || roomState.error || playersState.error}</p> : null}
+          </section>
+        </div>
+      )}
       {isLobbyRulesOpen ? (
         <div
           className="teacher-lobby-rules-modal"

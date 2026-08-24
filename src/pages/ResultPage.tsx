@@ -12,7 +12,7 @@ import { useGame } from '../context/GameContext'
 import { LOCATION_BUILDING, normalizeBuildingLevels, type BuildingId, type BuildingLevel } from '../domain/cityBuildings'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
 import { formatCityLevel, MAX_GAME_CYCLES, ROLES, type CityLevel } from '../domain/ourCity'
-import { countPersonalDecisionOutcomes } from '../domain/personalDecisionResults'
+import { countPersonalDecisionOutcomes, derivePersonalImpactNarrative } from '../domain/personalDecisionResults'
 import { useAssessmentEvidence, useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
 import { classroomFriendlyError } from '../services'
 import {
@@ -25,6 +25,7 @@ import {
 import { clearTeacherSnapshot } from '../services/teacherQuestionSnapshot'
 // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
 import { withActionTiming } from '../debug/flightRecorder'
+
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const CITY_REFLECTIONS: Record<CityLevel, string> = {
@@ -76,6 +77,7 @@ const addLocationSummary = (target: LocationSummary, source: LocationSummary): L
   }
 }
 const PERSONAL_RESULTS_READ_ERROR = 'ไม่สามารถโหลดผลการตัดสินใจส่วนตัวได้ กรุณาลองใหม่'
+type TeacherResultTab = 'summary' | 'city' | 'evidence'
 
 export const ResultPage = () => {
   const roomId = (useParams().roomCode ?? '').toUpperCase()
@@ -99,8 +101,12 @@ export const ResultPage = () => {
   const personalResultsState = usePersonalDecisionResults(hasStudentSession ? roomId : '', studentPlayerId, hasStudentSession ? uid : '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [detailsExpanded, setDetailsExpanded] = useState(false)
+  const [activeTeacherTab, setActiveTeacherTab] = useState<TeacherResultTab>('summary')
   const [activeBuildingId, setActiveBuildingId] = useState<LocationId | null>(null)
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [])
 
   useEffect(() => {
     const status = roomState.data?.status
@@ -109,10 +115,6 @@ export const ResultPage = () => {
     if (status === 'lobby') navigate(isTeacher ? '/teacher' : `/lobby/${roomId}`, { replace: true })
   }, [isTeacher, navigate, roomId, roomState.data?.status])
 
-  // Assessment Phase B1: a student whose activity just finished still needs
-  // their session to submit POST/Reflection (see /assessment/post/:roomCode)
-  // - the session must survive this transition, not be cleared here. Only
-  // the assessment flow's own "กลับหน้าหลัก" completion action clears it now.
   useEffect(() => {
     if (roomState.data?.status !== 'finished' || isTeacher || !hasStudentSession) return
     navigate(`/assessment/post/${roomId}`, { replace: true })
@@ -186,6 +188,7 @@ export const ResultPage = () => {
     const role = ROLES.find((candidate) => candidate.id === playerState.data?.roleId)
     const hasPrivateResults = personalCurrent.length > 0
     const personalResultsFailed = Boolean(personalResultsState.error)
+    const personalNarrative = derivePersonalImpactNarrative(currentTotals, room.cityLevel)
     return (
       <main className={`student-cycle-result is-${room.cityLevel}`}>
         <div className="result-city-art" aria-hidden="true"><CityScene buildingLevels={room.buildingLevels} cityLevel={room.cityLevel} /></div><div className="result-city-veil" aria-hidden="true" />
@@ -201,6 +204,11 @@ export const ResultPage = () => {
                 <article className="is-timeout"><span aria-hidden="true">?</span><p>ไม่ได้ตอบ<strong>{currentTotals.timeout}</strong></p></article>
               </section>
               <div className="student-cycle-result__total"><span>รอบนี้</span><strong>{currentTotal} การตัดสินใจ</strong><small>รวมคำถามปกติและเหตุการณ์วิกฤตที่สรุปผลแล้ว</small></div>
+              <section className={`student-personal-impact is-${personalNarrative.kind}`} aria-labelledby="personal-impact-title">
+                <h2 id="personal-impact-title">ผลจากการตัดสินใจของฉัน</h2>
+                <p>{personalNarrative.decisionMessage}</p>
+                <small>{personalNarrative.cityMessage}</small>
+              </section>
             </>
           ) : (
             <section className="student-cycle-result__data-state">ยังไม่มีข้อมูลผลส่วนตัวสำหรับรอบนี้</section>
@@ -219,35 +227,33 @@ export const ResultPage = () => {
       <div className="result-city-art" aria-hidden="true"><CityScene buildingLevels={room.buildingLevels} cityLevel={room.cityLevel} /></div><div className="result-city-veil" aria-hidden="true" />
       <header className="teacher-result-topbar"><div><span>🚩</span><p>รอบที่<strong>{room.gameCycle + 1} / {MAX_GAME_CYCLES}</strong></p></div><div><span>⭐</span><p>คะแนนเมือง<strong>{Math.round(room.cityScore).toLocaleString('th-TH')}</strong></p></div><div><span>🏆</span><p>อาชีพที่ผ่านแล้ว<strong>{roleProgress} / {MAX_GAME_CYCLES}</strong></p></div><div><span>👥</span><p>ห้องเรียน<strong>{room.roomId}</strong></p></div></header>
       <section className="teacher-result-shell">
-        <article className="teacher-result-summary">
-          <header className="teacher-result-hero"><div className="teacher-result-hero__level"><span>{CITY_RESULT_EMOJI[room.cityLevel]}</span><div><small>ผลเมืองรอบที่ {room.gameCycle + 1}</small><h1>{formatCityLevel(room.cityLevel)}</h1></div></div><div className="teacher-result-hero__score"><span>คะแนนเมือง</span><strong>{Math.round(room.cityScore).toLocaleString('th-TH')} <small>/ 1,000</small></strong></div><div className={`teacher-result-hero__delta ${cycleScoreDelta >= 0 ? 'is-positive' : 'is-negative'}`}><span>ผลสุทธิรอบนี้</span><strong>{signed(cycleScoreDelta)} คะแนน</strong></div><p>{CITY_REFLECTIONS[room.cityLevel]}</p></header>
-          <section className="teacher-answer-summary" aria-labelledby="answer-summary-title"><h2 id="answer-summary-title">สรุปคำตอบรอบนี้</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{latestTotals.integrityCount}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{latestTotals.corruptionCount}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{latestTotals.timeoutCount}</strong></p></article></div></section>
-          <section className="teacher-building-summary" aria-labelledby="building-summary-title"><div className="teacher-section-heading"><div><h2 id="building-summary-title">ภาพรวมอาคารทั้ง 7 แห่ง</h2><p>ผลกระทบเฉลี่ยจากคำตอบในรอบนี้</p></div></div><div className="teacher-building-summary__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>Lv.{building.level > 0 ? '+' : ''}{building.level} • {building.direction}</small></p><strong>{signed(building.average)}</strong></article>)}</div></section>
-          <button className="teacher-result-expand" aria-expanded={detailsExpanded} onClick={() => setDetailsExpanded((current) => !current)} type="button"><span>{detailsExpanded ? 'ซ่อนรายละเอียดผลลัพธ์' : 'ดูรายละเอียดผลลัพธ์'}</span><b>{detailsExpanded ? '⌃' : '⌄'}</b></button>
-          {room.status === 'finished' ? (
-            <TeacherEvidenceSummarySection
-              error={assessmentEvidenceState.error}
-              loading={assessmentEvidenceState.loading}
-              players={playersState.data}
-              records={assessmentEvidenceState.data}
-            />
-          ) : null}
-          {showTeacherObservationSection ? (
-            <TeacherObservationSection
-              isTeacher={isTeacher}
-              providedObservation={observationEvidence}
-              roomId={roomId}
-              useProvidedObservation={room.status === 'finished'}
-            />
-          ) : null}
-          <footer className="teacher-result-actions">{canContinue ? <button className="is-primary" disabled={busy} onClick={() => void continueCity()} type="button">▶ เล่นต่อเพื่อพัฒนาเมือง</button> : null}{room.status === 'game-result' ? <button disabled={busy} onClick={() => void endActivity(false)} type="button">จบกิจกรรม</button> : null}{!canContinue ? <button className="is-primary" disabled={busy} onClick={() => void endActivity(true)} type="button">เริ่มห้องใหม่</button> : null}</footer>
-          {roleProgress >= MAX_GAME_CYCLES ? <strong className="teacher-result-complete">✓ นักเรียนได้ทดลองครบทั้ง 8 อาชีพแล้ว</strong> : null}{teacherError ? <output className="teacher-result-error">{teacherError}</output> : null}
-        </article>
-        {detailsExpanded ? <section className="teacher-result-details" aria-label="รายละเอียดผลลัพธ์">
-          <section className="teacher-result-levels"><div className="teacher-section-heading"><div><h2>ระดับเมือง</h2><p>เกณฑ์คะแนนรวมของเมือง</p></div></div><div className="teacher-result-levels__grid">{CITY_LEVEL_STEPS.map((step) => <article className={step.id === room.cityLevel ? 'is-current' : ''} key={step.id}><span>{CITY_RESULT_EMOJI[step.id]}</span><strong>{formatCityLevel(step.id)}</strong><small>{step.range} คะแนน</small></article>)}</div></section>
-          <section className="teacher-result-answer-details"><div className="teacher-section-heading"><div><h2>สรุปคำตอบ</h2><p>ข้อมูลรวมของห้องเรียน ไม่แสดงผลรายบุคคล</p></div></div><div className="teacher-result-answer-table" role="table"><div className="is-heading" role="row"><span role="columnheader">ประเภทการตัดสินใจ</span><span role="columnheader">รอบล่าสุด</span><span role="columnheader">สัดส่วน</span><span role="columnheader">สะสมทั้งหมด</span></div><div role="row"><strong role="cell">สุจริตรอบล่าสุด</strong><span role="cell">{latestTotals.integrityCount}</span><span role="cell">{percentage(latestTotals.integrityCount)}%</span><span role="cell">สุจริตสะสม {room.integrityTotal}</span></div><div role="row"><strong role="cell">ทุจริตรอบล่าสุด</strong><span role="cell">{latestTotals.corruptionCount}</span><span role="cell">{percentage(latestTotals.corruptionCount)}%</span><span role="cell">ทุจริตสะสม {room.corruptionTotal}</span></div><div role="row"><strong role="cell">ไม่ตอบรอบล่าสุด</strong><span role="cell">{latestTotals.timeoutCount}</span><span role="cell">{percentage(latestTotals.timeoutCount)}%</span><span role="cell">ไม่ตอบสะสม {room.timeoutTotal}</span></div></div></section>
-          <section className="teacher-result-building-details"><div className="teacher-section-heading"><div><h2>ผลลัพธ์อาคาร</h2><p>รายละเอียดจากข้อมูลจริงที่สรุปแล้วในรอบนี้</p></div></div><div className="teacher-result-building-details__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><header><span>{building.icon}</span><div><h3>{building.label}</h3><p>Lv.{building.level > 0 ? '+' : ''}{building.level} • {BUILDING_LEVEL_LABELS[building.level]}</p></div><strong>{signed(building.average)}</strong></header><dl><div><dt>สุจริต</dt><dd>{building.summary.integrityCount}</dd></div><div><dt>ทุจริต</dt><dd>{building.summary.corruptionCount}</dd></div><div><dt>ไม่ตอบ</dt><dd>{building.summary.timeoutCount}</dd></div></dl><button onClick={() => setActiveBuildingId(building.id)} type="button">ดูรายละเอียด</button></article>)}</div></section>
-        </section> : null}
+        <nav className="teacher-result-tabs" aria-label="ส่วนข้อมูลผลลัพธ์" role="tablist">
+          {([
+            ['summary', 'สรุป'],
+            ['city', 'รายละเอียดเมือง'],
+            ['evidence', 'หลักฐานครู'],
+          ] as const).map(([tab, label]) => (
+            <button aria-controls={`teacher-result-panel-${tab}`} aria-selected={activeTeacherTab === tab} className={activeTeacherTab === tab ? 'is-active' : ''} id={`teacher-result-tab-${tab}`} key={tab} onClick={() => setActiveTeacherTab(tab)} role="tab" type="button">{label}</button>
+          ))}
+        </nav>
+        <div className="teacher-result-panels">
+          {activeTeacherTab === 'summary' ? <article className="teacher-result-summary" aria-labelledby="teacher-result-tab-summary" id="teacher-result-panel-summary" role="tabpanel">
+            <header className="teacher-result-hero"><div className="teacher-result-hero__level"><span>{CITY_RESULT_EMOJI[room.cityLevel]}</span><div><small>ผลเมืองรอบที่ {room.gameCycle + 1}</small><h1>{formatCityLevel(room.cityLevel)}</h1></div></div><div className="teacher-result-hero__score"><span>คะแนนเมือง</span><strong>{Math.round(room.cityScore).toLocaleString('th-TH')} <small>/ 1,000</small></strong></div><div className={`teacher-result-hero__delta ${cycleScoreDelta >= 0 ? 'is-positive' : 'is-negative'}`}><span>ผลสุทธิรอบนี้</span><strong>{signed(cycleScoreDelta)} คะแนน</strong></div><p>{CITY_REFLECTIONS[room.cityLevel]}</p></header>
+            <section className="teacher-answer-summary" aria-labelledby="answer-summary-title"><h2 id="answer-summary-title">สรุปคำตอบรอบนี้</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{latestTotals.integrityCount}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{latestTotals.corruptionCount}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{latestTotals.timeoutCount}</strong></p></article></div></section>
+            <section className="teacher-building-summary" aria-labelledby="building-summary-title"><div className="teacher-section-heading"><div><h2 id="building-summary-title">ภาพรวมอาคารทั้ง 7 แห่ง</h2><p>ผลกระทบเฉลี่ยจากคำตอบในรอบนี้</p></div></div><div className="teacher-building-summary__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>Lv.{building.level > 0 ? '+' : ''}{building.level} • {building.direction}</small></p><strong>{signed(building.average)}</strong></article>)}</div></section>
+            {roleProgress >= MAX_GAME_CYCLES ? <strong className="teacher-result-complete">✓ นักเรียนได้ทดลองครบทั้ง 8 อาชีพแล้ว</strong> : null}{teacherError ? <output className="teacher-result-error">{teacherError}</output> : null}
+          </article> : null}
+          {activeTeacherTab === 'city' ? <section className="teacher-result-details" aria-labelledby="teacher-result-tab-city" id="teacher-result-panel-city" role="tabpanel">
+            <section className="teacher-result-levels"><div className="teacher-section-heading"><div><h2>ระดับเมือง</h2><p>เกณฑ์คะแนนรวมของเมือง</p></div></div><div className="teacher-result-levels__grid">{CITY_LEVEL_STEPS.map((step) => <article className={step.id === room.cityLevel ? 'is-current' : ''} key={step.id}><span>{CITY_RESULT_EMOJI[step.id]}</span><strong>{formatCityLevel(step.id)}</strong><small>{step.range} คะแนน</small></article>)}</div></section>
+            <section className="teacher-result-answer-details"><div className="teacher-section-heading"><div><h2>สรุปคำตอบ</h2><p>ข้อมูลรวมของห้องเรียน ไม่แสดงผลรายบุคคล</p></div></div><div className="teacher-result-answer-table" role="table"><div className="is-heading" role="row"><span role="columnheader">ประเภทการตัดสินใจ</span><span role="columnheader">รอบล่าสุด</span><span role="columnheader">สัดส่วน</span><span role="columnheader">สะสมทั้งหมด</span></div><div role="row"><strong role="cell">สุจริตรอบล่าสุด</strong><span role="cell">{latestTotals.integrityCount}</span><span role="cell">{percentage(latestTotals.integrityCount)}%</span><span role="cell">สุจริตสะสม {room.integrityTotal}</span></div><div role="row"><strong role="cell">ทุจริตรอบล่าสุด</strong><span role="cell">{latestTotals.corruptionCount}</span><span role="cell">{percentage(latestTotals.corruptionCount)}%</span><span role="cell">ทุจริตสะสม {room.corruptionTotal}</span></div><div role="row"><strong role="cell">ไม่ตอบรอบล่าสุด</strong><span role="cell">{latestTotals.timeoutCount}</span><span role="cell">{percentage(latestTotals.timeoutCount)}%</span><span role="cell">ไม่ตอบสะสม {room.timeoutTotal}</span></div></div></section>
+            <section className="teacher-result-building-details"><div className="teacher-section-heading"><div><h2>ผลลัพธ์อาคาร</h2><p>รายละเอียดจากข้อมูลจริงที่สรุปแล้วในรอบนี้</p></div></div><div className="teacher-result-building-details__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><header><span>{building.icon}</span><div><h3>{building.label}</h3><p>Lv.{building.level > 0 ? '+' : ''}{building.level} • {BUILDING_LEVEL_LABELS[building.level]}</p></div><strong>{signed(building.average)}</strong></header><dl><div><dt>สุจริต</dt><dd>{building.summary.integrityCount}</dd></div><div><dt>ทุจริต</dt><dd>{building.summary.corruptionCount}</dd></div><div><dt>ไม่ตอบ</dt><dd>{building.summary.timeoutCount}</dd></div></dl><button onClick={() => setActiveBuildingId(building.id)} type="button">ดูรายละเอียด</button></article>)}</div></section>
+          </section> : null}
+          {activeTeacherTab === 'evidence' ? <section className="teacher-result-evidence-panel" aria-labelledby="teacher-result-tab-evidence" id="teacher-result-panel-evidence" role="tabpanel">
+            {room.status === 'finished' ? <TeacherEvidenceSummarySection error={assessmentEvidenceState.error} loading={assessmentEvidenceState.loading} players={playersState.data} records={assessmentEvidenceState.data} /> : null}
+            {showTeacherObservationSection ? <TeacherObservationSection isTeacher={isTeacher} providedObservation={observationEvidence} roomId={roomId} useProvidedObservation={room.status === 'finished'} /> : null}
+          </section> : null}
+        </div>
+        <footer className="teacher-result-actions">{canContinue ? <button className="is-primary" disabled={busy} onClick={() => void continueCity()} type="button">▶ เล่นต่อเพื่อพัฒนาเมือง</button> : null}{room.status === 'game-result' ? <button disabled={busy} onClick={() => void endActivity(false)} type="button">จบกิจกรรม</button> : null}{!canContinue ? <button className="is-primary" disabled={busy} onClick={() => void endActivity(true)} type="button">เริ่มห้องใหม่</button> : null}</footer>
       </section>
       {activeBuilding ? <div className="teacher-building-modal" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setActiveBuildingId(null) }}><section aria-labelledby="building-detail-title" aria-modal="true" role="dialog"><button aria-label="ปิดรายละเอียดอาคาร" className="teacher-building-modal__close" onClick={() => setActiveBuildingId(null)} type="button">×</button><header><span>{activeBuilding.icon}</span><div><small>รายละเอียดอาคาร</small><h2 id="building-detail-title">{activeBuilding.label}</h2></div></header><div className="teacher-building-modal__state"><span>สถานะปัจจุบัน</span><strong>Lv.{activeBuilding.level > 0 ? '+' : ''}{activeBuilding.level} • {BUILDING_LEVEL_LABELS[activeBuilding.level]}</strong><small>{activeBuilding.direction}</small></div><div className="teacher-building-modal__metrics"><article><span>ผลกระทบเฉลี่ยรอบนี้</span><strong>{signed(activeBuilding.average)}</strong></article><article><span>จำนวนคำตอบ</span><strong>{activeBuilding.summary.participantCount}</strong></article></div><dl><div><dt>เลือกทางสุจริต</dt><dd>{activeBuilding.summary.integrityCount}</dd></div><div><dt>เลือกทางทุจริต</dt><dd>{activeBuilding.summary.corruptionCount}</dd></div><div><dt>ไม่ได้ตอบ</dt><dd>{activeBuilding.summary.timeoutCount}</dd></div></dl><button className="teacher-building-modal__done" onClick={() => setActiveBuildingId(null)} type="button">ปิดรายละเอียด</button></section></div> : null}
     </main>

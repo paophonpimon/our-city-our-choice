@@ -14,7 +14,7 @@
     "loadtest:40": "node scripts/load-test-40.mjs"
   },
   "dependencies": {
-    "@fontsource/mitr": "^5.3.0",
+    "@fontsource/chakra-petch": "^5.3.0",
     "@lottiefiles/dotlottie-react": "^0.19.13",
     "firebase": "^12.1.0",
     "qrcode.react": "^4.2.0",
