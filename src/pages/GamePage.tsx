@@ -8,10 +8,13 @@ import { orderChoicesForPlayer } from '../domain/classroomQuestions'
 import { ROLES } from '../domain/ourCity'
 import { usePlayer, usePlayerAnswers, useQuestions, useRoom } from '../hooks/useGameData'
 import { useCountdown } from '../hooks/useCountdown'
+import { useSoundLoop } from '../hooks/useSoundPack'
+import { selectGameAmbience } from '../lib/soundPack'
 import { classroomFriendlyError } from '../services'
 import { getClassroomStudentSession, saveClassroomViewerRole } from '../services/sessionStorage'
 import { getCrisisEvent, orderCrisisChoicesForPlayer } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord } from '../types/classroomGame'
+import { hideFailedQuestionScene, resolveQuestionSceneImageUrl } from './gameQuestionScenes'
 // TEMPORARY DIAGNOSTIC — remove alongside src/debug when done
 import { debugLog, isDebugMode } from '../debug/useDebugLog'
 // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
@@ -43,6 +46,21 @@ interface StudentQuestionStageProps {
   children: ReactNode
   waitingVariant: StudentWaitingVariant | null
 }
+
+export const QuestionSceneImage = ({ src }: { src: string }) => (
+  <figure className="game-play-question-media">
+    <img
+      alt="ภาพประกอบสถานการณ์"
+      decoding="async"
+      fetchPriority="high"
+      height={960}
+      loading="eager"
+      onError={(event) => hideFailedQuestionScene(event.currentTarget)}
+      src={src}
+      width={1280}
+    />
+  </figure>
+)
 
 export const StudentImpactWaitingPresentation = ({ variant }: { variant: StudentWaitingVariant }) => {
   const crisis = variant === 'crisis'
@@ -139,6 +157,7 @@ export const GamePage = () => {
     : undefined
   const role = ROLES.find((item) => item.id === playerState.data?.roleId)
   const countdownEnded = roomState.data?.status === 'playing' && remaining === 0 && !existingAnswer
+  useSoundLoop('ambience', selectGameAmbience(roomState.data?.status, playerState.data?.roleId))
 
   if (!session || session.roomId !== roomId) return <Navigate replace to={`/join?room=${roomId}`} />
   if (roomState.data?.status === 'lobby') return <Navigate replace to={`/lobby/${roomId}`} />
@@ -240,6 +259,7 @@ export const GamePage = () => {
   if (!playerState.data.roleId || !question) {
     return <main className="our-city-page grid min-h-dvh place-items-center px-5 text-center"><p>กำลังรับอาชีพและคำถามจากครู…</p></main>
   }
+  const questionSceneImageUrl = resolveQuestionSceneImageUrl(question.questionId, question.imageUrl)
 
   return (
     <main className="our-city-page game-play-page min-h-dvh px-4 py-5 md:px-7 md:py-7">
@@ -258,33 +278,37 @@ export const GamePage = () => {
           </header>
 
           <article className="our-city-panel game-play-card mt-4 flex flex-1 flex-col p-6 md:p-9">
-            {question.imageUrl ? <img className="game-play-image mb-6 max-h-64 w-full rounded-2xl object-cover" src={question.imageUrl} alt="ภาพประกอบสถานการณ์" /> : null}
-            <p className="text-sm font-bold tracking-[.14em] text-[#8fc4c5] uppercase">สถานการณ์ของคุณ</p>
-            <h2 className="game-play-prompt mt-4 text-2xl leading-relaxed font-black md:text-4xl">{question.prompt}</h2>
+            <div className={`game-play-question-layout${questionSceneImageUrl ? ' has-scene' : ''}`}>
+              <div className="game-play-question-copy">
+                <p className="text-sm font-bold tracking-[.14em] text-[#8fc4c5] uppercase">สถานการณ์ของคุณ</p>
+                <h2 className="game-play-prompt mt-4 text-2xl leading-relaxed font-black md:text-4xl">{question.prompt}</h2>
+              </div>
+              {questionSceneImageUrl ? <QuestionSceneImage key={questionSceneImageUrl} src={questionSceneImageUrl} /> : null}
 
-            <div className="game-play-choices relative mt-auto grid gap-4 pt-8 md:grid-cols-2">
-              {orderedChoices.map((choice, index) => (
-                <button
-                  className={`game-play-choice min-h-32 rounded-2xl border p-5 text-left text-lg font-bold transition ${
-                    existingAnswer?.choiceId === choice.id
-                      ? 'is-selected'
-                      : 'is-unanswered'
-                  } disabled:cursor-not-allowed disabled:opacity-55`}
-                  disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing' || remaining <= 0}
-                  key={choice.id}
-                  onClick={() => void answer(choice.id)}
-                >
-                  <span className="mr-3 inline-grid h-10 w-10 place-items-center rounded-full border border-white/25 text-[#f4c96d]">
-                    {index === 0 ? 'ก.' : 'ข.'}
-                  </span>
-                  {choice.text}
-                </button>
-              ))}
-              {countdownEnded ? <TimeoutLockOverlay /> : null}
-            </div>
+              <div className="game-play-choices relative mt-auto grid gap-4 pt-8 md:grid-cols-2">
+                {orderedChoices.map((choice, index) => (
+                  <button
+                    className={`game-play-choice min-h-32 rounded-2xl border p-5 text-left text-lg font-bold transition ${
+                      existingAnswer?.choiceId === choice.id
+                        ? 'is-selected'
+                        : 'is-unanswered'
+                    } disabled:cursor-not-allowed disabled:opacity-55`}
+                    disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing' || remaining <= 0}
+                    key={choice.id}
+                    onClick={() => void answer(choice.id)}
+                  >
+                    <span className="mr-3 inline-grid h-10 w-10 place-items-center rounded-full border border-white/25 text-[#f4c96d]">
+                      {index === 0 ? 'ก.' : 'ข.'}
+                    </span>
+                    {choice.text}
+                  </button>
+                ))}
+                {countdownEnded ? <TimeoutLockOverlay /> : null}
+              </div>
 
-            <div className="game-play-feedback mt-6 min-h-14 text-center" aria-live="polite">
-              {error ? <p className="mt-2 text-red-200">{error}</p> : null}
+              <div className="game-play-feedback mt-6 min-h-14 text-center" aria-live="polite">
+                {error ? <p className="mt-2 text-red-200">{error}</p> : null}
+              </div>
             </div>
           </article>
         </StudentQuestionStage>

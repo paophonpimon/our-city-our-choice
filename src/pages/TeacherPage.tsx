@@ -22,6 +22,8 @@ import { BUILDING_IDS, BUILDING_LOCATION, INITIAL_BUILDING_LEVELS, normalizeBuil
 import { useAnswers, useCrisisResults, usePlayers, usePreAssessments, useRoom, useRounds } from '../hooks/useGameData'
 import { useCountdown } from '../hooks/useCountdown'
 import { enterFullscreenSafely } from '../hooks/useFullscreen'
+import { useSoundEffectOnce, useSoundLoop } from '../hooks/useSoundPack'
+import { selectCutsceneSound, selectYearTransitionAccent, shouldDuckTeacherBgm } from '../lib/soundPack'
 import { classroomFriendlyError } from '../services'
 import { loadGoogleSheetsQuestions } from '../services/googleSheetsQuestions'
 import {
@@ -60,6 +62,7 @@ type CrisisRevealPhase = 'holding' | 'resolving' | 'revealing' | 'revealed'
 interface YearCutsceneState {
   cityYear: number
   phase: YearCutscenePhase
+  transitionId: string
 }
 
 interface BuildingChangeStory {
@@ -264,6 +267,20 @@ export const TeacherPage = () => {
   const roundsState = useRounds(subscribedRoomId)
   const crisisResultsState = useCrisisResults(subscribedRoomId)
   const room = roomState.data
+  const crisisAlertTrigger = room?.status === 'crisis-intro' && room.currentCrisisEventId
+    ? `${room.roomId}:${room.gameCycle}:${room.currentCrisisEventId}`
+    : null
+  const yearTransitionAccent = selectYearTransitionAccent(yearCutscene?.phase)
+  const yearTransitionAccentTrigger = yearTransitionAccent && yearCutscene
+    ? `${yearCutscene.transitionId}:year-transition`
+    : null
+  const teacherBgmDucked = shouldDuckTeacherBgm(room?.status, yearCutscene !== null)
+  useSoundEffectOnce('alertCrisis', crisisAlertTrigger)
+  useSoundEffectOnce(yearTransitionAccent, yearTransitionAccentTrigger)
+  useSoundLoop('cutscene', selectCutsceneSound(yearCutscene?.phase))
+  useEffect(() => {
+    teacherSoundtrackRef.current?.setDucked(teacherBgmDucked)
+  }, [teacherBgmDucked])
   roomRef.current = room
   visualCityLevelRef.current = visualCityLevel
   visualBuildingLevelsRef.current = visualBuildingLevels
@@ -845,6 +862,7 @@ export const TeacherPage = () => {
       const cutscene = {
         cityYear: room.gameCycle * 10 + room.currentQuestionNumber,
         phase: 'entering' as const,
+        transitionId: `${roomAtStart}:${room.gameCycle}:${questionAtStart}:presentation-${run}`,
       }
 
       setYearCutscene(cutscene)

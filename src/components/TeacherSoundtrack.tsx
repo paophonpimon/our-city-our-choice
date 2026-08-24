@@ -5,6 +5,7 @@ export type TeacherSoundtrackMode = 'off' | 'lobby' | 'game'
 export interface TeacherSoundtrackHandle {
   playLobby: () => void
   playGame: () => void
+  setDucked: (ducked: boolean) => void
   stop: () => void
 }
 
@@ -22,8 +23,14 @@ const MUTED_KEY = 'our_city_teacher_audio_muted_v1'
 const POSITION_KEY = 'our_city_teacher_audio_position_v1'
 const DEFAULT_VOLUME = 0.45
 const VOLUME_STEP = 0.1
+const BGM_OUTPUT_GAIN = 0.6
+const BGM_DUCK_GAIN = 0.15
+const BGM_FADE_DURATION_MS = 180
 
 const clampVolume = (value: number): number => Math.min(1, Math.max(0, value))
+
+export const getTeacherBgmOutputVolume = (controlVolume: number, ducked: boolean): number =>
+  clampVolume(controlVolume) * BGM_OUTPUT_GAIN * (ducked ? BGM_DUCK_GAIN : 1)
 
 const readStoredVolume = (): number => {
   if (typeof window === 'undefined') return DEFAULT_VOLUME
@@ -59,11 +66,29 @@ export const TeacherSoundtrack = forwardRef<TeacherSoundtrackHandle, TeacherSoun
     const controlsRef = useRef<HTMLElement | null>(null)
     const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null)
     const activeModeRef = useRef<TeacherSoundtrackMode>('off')
+    const duckedRef = useRef(false)
+    const volumeRef = useRef(readStoredVolume())
+    const volumeFadeFrameRef = useRef<number | null>(null)
     const [volume, setVolume] = useState(readStoredVolume)
     const [muted, setMuted] = useState(readStoredMuted)
     const [activeMode, setActiveMode] = useState<TeacherSoundtrackMode>('off')
     const [needsInteraction, setNeedsInteraction] = useState(false)
     const [position, setPosition] = useState<TeacherAudioPosition | null>(readStoredPosition)
+
+    const fadeVolumeTo = useCallback((targetVolume: number): void => {
+      const audio = audioRef.current
+      if (!audio) return
+      if (volumeFadeFrameRef.current !== null) window.cancelAnimationFrame(volumeFadeFrameRef.current)
+      const initialVolume = audio.volume
+      const startedAt = window.performance.now()
+      const step = (now: number): void => {
+        const progress = Math.min(1, (now - startedAt) / BGM_FADE_DURATION_MS)
+        audio.volume = initialVolume + (targetVolume - initialVolume) * progress
+        if (progress < 1) volumeFadeFrameRef.current = window.requestAnimationFrame(step)
+        else volumeFadeFrameRef.current = null
+      }
+      volumeFadeFrameRef.current = window.requestAnimationFrame(step)
+    }, [])
 
     const switchTrack = useCallback((nextMode: TeacherSoundtrackMode): void => {
       const audio = audioRef.current
@@ -98,12 +123,13 @@ export const TeacherSoundtrack = forwardRef<TeacherSoundtrackHandle, TeacherSoun
       const audio = new Audio()
       audio.loop = true
       audio.preload = 'metadata'
-      audio.volume = volume
+      audio.volume = getTeacherBgmOutputVolume(volumeRef.current, duckedRef.current)
       audio.muted = muted
       audioRef.current = audio
       switchTrack(mode)
 
       return () => {
+        if (volumeFadeFrameRef.current !== null) window.cancelAnimationFrame(volumeFadeFrameRef.current)
         audio.pause()
         audio.removeAttribute('src')
         audio.load()
@@ -119,9 +145,10 @@ export const TeacherSoundtrack = forwardRef<TeacherSoundtrackHandle, TeacherSoun
 
     useEffect(() => {
       const audio = audioRef.current
-      if (audio) audio.volume = volume
+      volumeRef.current = volume
+      if (audio) fadeVolumeTo(getTeacherBgmOutputVolume(volume, duckedRef.current))
       window.localStorage.setItem(VOLUME_KEY, String(volume))
-    }, [volume])
+    }, [fadeVolumeTo, volume])
 
     useEffect(() => {
       const audio = audioRef.current
@@ -132,8 +159,12 @@ export const TeacherSoundtrack = forwardRef<TeacherSoundtrackHandle, TeacherSoun
     useImperativeHandle(forwardedRef, () => ({
       playLobby: () => switchTrack('lobby'),
       playGame: () => switchTrack('game'),
+      setDucked: (ducked) => {
+        duckedRef.current = ducked
+        fadeVolumeTo(getTeacherBgmOutputVolume(volumeRef.current, ducked))
+      },
       stop: () => switchTrack('off'),
-    }), [switchTrack])
+    }), [fadeVolumeTo, switchTrack])
 
     const clampPosition = useCallback((next: TeacherAudioPosition): TeacherAudioPosition => {
       const controls = controlsRef.current
@@ -197,7 +228,7 @@ export const TeacherSoundtrack = forwardRef<TeacherSoundtrackHandle, TeacherSoun
         setMuted(false)
         const audio = audioRef.current
         if (audio) {
-          audio.volume = DEFAULT_VOLUME
+          audio.volume = getTeacherBgmOutputVolume(DEFAULT_VOLUME, duckedRef.current)
           audio.muted = false
           if (activeModeRef.current !== 'off') {
             void audio.play()

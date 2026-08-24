@@ -7,6 +7,8 @@ import { LOCATION_BY_ROLE } from '../domain/cityScoring'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { ROLE_CARD_ASSETS, ROLE_CARD_BACK_ASSET } from '../domain/roleCards'
 import { usePlayer, usePlayers, useRoom } from '../hooks/useGameData'
+import { useSoundEffectOnce } from '../hooks/useSoundPack'
+import { selectRoleDrawAccent } from '../lib/soundPack'
 import { classroomFriendlyError } from '../services'
 import { getClassroomStudentSession, getClassroomTeacherSession, getClassroomViewerRole } from '../services/sessionStorage'
 // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
@@ -37,6 +39,11 @@ export const RoleDrawPage = () => {
   const [revealed, setRevealed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const sceneAccent = selectRoleDrawAccent(roomState.data?.gameCycle, revealed)
+  const sceneAccentTrigger = sceneAccent && roomState.data
+    ? `${roomId}:${roomState.data.gameCycle}:role-draw`
+    : null
+  useSoundEffectOnce(sceneAccent, sceneAccentTrigger)
 
   useEffect(() => {
     setRevealed(false)

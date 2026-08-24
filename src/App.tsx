@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { GameProvider } from './context/GameContext'
+import { useUiClickSound } from './hooks/useSoundPack'
 import { ClosedPage } from './pages/ClosedPage'
 import { GamePage } from './pages/GamePage'
 import { HomePage } from './pages/HomePage'
@@ -16,26 +17,29 @@ import { DebugOverlay } from './debug/DebugOverlay'
 // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts
 import { FlightRecorderPanel } from './debug/FlightRecorderPanel'
 
-const App = () => (
-  <BrowserRouter>
-    <GameProvider>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/teacher" element={<TeacherPage />} />
-        <Route path="/join" element={<JoinPage />} />
-        <Route path="/assessment/pre/:roomCode" element={<PreAssessmentPage />} />
-        <Route path="/assessment/post/:roomCode" element={<PostAssessmentPage />} />
-        <Route path="/lobby/:roomCode" element={<LobbyPage />} />
-        <Route path="/game/:roomCode" element={<GamePage />} />
-        <Route path="/role-draw/:roomCode" element={<RoleDrawPage />} />
-        <Route path="/result/:roomCode" element={<ResultPage />} />
-        <Route path="/closed/:roomCode" element={<ClosedPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-      <DebugOverlay />
-      <FlightRecorderPanel />
-    </GameProvider>
-  </BrowserRouter>
-)
+const App = () => {
+  useUiClickSound()
+  return (
+    <BrowserRouter>
+      <GameProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/teacher" element={<TeacherPage />} />
+          <Route path="/join" element={<JoinPage />} />
+          <Route path="/assessment/pre/:roomCode" element={<PreAssessmentPage />} />
+          <Route path="/assessment/post/:roomCode" element={<PostAssessmentPage />} />
+          <Route path="/lobby/:roomCode" element={<LobbyPage />} />
+          <Route path="/game/:roomCode" element={<GamePage />} />
+          <Route path="/role-draw/:roomCode" element={<RoleDrawPage />} />
+          <Route path="/result/:roomCode" element={<ResultPage />} />
+          <Route path="/closed/:roomCode" element={<ClosedPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+        <DebugOverlay />
+        <FlightRecorderPanel />
+      </GameProvider>
+    </BrowserRouter>
+  )
+}
 
 export default App

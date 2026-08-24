@@ -7964,3 +7964,245 @@ details.teacher-lobby-role-guide summary.teacher-lobby-card-heading:hover strong
   .student-impact-waiting__glow,
   .student-impact-waiting__progress i { animation: none; }
 }
+
+/* Role-question scene illustrations ------------------------------------- */
+.our-city-page.game-play-page,
+.our-city-page.crisis-student-page {
+  width: 100%;
+  max-width: 100%;
+  padding-top: max(clamp(1rem, 2.4vw, 1.75rem), env(safe-area-inset-top)) !important;
+  padding-right: max(clamp(1rem, 2.4vw, 1.75rem), env(safe-area-inset-right)) !important;
+  padding-bottom: max(clamp(1.25rem, 2.4vw, 1.75rem), env(safe-area-inset-bottom)) !important;
+  padding-left: max(clamp(1rem, 2.4vw, 1.75rem), env(safe-area-inset-left)) !important;
+  overflow-x: hidden;
+}
+.game-play-shell,
+.crisis-student-shell,
+.student-question-entry,
+.game-play-header > div,
+.game-play-card,
+.crisis-student-header,
+.crisis-student-card {
+  min-width: 0;
+}
+.game-play-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.game-play-header h1,
+.game-play-header p,
+.game-play-prompt,
+.game-play-choice,
+.crisis-student-header h1,
+.crisis-student-header p,
+.crisis-student-card > h2,
+.crisis-student-summary,
+.crisis-student-choices button,
+.student-impact-waiting h1,
+.student-impact-waiting p,
+.student-impact-waiting strong {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: normal;
+}
+.game-play-question-layout {
+  --question-scene-frame-max: 36rem;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.game-play-question-layout.has-scene {
+  display: grid;
+  grid-template-areas:
+    "copy"
+    "media"
+    "choices"
+    "feedback";
+  gap: .75rem;
+}
+.game-play-question-copy { width: 100%; min-width: 0; grid-area: copy; }
+.game-play-question-copy > p:first-child { color: #188b5a !important; }
+.game-play-question-layout > .game-play-choices {
+  width: 100%;
+  min-width: 0;
+  grid-area: choices;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  margin-top: 0 !important;
+  padding-top: .5rem !important;
+}
+.game-play-question-layout > .game-play-feedback { min-width: 0; grid-area: feedback; }
+.game-play-question-layout.has-scene > .game-play-feedback {
+  margin-top: 0 !important;
+}
+.game-play-question-media {
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  grid-area: media;
+  width: min(100%, var(--question-scene-frame-max));
+  max-width: var(--question-scene-frame-max);
+  min-width: 0;
+  aspect-ratio: 16 / 9;
+  align-self: center;
+  overflow: hidden;
+  margin: 0 auto;
+  border: 1px solid #c6dce9;
+  border-radius: 1.2rem;
+  background: #e9f2f7;
+  box-shadow: 0 .65rem 1.4rem rgb(35 82 118 / 13%);
+}
+.game-play-question-media[hidden] { display: none; }
+.game-play-question-media::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 35%);
+  content: '';
+  pointer-events: none;
+}
+.game-play-question-media img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Phones use natural-height controls and scroll instead of clipped copy. */
+@media (max-width: 600px) {
+  .game-play-page,
+  .crisis-student-page { background-attachment: scroll !important; }
+  .game-play-brandbar { min-height: 3.25rem; padding: .25rem .35rem; }
+  .game-play-header { gap: .65rem !important; padding: .75rem !important; }
+  .game-play-header p { font-size: .75rem !important; line-height: 1.45; }
+  .game-play-header h1 { font-size: clamp(1.15rem, 6vw, 1.5rem) !important; line-height: 1.35; }
+  .game-play-header > div:last-child { padding: .55rem .7rem !important; }
+  .game-play-header > div:last-child strong { font-size: 1.15rem !important; }
+  .game-play-card { margin-top: .65rem !important; padding: clamp(.9rem, 5vw, 1.5rem) !important; }
+  .game-play-prompt { margin-top: .5rem !important; font-size: clamp(1.25rem, 6.2vw, 1.7rem) !important; line-height: 1.55 !important; }
+  .game-play-question-layout.has-scene { gap: .6rem; }
+  .game-play-question-media { border-radius: .9rem; }
+  .game-play-choices { gap: .7rem !important; }
+  .game-play-choice {
+    min-height: max(4.5rem, 44px) !important;
+    padding: clamp(.75rem, 4vw, 1rem) !important;
+    font-size: clamp(.95rem, 4.3vw, 1.125rem) !important;
+    line-height: 1.5;
+  }
+  .game-play-choice > span { width: 2.35rem !important; height: 2.35rem !important; }
+  .game-play-feedback { min-height: 2.75rem !important; }
+  .crisis-student-page .crisis-student-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: .8rem !important;
+  }
+  .crisis-student-page .crisis-student-header > strong {
+    grid-column: 2;
+    grid-row: 1 / 5;
+    align-self: center;
+    margin-top: 0;
+    padding: .6rem .7rem;
+    font-size: 1rem;
+  }
+  .crisis-student-meta { align-items: flex-start; gap: .35rem; }
+  .crisis-student-page .crisis-student-card { padding: 1rem !important; }
+  .crisis-student-page .crisis-student-choices button {
+    min-height: max(4.5rem, 44px);
+    padding: .75rem;
+  }
+  .student-impact-waiting__content { width: min(39rem, calc(100% - 1rem)); }
+}
+
+/* Short landscape compacts spacing without changing the reading order. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .our-city-page.game-play-page,
+  .our-city-page.crisis-student-page {
+    padding-top: max(.35rem, env(safe-area-inset-top)) !important;
+    padding-right: max(.65rem, env(safe-area-inset-right)) !important;
+    padding-bottom: max(.35rem, env(safe-area-inset-bottom)) !important;
+    padding-left: max(.65rem, env(safe-area-inset-left)) !important;
+    background-attachment: scroll !important;
+  }
+  .game-play-shell,
+  .crisis-student-shell { min-height: calc(100dvh - .7rem) !important; }
+  .game-play-brandbar { min-height: 2.55rem; padding: .15rem .35rem; }
+  .game-play-brandbar .game-brand__mark { width: 2.1rem; height: 2.1rem; font-size: 1rem; }
+  .game-play-brandbar .game-brand > strong { font-size: .58rem; }
+  .game-play-header { gap: .65rem !important; padding: .45rem .75rem !important; }
+  .game-play-header p { font-size: .68rem !important; line-height: 1.35; }
+  .game-play-header h1 { font-size: 1.05rem !important; line-height: 1.25; }
+  .game-play-header > div:last-child { padding: .35rem .65rem !important; border-radius: .7rem !important; }
+  .game-play-header > div:last-child span { font-size: .62rem !important; }
+  .game-play-header > div:last-child strong { font-size: 1rem !important; }
+  .game-play-card { margin-top: .4rem !important; padding: .65rem !important; }
+  .game-play-question-layout { --question-scene-frame-max: 20rem; }
+  .game-play-question-layout.has-scene { gap: .5rem; }
+  .game-play-question-copy > p:first-child { font-size: .68rem !important; }
+  .game-play-prompt { margin-top: .2rem !important; font-size: clamp(1rem, 2.8vw, 1.35rem) !important; line-height: 1.35 !important; }
+  .game-play-question-layout.has-scene > .game-play-choices {
+    gap: .55rem !important;
+    padding-top: .4rem !important;
+  }
+  .game-play-choice {
+    min-height: max(3.5rem, 44px) !important;
+    padding: .55rem .7rem !important;
+    font-size: clamp(.78rem, 1.7vw, .95rem) !important;
+    line-height: 1.35;
+  }
+  .game-play-choice > span {
+    width: 2rem !important;
+    height: 2rem !important;
+    margin-right: .45rem !important;
+  }
+  .game-play-question-media { border-radius: .75rem; }
+  .game-play-feedback { min-height: 2rem !important; }
+  .game-play-question-layout.has-scene > .game-play-feedback { margin-top: .2rem !important; }
+
+  .crisis-student-page .crisis-student-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .15rem .7rem;
+    padding: .45rem .75rem !important;
+    border-radius: 1rem;
+  }
+  .crisis-student-page .crisis-student-header p { font-size: .75rem; }
+  .crisis-student-page .crisis-student-header h1 { font-size: 1.05rem; line-height: 1.25; }
+  .crisis-student-meta { flex-direction: row; gap: .45rem; font-size: .7rem; }
+  .crisis-student-meta b { padding: .15rem .45rem; }
+  .crisis-student-impact-note { font-size: .65rem; }
+  .crisis-student-page .crisis-student-header > strong {
+    grid-column: 2;
+    grid-row: 1 / 5;
+    align-self: center;
+    margin-top: 0;
+    padding: .45rem .6rem;
+    font-size: .9rem;
+  }
+  .crisis-student-page .crisis-student-card { margin-top: .4rem; padding: .65rem; border-radius: 1rem; }
+  .crisis-student-page .crisis-student-summary { margin-bottom: .35rem; padding: .35rem .55rem; font-size: .72rem; line-height: 1.35; }
+  .crisis-student-page .crisis-student-kicker { font-size: .68rem; }
+  .crisis-student-page .crisis-student-card > h2 { margin-top: .2rem; font-size: 1.05rem; line-height: 1.35; }
+  .crisis-student-page .crisis-student-choices { gap: .55rem; padding-top: .45rem; }
+  .crisis-student-page .crisis-student-choices button {
+    min-height: max(3.5rem, 44px);
+    padding: .55rem .7rem;
+    font-size: .82rem;
+    line-height: 1.35;
+  }
+  .crisis-student-page .crisis-student-choices button span { width: 2rem; height: 2rem; }
+  .crisis-student-page .crisis-student-feedback { min-height: 2rem; padding-top: .35rem; }
+  .student-impact-waiting { min-height: calc(100dvh - 3.25rem); border-radius: 1rem; }
+  .student-impact-waiting__content { gap: .3rem; padding: .65rem 1rem; }
+  .student-impact-waiting__icon { width: 3rem; height: 3rem; border-radius: .8rem; font-size: 1.65rem; }
+  .student-impact-waiting h1 { font-size: clamp(1.15rem, 3vw, 1.5rem); }
+  .student-impact-waiting p { font-size: .78rem; }
+  .student-impact-waiting strong { font-size: .85rem; }
+  .student-impact-waiting__progress { margin-top: .1rem; }
+}

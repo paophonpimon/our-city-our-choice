@@ -14,6 +14,8 @@ import type { LocationId, LocationSummary } from '../domain/cityScoring'
 import { formatCityLevel, MAX_GAME_CYCLES, ROLES, type CityLevel } from '../domain/ourCity'
 import { countPersonalDecisionOutcomes, derivePersonalImpactNarrative } from '../domain/personalDecisionResults'
 import { useAssessmentEvidence, useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
+import { useSoundLoop } from '../hooks/useSoundPack'
+import { selectResultAmbience } from '../lib/soundPack'
 import { classroomFriendlyError } from '../services'
 import {
   clearClassroomStudentSession,
@@ -103,6 +105,12 @@ export const ResultPage = () => {
   const [error, setError] = useState('')
   const [activeTeacherTab, setActiveTeacherTab] = useState<TeacherResultTab>('summary')
   const [activeBuildingId, setActiveBuildingId] = useState<LocationId | null>(null)
+  useSoundLoop('ambience', selectResultAmbience(
+    roomState.data?.status,
+    roomState.data?.cityScore,
+    roomState.data?.cityLevel,
+    activeBuildingId,
+  ))
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
