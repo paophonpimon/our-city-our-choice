@@ -439,6 +439,90 @@ describe('classroom UI contracts', () => {
     expect(resultPage).toContain('ไม่สามารถโหลดผลการตัดสินใจส่วนตัวได้ กรุณาลองใหม่')
     expect(resultPage).not.toContain("hasPrivateResults ? currentTotals.integrity : '—'")
   })
+
+  it('renders a room-level public Summary tab for a finished room before private teacher calculations', () => {
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    const publicGuard = resultPage.indexOf(
+      "const isPublicFinishedResult = !isTeacher && !hasStudentSession && room.status === 'finished'",
+    )
+    const publicResult = resultPage.indexOf('if (isPublicFinishedResult)', publicGuard)
+    const accessGuard = resultPage.indexOf('if (!isTeacher && !hasStudentSession)', publicResult)
+    const aggregateCalculations = resultPage.indexOf('const cycleResults = [...cycleRounds, ...cycleCrises]')
+    const teacherResult = resultPage.indexOf('<main className={`teacher-result-page', aggregateCalculations)
+
+    expect(publicGuard).toBeGreaterThan(-1)
+    expect(publicResult).toBeGreaterThan(publicGuard)
+    expect(accessGuard).toBeGreaterThan(publicResult)
+    expect(aggregateCalculations).toBeGreaterThan(accessGuard)
+    expect(teacherResult).toBeGreaterThan(aggregateCalculations)
+    expect(resultPage.slice(publicResult, accessGuard)).toContain('public-result-page')
+    expect(resultPage.slice(publicResult, accessGuard)).toContain("['summary', 'สรุป']")
+    expect(resultPage.slice(publicResult, accessGuard)).toContain("activeTeacherTab === 'summary'")
+    expect(resultPage.slice(publicResult, accessGuard)).toContain('completedGameCount')
+    expect(resultPage.slice(publicResult, accessGuard)).toContain('สถานะอาคารทั้ง 7 แห่ง')
+    expect(resultPage.slice(publicResult, accessGuard)).not.toContain(
+      'หน้านี้แสดงผลเฉพาะครูเจ้าของห้องหรือผู้เรียนที่เข้าร่วมจากอุปกรณ์นี้',
+    )
+  })
+
+  it('renders a public City Detail tab from CityScene and room-level building states', () => {
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    const publicResult = resultPage.indexOf('if (isPublicFinishedResult)')
+    const accessGuard = resultPage.indexOf('if (!isTeacher && !hasStudentSession)', publicResult)
+    const publicBranch = resultPage.slice(publicResult, accessGuard)
+
+    expect(publicBranch).toContain("['city', 'รายละเอียดเมือง']")
+    expect(publicBranch).toContain("activeTeacherTab === 'city'")
+    expect(publicBranch).toContain('public-result-city-preview')
+    expect(publicBranch).toContain('<CityScene buildingLevels={publicBuildingLevels} cityLevel={room.cityLevel} />')
+    expect(publicBranch).toContain('ระดับอาคารสุดท้าย')
+    expect(publicBranch).toContain('BUILDING_LEVEL_LABELS[level]')
+  })
+
+  it('uses only whitelisted room aggregates for public tabs without evidence, fake per-building detail, or mutation controls', () => {
+    const resultPage = readSource('../pages/ResultPage.tsx')
+    const publicResult = resultPage.indexOf('if (isPublicFinishedResult)')
+    const accessGuard = resultPage.indexOf('if (!isTeacher && !hasStudentSession)', publicResult)
+    const publicBranch = resultPage.slice(publicResult, accessGuard)
+
+    expect(publicBranch).toContain('room.cityScore')
+    expect(publicBranch).toContain('room.cityLevel')
+    expect(publicBranch).toContain('room.lockedPlayerCount')
+    expect(publicBranch).toContain('room.integrityTotal')
+    expect(publicBranch).toContain('room.corruptionTotal')
+    expect(publicBranch).toContain('room.timeoutTotal')
+    expect(publicBranch).toContain('normalizeBuildingLevels(room.buildingLevels)')
+    expect(publicBranch).toContain('RESULT_BUILDINGS.map')
+    expect(publicBranch).not.toContain('locationSummaries')
+    expect(publicBranch).not.toContain('integrityCount')
+    expect(publicBranch).not.toContain('corruptionCount')
+    expect(publicBranch).not.toContain('timeoutCount')
+    expect(publicBranch).not.toContain('TeacherEvidenceSummarySection')
+    expect(publicBranch).not.toContain('หลักฐานครู')
+    expect(publicBranch).not.toContain('continueCity')
+    expect(publicBranch).not.toContain('endActivity')
+    expect(publicBranch).not.toContain('เริ่มห้องใหม่')
+    expect(publicBranch).not.toContain('service.')
+    expect(publicBranch).not.toContain('clearClassroom')
+  })
+
+  it('preserves real teacher subscriptions/building evidence and the existing student result branch', () => {
+    const resultPage = readSource('../pages/ResultPage.tsx')
+
+    expect(resultPage).toContain("const roundsState = useRounds(isTeacher ? roomId : '')")
+    expect(resultPage).toContain("const crisisResultsState = useCrisisResults(isTeacher ? roomId : '')")
+    expect(resultPage).toContain("const playersState = usePlayers(isTeacher ? roomId : '')")
+    expect(resultPage).toContain("isTeacher && roomState.data?.status === 'finished'")
+    expect(resultPage).toContain("usePlayer(hasStudentSession ? roomId : '', studentPlayerId)")
+    expect(resultPage).toContain("usePersonalDecisionResults(hasStudentSession ? roomId : '', studentPlayerId, hasStudentSession ? uid : '')")
+    expect(resultPage).toContain('result.locationSummaries[building.id]')
+    expect(resultPage).toContain('<TeacherEvidenceSummarySection')
+    expect(resultPage).toContain("['summary', 'สรุป']")
+    expect(resultPage).toContain("['city', 'รายละเอียดเมือง']")
+    expect(resultPage).toContain("['evidence', 'หลักฐานครู']")
+    expect(resultPage).toContain('if (!isTeacher && hasStudentSession)')
+    expect(resultPage).toContain('<main className={`student-cycle-result')
+  })
 })
 
 describe('PRE submission never gets stuck indefinitely on "กำลังส่งคำตอบ..."', () => {

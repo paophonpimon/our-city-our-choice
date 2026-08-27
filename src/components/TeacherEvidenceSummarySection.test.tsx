@@ -154,3 +154,23 @@ describe('finished ResultPage Observation de-duplication', () => {
     expect(summary).toContain(observation.notes)
   })
 })
+
+describe('Teacher Observation light ResultPage visual contract', () => {
+  it('styles unsaved, selected, saved, focus, and disabled states with the light palette', () => {
+    const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
+    const start = styles.indexOf('/* Teacher Observation (Phase B2a) */')
+    const end = styles.indexOf('/* Teacher Evidence Summary (Phase B2c) */', start)
+    const observationStyles = styles.slice(start, end)
+
+    expect(observationStyles).toContain('background: #f7fbfe;')
+    expect(observationStyles).toContain('color: #173d5d;')
+    expect(observationStyles).toContain('.teacher-observation-rating-option:hover')
+    expect(observationStyles).toContain('.teacher-observation-rating-option.is-selected')
+    expect(observationStyles).toContain('.teacher-observation-rating-option:has(input:focus-visible)')
+    expect(observationStyles).toContain('.teacher-observation-summary-item')
+    expect(observationStyles).toContain('.teacher-observation-notes-display')
+    expect(observationStyles).toContain('.teacher-observation-submit-button:disabled')
+    expect(observationStyles).not.toContain('background: rgba(13, 22, 35, 0.85);')
+    expect(observationStyles).not.toContain('color: #ffffff;')
+  })
+})

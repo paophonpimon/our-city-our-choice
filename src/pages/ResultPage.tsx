@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CityLoader } from '../components/CityLoader'
 import { CityScene } from '../components/CityScene'
+import { BrandHeader, ErrorPanel, ScenePage } from '../components/Layout'
 import { TeacherObservationSection } from '../components/TeacherObservationSection'
 import {
   getTeacherObservationEvidence,
@@ -144,6 +145,54 @@ export const ResultPage = () => {
   const loadingStudent = hasStudentSession && (playerState.loading || personalResultsState.loading)
   if (roomState.loading || loadingTeacher || loadingStudent) return <CityLoader variant="full" message="กำลังสรุปผลเมือง..." />
   if (!room) return <Navigate replace to="/" />
+  const isPublicFinishedResult = !isTeacher && !hasStudentSession && room.status === 'finished'
+  if (isPublicFinishedResult) {
+    const publicBuildingLevels = normalizeBuildingLevels(room.buildingLevels)
+    const publicTabs: readonly [Exclude<TeacherResultTab, 'evidence'>, string][] = [
+      ['summary', 'สรุป'],
+      ['city', 'รายละเอียดเมือง'],
+    ]
+    return (
+      <main className={`teacher-result-page public-result-page is-${room.cityLevel}`}>
+        <div className="result-city-art" aria-hidden="true"><CityScene buildingLevels={publicBuildingLevels} cityLevel={room.cityLevel} /></div><div className="result-city-veil" aria-hidden="true" />
+        <header className="teacher-result-topbar"><div><span>✓</span><p>รอบที่เล่นจบ<strong>{room.completedGameCount.toLocaleString('th-TH')}</strong></p></div><div><span>⭐</span><p>คะแนนเมือง<strong>{Math.round(room.cityScore).toLocaleString('th-TH')}</strong></p></div><div><span>👥</span><p>ผู้เข้าร่วม<strong>{room.lockedPlayerCount.toLocaleString('th-TH')} คน</strong></p></div><div><span>🏙️</span><p>ห้องกิจกรรม<strong>{room.roomId}</strong></p></div></header>
+        <section className="teacher-result-shell">
+          <nav className="teacher-result-tabs" aria-label="ส่วนข้อมูลผลลัพธ์สาธารณะ" role="tablist">
+            {publicTabs.map(([tab, label]) => (
+              <button aria-controls={`public-result-panel-${tab}`} aria-selected={activeTeacherTab === tab} className={activeTeacherTab === tab ? 'is-active' : ''} id={`public-result-tab-${tab}`} key={tab} onClick={() => setActiveTeacherTab(tab)} role="tab" type="button">{label}</button>
+            ))}
+          </nav>
+          <div className="teacher-result-panels">
+            {activeTeacherTab === 'summary' ? <article className="teacher-result-summary" aria-labelledby="public-result-tab-summary" id="public-result-panel-summary" role="tabpanel">
+              <header className="teacher-result-hero"><div className="teacher-result-hero__level"><span>{CITY_RESULT_EMOJI[room.cityLevel]}</span><div><small>สถานะเมืองสุดท้าย</small><h1>{formatCityLevel(room.cityLevel)}</h1></div></div><div className="teacher-result-hero__score"><span>คะแนนเมือง</span><strong>{Math.round(room.cityScore).toLocaleString('th-TH')} <small>/ 1,000</small></strong></div><div className="teacher-result-hero__delta"><span>ผู้เข้าร่วมกิจกรรม</span><strong>{room.lockedPlayerCount.toLocaleString('th-TH')} คน</strong></div><p>{CITY_REFLECTIONS[room.cityLevel]}</p></header>
+              <section className="teacher-answer-summary" aria-labelledby="public-answer-summary-title"><h2 id="public-answer-summary-title">ผลการตัดสินใจสะสม</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{room.integrityTotal.toLocaleString('th-TH')}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{room.corruptionTotal.toLocaleString('th-TH')}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{room.timeoutTotal.toLocaleString('th-TH')}</strong></p></article></div></section>
+              <section className="teacher-building-summary" aria-labelledby="public-building-summary-title"><div className="teacher-section-heading"><div><h2 id="public-building-summary-title">สถานะอาคารทั้ง 7 แห่ง</h2><p>แสดงเฉพาะระดับอาคารสุดท้ายจากข้อมูลรวมระดับห้อง</p></div></div><div className="teacher-building-summary__grid">{RESULT_BUILDINGS.map((building) => { const level = publicBuildingLevels[building.buildingId]; return <article className={level > 0 ? 'is-positive' : level < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>{BUILDING_LEVEL_LABELS[level]}</small></p><strong>Lv.{level > 0 ? '+' : ''}{level}</strong></article> })}</div></section>
+            </article> : null}
+            {activeTeacherTab === 'city' ? <section className="teacher-result-details public-result-details" aria-labelledby="public-result-tab-city" id="public-result-panel-city" role="tabpanel">
+              <section className="public-result-city-preview"><div className="teacher-section-heading"><div><h2>ภาพเมืองสุดท้าย</h2><p>{formatCityLevel(room.cityLevel)} • {Math.round(room.cityScore).toLocaleString('th-TH')} / 1,000 คะแนน</p></div></div><div className="public-result-city-preview__scene"><CityScene buildingLevels={publicBuildingLevels} cityLevel={room.cityLevel} /></div></section>
+              <section className="teacher-result-levels"><div className="teacher-section-heading"><div><h2>ระดับเมือง</h2><p>เกณฑ์คะแนนรวมของเมือง</p></div></div><div className="teacher-result-levels__grid">{CITY_LEVEL_STEPS.map((step) => <article className={step.id === room.cityLevel ? 'is-current' : ''} key={step.id}><span>{CITY_RESULT_EMOJI[step.id]}</span><strong>{formatCityLevel(step.id)}</strong><small>{step.range} คะแนน</small></article>)}</div></section>
+              <section className="teacher-answer-summary" aria-labelledby="public-city-totals-title"><h2 id="public-city-totals-title">ผลรวมระดับห้อง</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{room.integrityTotal.toLocaleString('th-TH')}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{room.corruptionTotal.toLocaleString('th-TH')}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{room.timeoutTotal.toLocaleString('th-TH')}</strong></p></article></div></section>
+              <section className="teacher-building-summary" aria-labelledby="public-city-buildings-title"><div className="teacher-section-heading"><div><h2 id="public-city-buildings-title">ระดับอาคารสุดท้าย</h2><p>ไม่มีการแสดงตัวเลขรายอาคารที่ต้องอ่านข้อมูลรอบส่วนตัว</p></div></div><div className="teacher-building-summary__grid">{RESULT_BUILDINGS.map((building) => { const level = publicBuildingLevels[building.buildingId]; return <article className={level > 0 ? 'is-positive' : level < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>{BUILDING_LEVEL_LABELS[level]}</small></p><strong>Lv.{level > 0 ? '+' : ''}{level}</strong></article> })}</div></section>
+            </section> : null}
+          </div>
+          <footer className="teacher-result-actions"><Link className="public-result-home-link teacher-result-home-button" to="/"><span aria-hidden="true">⌂</span> กลับหน้าหลัก</Link></footer>
+        </section>
+      </main>
+    )
+  }
+  if (!isTeacher && !hasStudentSession) {
+    return (
+      <ScenePage compact>
+        <BrandHeader backTo="/" />
+        <div className="flex flex-1 items-center px-5 pb-8">
+          <ErrorPanel
+            action={<Link className="primary-button inline-flex w-full items-center justify-center" to="/">กลับหน้าหลัก</Link>}
+            message="หน้านี้แสดงผลเฉพาะครูเจ้าของห้องหรือผู้เรียนที่เข้าร่วมจากอุปกรณ์นี้"
+          />
+        </div>
+      </ScenePage>
+    )
+  }
 
   const cycleResults = [...cycleRounds, ...cycleCrises]
   const latestTotals = cycleResults.reduce((totals, result) => ({ integrityCount: totals.integrityCount + result.integrityCount, corruptionCount: totals.corruptionCount + result.corruptionCount, timeoutCount: totals.timeoutCount + result.timeoutCount }), { integrityCount: 0, corruptionCount: 0, timeoutCount: 0 })

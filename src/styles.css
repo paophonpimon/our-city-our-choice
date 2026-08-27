@@ -5940,6 +5940,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-result-actions button:not(.is-primary) { flex: 1; min-width: 140px; }
 .teacher-result-home-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .teacher-result-home-button span { font-size: 1.25rem; line-height: 1; }
+.public-result-home-link { flex: 1; min-height: 52px; border: 1px solid #82b7df; border-radius: 14px; background: white; color: #155b97; font: 700 16px/1.2 inherit; text-decoration: none; }
+.public-result-home-link:hover { border-color: #3f8dc8; background: #f2f9fe; }
+.public-result-home-link:focus-visible { outline: 3px solid rgb(18 110 212 / 28%); outline-offset: 2px; }
 .teacher-result-actions button:disabled { opacity: .55; cursor: wait; }
 .teacher-result-complete,
 .teacher-result-error { padding: 8px 12px; border-radius: 10px; text-align: center; font-size: 14px; }
@@ -5947,6 +5950,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .teacher-result-error { background: #fff0ee; color: #bf3f39; }
 
 .teacher-result-details { display: grid; gap: 16px; padding: 18px; }
+.public-result-city-preview__scene { aspect-ratio: 16 / 7; overflow: hidden; border: 1px solid #bdd8e9; border-radius: 16px; background: #dceef8; }
+.public-result-city-preview__scene .city-scene { width: 100%; height: 100%; }
 .teacher-result-evidence-panel { display: grid; gap: 14px; min-height: 100%; padding: 18px; }
 .teacher-result-details > section { padding: 15px; border: 1px solid #cfe1ed; border-radius: 18px; background: rgb(249 252 255 / 92%); }
 .teacher-result-levels__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
@@ -6626,9 +6631,11 @@ img.game-home-cast {
 .teacher-observation-section {
   margin-top: 1.5rem;
   padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid #c9deeb;
   border-radius: 1rem;
-  background: rgba(13, 22, 35, 0.85);
+  background: #f7fbfe;
+  color: #173d5d;
+  box-shadow: 0 10px 28px rgb(28 78 112 / 8%);
   backdrop-filter: blur(8px);
 }
 
@@ -6643,15 +6650,15 @@ img.game-home-cast {
 }
 
 .teacher-observation-badge--complete {
-  background: rgba(32, 182, 110, 0.2);
-  color: #5fe39d;
-  border: 1px solid rgba(32, 182, 110, 0.4);
+  background: #e7f8ef;
+  color: #16784a;
+  border: 1px solid #addbc3;
 }
 
 .teacher-observation-badge--pending {
-  background: rgba(244, 201, 109, 0.15);
-  color: #f4c96d;
-  border: 1px solid rgba(244, 201, 109, 0.3);
+  background: #fff7df;
+  color: #805b0a;
+  border: 1px solid #e8cf8b;
 }
 
 .teacher-observation-summary-card {
@@ -6670,8 +6677,8 @@ img.game-home-cast {
 .teacher-observation-summary-item {
   padding: 0.85rem;
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border: 1px solid #d6e5ee;
 }
 
 .teacher-observation-summary-item header {
@@ -6687,8 +6694,8 @@ img.game-home-cast {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 9999px;
-  background: rgba(244, 201, 109, 0.2);
-  color: #f4c96d;
+  background: #fff2c9;
+  color: #805b0a;
   font-size: 0.8rem;
   font-weight: 900;
 }
@@ -6696,7 +6703,7 @@ img.game-home-cast {
 .teacher-observation-summary-item__title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #e5f0ef;
+  color: #173d5d;
 }
 
 .teacher-observation-summary-item__score {
@@ -6708,30 +6715,30 @@ img.game-home-cast {
 .teacher-observation-summary-item__value {
   font-size: 1.15rem;
   font-weight: 800;
-  color: #f4c96d;
+  color: #94680d;
 }
 
 .teacher-observation-summary-item__score small {
-  color: #a9c5c3;
+  color: #60798b;
   font-size: 0.8rem;
 }
 
 .teacher-observation-notes-display {
   padding: 0.85rem;
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border: 1px solid #d6e5ee;
 }
 
 .teacher-observation-notes-display strong {
   display: block;
   font-size: 0.85rem;
-  color: #f4c96d;
+  color: #805b0a;
   margin-bottom: 0.35rem;
 }
 
 .teacher-observation-notes-display p {
-  color: #d1e2e1;
+  color: #304f68;
   font-size: 0.9rem;
   white-space: pre-wrap;
 }
@@ -6746,14 +6753,14 @@ img.game-home-cast {
 .teacher-observation-scale-guide {
   padding: 0.75rem 1rem;
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #eef7fc;
+  border: 1px solid #d2e4ef;
 }
 
 .teacher-observation-scale-guide__title {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #f4c96d;
+  color: #164f83;
   margin-bottom: 0.35rem;
 }
 
@@ -6762,11 +6769,11 @@ img.game-home-cast {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.35rem 0.75rem;
   font-size: 0.8rem;
-  color: #a9c5c3;
+  color: #526f84;
 }
 
 .teacher-observation-scale-guide__list strong {
-  color: #f4c96d;
+  color: #805b0a;
 }
 
 .teacher-observation-dimensions-list {
@@ -6778,8 +6785,8 @@ img.game-home-cast {
 .teacher-observation-dimension-field {
   padding: 0.85rem 1rem;
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border: 1px solid #d6e5ee;
 }
 
 .teacher-observation-dimension-legend {
@@ -6795,8 +6802,8 @@ img.game-home-cast {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 9999px;
-  background: rgba(244, 201, 109, 0.2);
-  color: #f4c96d;
+  background: #fff2c9;
+  color: #805b0a;
   font-size: 0.8rem;
   font-weight: 900;
 }
@@ -6804,7 +6811,7 @@ img.game-home-cast {
 .teacher-observation-dimension-legend__title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #ffffff;
+  color: #173d5d;
 }
 
 .teacher-observation-rating-group {
@@ -6826,29 +6833,39 @@ img.game-home-cast {
   justify-content: center;
   padding: 0.6rem 0.4rem;
   border-radius: 0.65rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #b9d0de;
+  background: #ffffff;
+  color: #284f6d;
   cursor: pointer;
   text-align: center;
   transition: all 150ms ease;
 }
 
 .teacher-observation-rating-option:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: #5a9ac5;
+  background: #edf7fd;
 }
 
 .teacher-observation-rating-option.is-selected {
-  border-color: #f4c96d;
-  background: rgba(244, 201, 109, 0.18);
-  color: #f4c96d;
+  border-color: #c58b11;
+  background: linear-gradient(135deg, #fff5cf, #ffe398);
+  color: #173d5d;
+  box-shadow: inset 0 0 0 1px #dba92e, 0 5px 14px rgb(173 119 10 / 16%);
+}
+
+.teacher-observation-rating-option:has(input:focus-visible) {
+  outline: 3px solid rgb(18 110 212 / 35%);
+  outline-offset: 2px;
 }
 
 .teacher-observation-rating-option__val {
   font-size: 1.15rem;
   font-weight: 900;
   margin-bottom: 0.15rem;
+  color: #164f83;
 }
+
+.teacher-observation-rating-option.is-selected .teacher-observation-rating-option__val { color: #805b0a; }
 
 .teacher-observation-rating-option__label {
   font-size: 0.72rem;
@@ -6864,40 +6881,43 @@ img.game-home-cast {
 .teacher-observation-notes-field label strong {
   display: block;
   font-size: 0.9rem;
-  color: #ffffff;
+  color: #173d5d;
 }
 
 .teacher-observation-notes-field label small {
   display: block;
   font-size: 0.8rem;
-  color: #a9c5c3;
+  color: #60798b;
 }
 
 .teacher-observation-notes-field textarea {
   width: 100%;
   padding: 0.65rem 0.85rem;
   border-radius: 0.65rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
+  border: 1px solid #b9d0de;
+  background: #ffffff;
+  color: #173d5d;
   font-family: inherit;
   font-size: 0.9rem;
   resize: vertical;
 }
 
+.teacher-observation-notes-field textarea::placeholder { color: #7890a2; }
+
 .teacher-observation-notes-field textarea:focus {
   outline: none;
-  border-color: #f4c96d;
+  border-color: #126ed4;
+  box-shadow: 0 0 0 3px rgb(18 110 212 / 18%);
 }
 
 .teacher-observation-notes-counter {
   text-align: right;
   font-size: 0.75rem;
-  color: #a9c5c3;
+  color: #60798b;
 }
 
 .teacher-observation-error {
-  color: #fca5a5;
+  color: #a93333;
   font-size: 0.9rem;
 }
 
@@ -6919,7 +6939,9 @@ img.game-home-cast {
 }
 
 .teacher-observation-submit-button:disabled {
-  opacity: 0.4;
+  background: #dce6ec;
+  color: #647887;
+  opacity: 1;
   cursor: not-allowed;
 }
 
