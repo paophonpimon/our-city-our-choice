@@ -87,11 +87,16 @@ export interface MatchedGroupAssessmentEvidence {
   matchedCount: number
   preMean: number
   postMean: number
+  /** Difference between POST and PRE group means on the 1-5 response scale. */
+  meanGainFivePoint: number
+  /** Backward-compatible average individual total-score gain on the 10-50 scale. */
   meanGain: number
   improvedCount: number
   unchangedCount: number
   decreasedCount: number
   improvedPercent: number
+  unchangedPercent: number
+  decreasedPercent: number
 }
 
 export interface MatchedAssessmentEvidence {
@@ -161,11 +166,14 @@ export const calculateMatchedGroupAssessmentEvidence = (
       matchedCount: 0,
       preMean: 0,
       postMean: 0,
+      meanGainFivePoint: 0,
       meanGain: 0,
       improvedCount: 0,
       unchangedCount: 0,
       decreasedCount: 0,
       improvedPercent: 0,
+      unchangedPercent: 0,
+      decreasedPercent: 0,
     }
   }
 
@@ -173,15 +181,21 @@ export const calculateMatchedGroupAssessmentEvidence = (
   const unchangedCount = students.filter((student) => student.change === 'unchanged').length
   const decreasedCount = students.filter((student) => student.change === 'decreased').length
 
+  const preMean = students.reduce((total, student) => total + student.preMean, 0) / matchedCount
+  const postMean = students.reduce((total, student) => total + student.postMean, 0) / matchedCount
+
   return {
     matchedCount,
-    preMean: students.reduce((total, student) => total + student.preMean, 0) / matchedCount,
-    postMean: students.reduce((total, student) => total + student.postMean, 0) / matchedCount,
+    preMean,
+    postMean,
+    meanGainFivePoint: postMean - preMean,
     meanGain: students.reduce((total, student) => total + student.gain, 0) / matchedCount,
     improvedCount,
     unchangedCount,
     decreasedCount,
     improvedPercent: improvedCount / matchedCount * 100,
+    unchangedPercent: unchangedCount / matchedCount * 100,
+    decreasedPercent: decreasedCount / matchedCount * 100,
   }
 }
 

@@ -127,7 +127,7 @@ describe('classroom UI contracts', () => {
     expect(styles).not.toMatch(/Mitr|Noto Sans Thai Looped|Leelawadee|Kanit|Th Sarabun/)
     expect(styles).toContain('.assessment-scale__item > span {')
     expect(styles).toContain('text-wrap: balance')
-    expect(styles).toContain('.assessment-item__prompt {\n  display: flex;')
+    expect(styles).toMatch(/\.assessment-item__prompt\s*\{[^}]*\bdisplay:\s*flex;/)
     expect(postPage).toContain('ตอบสั้น ๆ ตามความคิดของคุณได้ ข้อละ 1–2 ประโยคก็เพียงพอ')
   })
 

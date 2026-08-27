@@ -200,11 +200,14 @@ describe('pure matched PRE/POST evidence calculations (Phase B2b)', () => {
       matchedCount: 3,
       preMean: 10 / 3,
       postMean: 10 / 3,
+      meanGainFivePoint: 0,
       meanGain: 0,
       improvedCount: 1,
       unchangedCount: 1,
       decreasedCount: 1,
       improvedPercent: 1 / 3 * 100,
+      unchangedPercent: 1 / 3 * 100,
+      decreasedPercent: 1 / 3 * 100,
     })
   })
 
@@ -254,11 +257,14 @@ describe('pure matched PRE/POST evidence calculations (Phase B2b)', () => {
       matchedCount: 2,
       preMean: 2,
       postMean: 2,
+      meanGainFivePoint: 0,
       meanGain: 0,
       improvedCount: 1,
       unchangedCount: 0,
       decreasedCount: 1,
       improvedPercent: 50,
+      unchangedPercent: 0,
+      decreasedPercent: 50,
     })
   })
 
@@ -269,13 +275,28 @@ describe('pure matched PRE/POST evidence calculations (Phase B2b)', () => {
         matchedCount: 0,
         preMean: 0,
         postMean: 0,
+        meanGainFivePoint: 0,
         meanGain: 0,
         improvedCount: 0,
         unchangedCount: 0,
         decreasedCount: 0,
         improvedPercent: 0,
+        unchangedPercent: 0,
+        decreasedPercent: 0,
       },
     })
+  })
+
+  it('derives the judge-facing five-point gain without changing total-score meanGain', () => {
+    const result = calculateMatchedAssessmentEvidence(
+      [record('a', Array(10).fill(2)), record('b', Array(10).fill(3))],
+      [record('a', Array(10).fill(4)), record('b', Array(10).fill(4))],
+    )
+
+    expect(result.group.meanGain).toBe(15)
+    expect(result.group.meanGainFivePoint).toBeCloseTo(1.5)
+    expect(result.group.meanGainFivePoint).toBeCloseTo(result.group.postMean - result.group.preMean)
+    expect(result.group.meanGainFivePoint).toBeCloseTo(result.group.meanGain / 10)
   })
 
   it('uses only the first valid record per player and phase when duplicates are present', () => {
