@@ -138,12 +138,12 @@ describe('finished ResultPage Observation de-duplication', () => {
     expect(shouldShowTeacherObservationSection(true, true, null)).toBe(false)
 
     const resultPage = readFileSync(new URL('../pages/ResultPage.tsx', import.meta.url), 'utf8')
-    expect(resultPage).toContain('<TeacherEvidenceSummarySection')
+    expect(resultPage).toContain('<FinishedLearningEvidenceSection')
     expect(resultPage).toContain('<TeacherObservationSection')
     expect(resultPage).toContain('useProvidedObservation={room.status === \'finished\'}')
   })
 
-  it('hides the duplicate completed Observation section while the evidence summary still displays it', () => {
+  it('hides the duplicate completed Observation form while the stored summary remains available', () => {
     expect(shouldShowTeacherObservationSection(true, false, observation)).toBe(false)
     expect(shouldShowTeacherObservationSection(false, false, observation)).toBe(true)
 

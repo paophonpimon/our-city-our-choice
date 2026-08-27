@@ -99,3 +99,20 @@ describe('firebaseClassroomService.terminateActivity — explicit emergency life
     expect(normalSource).toContain("if (room.status !== 'game-result') throw new Error")
   })
 })
+
+describe('firebaseClassroomService.publishLearningEvidence — safe lifecycle aggregate', () => {
+  const source = readSource('./firebaseClassroomService.ts')
+  const start = source.indexOf('async publishLearningEvidence(')
+  const end = source.indexOf('subscribeAssessments(', start)
+  const publishSource = source.slice(start, end)
+
+  it('requires teacher ownership and writes only the whitelist aggregate field at any classroom stage', () => {
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    expect(publishSource).toContain('const room = await requireRoom(roomId)')
+    expect(publishSource).toContain('assertTeacher(room, teacherSessionId)')
+    expect(publishSource).not.toContain("room.status !== 'finished'")
+    expect(publishSource).toContain('{ publicLearningEvidence: evidence }')
+    expect(publishSource).not.toMatch(/assessments|responses|reflection|notes|playerId|ownerUid/)
+  })
+})

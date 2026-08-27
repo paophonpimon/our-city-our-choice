@@ -7,6 +7,7 @@ import {
 } from './assessment'
 import type {
   ClassroomAssessmentRecord,
+  ClassroomPublicLearningEvidence,
   ClassroomPostAssessment,
   ClassroomPreAssessment,
   ClassroomReflection,
@@ -37,6 +38,51 @@ export interface CompetitionAssessmentEvidence {
   observation: ClassroomTeacherObservation | null
   observationMean: number | null
 }
+
+/**
+ * Whitelist-only aggregate suitable for the public finished Result document.
+ * It intentionally excludes raw responses, identities, Reflection text, and
+ * teacher notes. Missing measured evidence is represented by null, never zero.
+ */
+export const createClassroomPublicLearningEvidence = (
+  participantCount: number,
+  records: readonly ClassroomAssessmentRecord[],
+): ClassroomPublicLearningEvidence => {
+  const evidence = calculateCompetitionAssessmentEvidence(participantCount, records)
+  const hasMatchedEvidence = evidence.matched.matchedCount > 0
+  const observation = evidence.observation
+
+  return {
+    schemaVersion: 1,
+    participantCount: evidence.participantCount,
+    preCompleteCount: evidence.preCompleteCount,
+    postCompleteCount: evidence.postCompleteCount,
+    matchedCount: evidence.matched.matchedCount,
+    preMean: hasMatchedEvidence ? evidence.matched.preMean : null,
+    postMean: hasMatchedEvidence ? evidence.matched.postMean : null,
+    meanGainFivePoint: hasMatchedEvidence ? evidence.matched.meanGainFivePoint : null,
+    improvedCount: evidence.matched.improvedCount,
+    unchangedCount: evidence.matched.unchangedCount,
+    decreasedCount: evidence.matched.decreasedCount,
+    improvedPercent: hasMatchedEvidence ? evidence.matched.improvedPercent : null,
+    unchangedPercent: hasMatchedEvidence ? evidence.matched.unchangedPercent : null,
+    decreasedPercent: hasMatchedEvidence ? evidence.matched.decreasedPercent : null,
+    reflectionCompleteCount: evidence.reflectionCompleteCount,
+    reflectionCompletionPercent: evidence.reflectionCompletionPercent,
+    observation: observation && evidence.observationMean !== null ? {
+      o1: observation.o1,
+      o2: observation.o2,
+      o3: observation.o3,
+      o4: observation.o4,
+      mean: evidence.observationMean,
+    } : null,
+  }
+}
+
+export const shouldPublishClassroomLearningEvidence = (
+  current: ClassroomPublicLearningEvidence | null | undefined,
+  next: ClassroomPublicLearningEvidence,
+): boolean => JSON.stringify(current ?? null) !== JSON.stringify(next)
 
 /** Pure judge-facing summary. Raw identities and Reflection text never leave this boundary. */
 export const calculateCompetitionAssessmentEvidence = (

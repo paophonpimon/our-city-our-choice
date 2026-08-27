@@ -72,6 +72,23 @@ describe('Sound Pack V1 selection', () => {
     expect(teacherPage).toContain("useSoundLoop('cutscene', selectCutsceneSound(yearCutscene?.phase))")
   })
 
+  it('keeps the finished Result route completely silent', () => {
+    const resultPage = readFileSync(new URL('../pages/ResultPage.tsx', import.meta.url), 'utf8')
+    const soundHook = readFileSync(new URL('../hooks/useSoundPack.ts', import.meta.url), 'utf8')
+    const teacherPage = readFileSync(new URL('../pages/TeacherPage.tsx', import.meta.url), 'utf8')
+
+    expect(resultPage).not.toContain('useSoundLoop')
+    expect(resultPage).not.toContain('selectResultAmbience')
+    expect(resultPage).not.toMatch(/alertCrisis|cutsceneTyping|sceneRooster|playEffect/)
+    expect(soundHook).toContain("/^\\/result\\/[^/]+\\/?$/.test(window.location.pathname)")
+    expect(soundHook.indexOf("/^\\/result\\/[^/]+\\/?$/.test(window.location.pathname)")).toBeLessThan(
+      soundHook.indexOf('soundPackController.noteUserGesture()'),
+    )
+    expect(soundHook).toContain('soundPackController.stopEffect(soundId)')
+    expect(teacherPage).toContain("soundPackController.stopEffect('alertCrisis')")
+    expect(teacherPage).toContain("soundPackController.stopEffect('sceneRooster')")
+  })
+
   it('plays cached rooster directly once at each completed year-cutscene boundary', () => {
     const teacherPage = readFileSync(new URL('../pages/TeacherPage.tsx', import.meta.url), 'utf8')
     const textFadeWait = teacherPage.indexOf('await waitForPresentation(timing.textFade)')
@@ -188,6 +205,20 @@ describe('SoundPackController', () => {
     controller.playEffectOnce('alertCrisis', 'crisis-room-a-event-1')
     expect(created).toHaveLength(1)
     expect(created[0]?.play).toHaveBeenCalledOnce()
+  })
+
+  it('stops an already-started cached one-shot effect when its owner unmounts', () => {
+    const alert = fakeAudio(SOUND_PACK.alertCrisis)
+    const controller = new SoundPackController(() => alert)
+    controller.noteUserGesture()
+
+    controller.playEffectOnce('alertCrisis', 'alertCrisis:ROOM:0:event-1')
+    alert.currentTime = 4
+    controller.stopEffect('alertCrisis')
+
+    expect(alert.play).toHaveBeenCalledOnce()
+    expect(alert.pause).toHaveBeenCalledOnce()
+    expect(alert.currentTime).toBe(0)
   })
 
   it('plays rooster once for each unique year-cutscene presentation identity', () => {

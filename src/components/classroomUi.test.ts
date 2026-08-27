@@ -64,7 +64,7 @@ describe('classroom UI contracts', () => {
     const restoreEffect = teacherPage.slice(restoreStart, restoreEnd)
     expect(restoreEffect).toContain('room.teacherSessionId !== uid')
     expect(restoreEffect).not.toContain("room.status === 'finished'")
-    expect(resultPage).toContain('<TeacherEvidenceSummarySection')
+    expect(resultPage).toContain('<FinishedLearningEvidenceSection')
     expect(resultPage).toContain('<TeacherObservationSection')
   })
 
@@ -412,20 +412,20 @@ describe('classroom UI contracts', () => {
     expect(resultPage).not.toMatch(/winner|leaderboard|อันดับ/i)
   })
 
-  it('uses a summary-first teacher Result with exclusive city and evidence panels plus persistent actions', () => {
+  it('uses a summary-first teacher Result with learning and city panels plus persistent actions', () => {
     const resultPage = readSource('../pages/ResultPage.tsx')
     const styles = readSource('../styles.css')
     expect(resultPage).toContain("useState<TeacherResultTab>('summary')")
     expect(resultPage).toContain("['summary', 'สรุป']")
+    expect(resultPage).toContain("['learning', 'ผลการเรียนรู้']")
     expect(resultPage).toContain("['city', 'รายละเอียดเมือง']")
-    expect(resultPage).toContain("['evidence', 'หลักฐานครู']")
     expect(resultPage).toContain("activeTeacherTab === 'summary' ?")
+    expect(resultPage).toContain("activeTeacherTab === 'learning' ?")
     expect(resultPage).toContain("activeTeacherTab === 'city' ?")
-    expect(resultPage).toContain("activeTeacherTab === 'evidence' ?")
     expect(resultPage.indexOf('className="teacher-result-actions"')).toBeGreaterThan(resultPage.indexOf('className="teacher-result-panels"'))
     expect(styles).toContain('grid-template-rows: auto minmax(0, 1fr) auto')
     expect(styles).toContain('.teacher-result-panels { min-height: 0; overflow: auto;')
-    expect(resultPage).toContain('<TeacherEvidenceSummarySection')
+    expect(resultPage).toContain('<FinishedLearningEvidenceSection')
     expect(resultPage).toContain('<TeacherObservationSection')
   })
 
@@ -479,7 +479,7 @@ describe('classroom UI contracts', () => {
     expect(publicBranch).toContain('BUILDING_LEVEL_LABELS[level]')
   })
 
-  it('uses only whitelisted room aggregates for public tabs without evidence, fake per-building detail, or mutation controls', () => {
+  it('uses only whitelisted room aggregates for public tabs without private reads, fake per-building detail, or mutation controls', () => {
     const resultPage = readSource('../pages/ResultPage.tsx')
     const publicResult = resultPage.indexOf('if (isPublicFinishedResult)')
     const accessGuard = resultPage.indexOf('if (!isTeacher && !hasStudentSession)', publicResult)
@@ -493,6 +493,7 @@ describe('classroom UI contracts', () => {
     expect(publicBranch).toContain('room.timeoutTotal')
     expect(publicBranch).toContain('normalizeBuildingLevels(room.buildingLevels)')
     expect(publicBranch).toContain('RESULT_BUILDINGS.map')
+    expect(publicBranch).toContain('room.publicLearningEvidence ?? null')
     expect(publicBranch).not.toContain('locationSummaries')
     expect(publicBranch).not.toContain('integrityCount')
     expect(publicBranch).not.toContain('corruptionCount')
@@ -516,10 +517,10 @@ describe('classroom UI contracts', () => {
     expect(resultPage).toContain("usePlayer(hasStudentSession ? roomId : '', studentPlayerId)")
     expect(resultPage).toContain("usePersonalDecisionResults(hasStudentSession ? roomId : '', studentPlayerId, hasStudentSession ? uid : '')")
     expect(resultPage).toContain('result.locationSummaries[building.id]')
-    expect(resultPage).toContain('<TeacherEvidenceSummarySection')
+    expect(resultPage).toContain('<FinishedLearningEvidenceSection')
     expect(resultPage).toContain("['summary', 'สรุป']")
+    expect(resultPage).toContain("['learning', 'ผลการเรียนรู้']")
     expect(resultPage).toContain("['city', 'รายละเอียดเมือง']")
-    expect(resultPage).toContain("['evidence', 'หลักฐานครู']")
     expect(resultPage).toContain('if (!isTeacher && hasStudentSession)')
     expect(resultPage).toContain('<main className={`student-cycle-result')
   })

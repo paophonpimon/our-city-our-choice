@@ -23,6 +23,7 @@ import type {
   ClassroomAssessmentRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPublicLearningEvidence,
   ClassroomPostAssessment,
   ClassroomPreAssessment,
   ClassroomReflection,
@@ -415,6 +416,14 @@ export class DemoClassroomGameService implements ClassroomGameService {
     )
     emit()
     return listen(emit)
+  }
+
+  async publishLearningEvidence(roomId: string, teacherSessionId: string, evidence: ClassroomPublicLearningEvidence): Promise<void> {
+    const state = readState()
+    const roomState = getRoomState(state, roomId)
+    assertTeacher(roomState.room, teacherSessionId)
+    roomState.room.publicLearningEvidence = clone(evidence)
+    writeState(state)
   }
 
 

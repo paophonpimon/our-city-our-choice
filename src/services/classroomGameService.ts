@@ -4,6 +4,7 @@ import type {
   ClassroomAssessmentRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPublicLearningEvidence,
   ClassroomPostAssessment,
   ClassroomPreAssessment,
   ClassroomReflection,
@@ -88,6 +89,12 @@ export interface ClassroomGameService {
     listener: (records: ClassroomAssessmentRecord[]) => void,
     onError: (message: string) => void,
   ): ClassroomUnsubscribe
+  /** Teacher-only idempotent publication of whitelist aggregate evidence during the classroom lifecycle. */
+  publishLearningEvidence(
+    roomId: string,
+    teacherSessionId: string,
+    evidence: ClassroomPublicLearningEvidence,
+  ): Promise<void>
   subscribeRoom(
     roomId: string,
     listener: (room: ClassroomRoom | null) => void,

@@ -23,6 +23,7 @@ import { useAnswers, useCrisisResults, usePlayers, usePreAssessments, useRoom, u
 import { useCountdown } from '../hooks/useCountdown'
 import { enterFullscreenSafely } from '../hooks/useFullscreen'
 import { useSoundEffectOnce, useSoundLoop } from '../hooks/useSoundPack'
+import { useTeacherLearningEvidencePublisher } from '../hooks/useTeacherLearningEvidencePublisher'
 import { selectCutsceneSound, shouldDuckTeacherBgm, soundPackController } from '../lib/soundPack'
 import { classroomFriendlyError } from '../services'
 import { loadGoogleSheetsQuestions } from '../services/googleSheetsQuestions'
@@ -267,12 +268,20 @@ export const TeacherPage = () => {
   const roundsState = useRounds(subscribedRoomId)
   const crisisResultsState = useCrisisResults(subscribedRoomId)
   const room = roomState.data
+  useTeacherLearningEvidencePublisher(
+    room,
+    !isStandaloneLayoutMode && storedSession?.roomId === room?.roomId,
+  )
   const crisisAlertTrigger = room?.status === 'crisis-intro' && room.currentCrisisEventId
     ? `${room.roomId}:${room.gameCycle}:${room.currentCrisisEventId}`
     : null
   const teacherBgmDucked = shouldDuckTeacherBgm(room?.status, yearCutscene !== null)
   useSoundEffectOnce('alertCrisis', crisisAlertTrigger)
   useSoundLoop('cutscene', selectCutsceneSound(yearCutscene?.phase))
+  useEffect(() => () => {
+    soundPackController.stopEffect('alertCrisis')
+    soundPackController.stopEffect('sceneRooster')
+  }, [])
   useEffect(() => {
     teacherSoundtrackRef.current?.setDucked(teacherBgmDucked)
   }, [teacherBgmDucked])

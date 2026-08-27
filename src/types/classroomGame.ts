@@ -40,6 +40,8 @@ export interface ClassroomRoom {
   integrityTotal: number
   corruptionTotal: number
   timeoutTotal: number
+  /** Teacher-published, whitelist-only aggregate for permanently readable finished results. */
+  publicLearningEvidence?: ClassroomPublicLearningEvidence | null
   roleRotation: RoleId[]
   /**
    * Teacher-controlled, one-way false -> true gate for the PRE assessment.
@@ -51,6 +53,34 @@ export interface ClassroomRoom {
   preAssessmentOpened: boolean
   createdAt: number
   updatedAt: number
+}
+
+export interface ClassroomPublicObservationEvidence {
+  o1: ObservationScaleValue
+  o2: ObservationScaleValue
+  o3: ObservationScaleValue
+  o4: ObservationScaleValue
+  mean: number
+}
+
+export interface ClassroomPublicLearningEvidence {
+  schemaVersion: 1
+  participantCount: number
+  preCompleteCount: number
+  postCompleteCount: number
+  matchedCount: number
+  preMean: number | null
+  postMean: number | null
+  meanGainFivePoint: number | null
+  improvedCount: number
+  unchangedCount: number
+  decreasedCount: number
+  improvedPercent: number | null
+  unchangedPercent: number | null
+  decreasedPercent: number | null
+  reflectionCompleteCount: number
+  reflectionCompletionPercent: number | null
+  observation: ClassroomPublicObservationEvidence | null
 }
 
 export interface ClassroomPlayer {

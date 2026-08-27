@@ -47,6 +47,7 @@ import type {
   ClassroomAssessmentRecord,
   ClassroomJoinInput,
   ClassroomPlayer,
+  ClassroomPublicLearningEvidence,
   ClassroomPostAssessment,
   ClassroomPreAssessment,
   ClassroomReflection,
@@ -131,6 +132,56 @@ const toMillis = (value: unknown): number | null => {
 
 const roleList = (value: unknown): RoleId[] => Array.isArray(value) ? value.filter(isRoleId) : []
 
+const mapPublicLearningEvidence = (value: unknown): ClassroomPublicLearningEvidence | null => {
+  if (!value || typeof value !== 'object') return null
+  const data = value as Record<string, unknown>
+  const countKeys = [
+    'participantCount', 'preCompleteCount', 'postCompleteCount', 'matchedCount',
+    'improvedCount', 'unchangedCount', 'decreasedCount', 'reflectionCompleteCount',
+  ] as const
+  if (data.schemaVersion !== 1 || countKeys.some((key) => !Number.isInteger(data[key]) || Number(data[key]) < 0)) return null
+  const nullableNumbers = [
+    'preMean', 'postMean', 'meanGainFivePoint', 'improvedPercent', 'unchangedPercent',
+    'decreasedPercent', 'reflectionCompletionPercent',
+  ] as const
+  if (nullableNumbers.some((key) => data[key] !== null && (typeof data[key] !== 'number' || !Number.isFinite(data[key])))) return null
+
+  let observation: ClassroomPublicLearningEvidence['observation'] = null
+  if (data.observation !== null) {
+    if (!data.observation || typeof data.observation !== 'object') return null
+    const candidate = data.observation as Record<string, unknown>
+    if (![candidate.o1, candidate.o2, candidate.o3, candidate.o4].every((score) => Number.isInteger(score) && Number(score) >= 1 && Number(score) <= 4)) return null
+    if (typeof candidate.mean !== 'number' || !Number.isFinite(candidate.mean) || candidate.mean < 1 || candidate.mean > 4) return null
+    observation = {
+      o1: candidate.o1 as ObservationScaleValue,
+      o2: candidate.o2 as ObservationScaleValue,
+      o3: candidate.o3 as ObservationScaleValue,
+      o4: candidate.o4 as ObservationScaleValue,
+      mean: candidate.mean,
+    }
+  }
+
+  return {
+    schemaVersion: 1,
+    participantCount: Number(data.participantCount),
+    preCompleteCount: Number(data.preCompleteCount),
+    postCompleteCount: Number(data.postCompleteCount),
+    matchedCount: Number(data.matchedCount),
+    preMean: data.preMean as number | null,
+    postMean: data.postMean as number | null,
+    meanGainFivePoint: data.meanGainFivePoint as number | null,
+    improvedCount: Number(data.improvedCount),
+    unchangedCount: Number(data.unchangedCount),
+    decreasedCount: Number(data.decreasedCount),
+    improvedPercent: data.improvedPercent as number | null,
+    unchangedPercent: data.unchangedPercent as number | null,
+    decreasedPercent: data.decreasedPercent as number | null,
+    reflectionCompleteCount: Number(data.reflectionCompleteCount),
+    reflectionCompletionPercent: data.reflectionCompletionPercent as number | null,
+    observation,
+  }
+}
+
 const mapRoom = (data: DocumentData): ClassroomRoom => {
   const createdAt = toMillis(data.createdAt) ?? Date.now()
   const cityScore = Number(data.cityScore ?? 500)
@@ -156,6 +207,7 @@ const mapRoom = (data: DocumentData): ClassroomRoom => {
     integrityTotal: Number(data.integrityTotal ?? 0),
     corruptionTotal: Number(data.corruptionTotal ?? 0),
     timeoutTotal: Number(data.timeoutTotal ?? 0),
+    publicLearningEvidence: mapPublicLearningEvidence(data.publicLearningEvidence),
     roleRotation: roleList(data.roleRotation),
     // A room written before this field existed has no value here at all -
     // Boolean(undefined) is false, so a legacy/missing room reads safely as
@@ -649,6 +701,12 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       ),
       onErrorMessage(onError),
     )
+  }
+
+  async publishLearningEvidence(roomId: string, teacherSessionId: string, evidence: ClassroomPublicLearningEvidence): Promise<void> {
+    const room = await requireRoom(roomId)
+    assertTeacher(room, teacherSessionId)
+    await updateDoc(doc(db, classroomPaths.room(roomId)), { publicLearningEvidence: evidence })
   }
 
   subscribeAssessments(roomId: string, listener: (assessments: ClassroomPreAssessment[]) => void, onError: (message: string) => void): () => void {

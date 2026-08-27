@@ -121,6 +121,6 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
     expect(resultPage).toContain('หลักฐานสำหรับนำเสนอกรรมการ')
     expect(resultPage).toContain('if (isPublicFinishedResult)')
     expect(resultPage).toContain('if (!isTeacher && hasStudentSession)')
-    expect(resultPage).toContain("['evidence', 'หลักฐานครู']")
+    expect(resultPage).toContain("['learning', 'ผลการเรียนรู้']")
   })
 })

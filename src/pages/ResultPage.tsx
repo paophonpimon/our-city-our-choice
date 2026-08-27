@@ -2,21 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CityLoader } from '../components/CityLoader'
 import { CityScene } from '../components/CityScene'
+import { FinishedLearningEvidenceSection } from '../components/FinishedLearningEvidenceSection'
 import { BrandHeader, ErrorPanel, ScenePage } from '../components/Layout'
 import { TeacherObservationSection } from '../components/TeacherObservationSection'
 import {
   getTeacherObservationEvidence,
   shouldShowTeacherObservationSection,
-  TeacherEvidenceSummarySection,
 } from '../components/TeacherEvidenceSummarySection'
 import { useGame } from '../context/GameContext'
 import { LOCATION_BUILDING, normalizeBuildingLevels, type BuildingId, type BuildingLevel } from '../domain/cityBuildings'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
 import { formatCityLevel, MAX_GAME_CYCLES, ROLES, type CityLevel } from '../domain/ourCity'
 import { countPersonalDecisionOutcomes, derivePersonalImpactNarrative } from '../domain/personalDecisionResults'
-import { useAssessmentEvidence, useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
-import { useSoundLoop } from '../hooks/useSoundPack'
-import { selectResultAmbience } from '../lib/soundPack'
+import { useCrisisResults, usePersonalDecisionResults, usePlayer, usePlayers, useRoom, useRounds } from '../hooks/useGameData'
+import { useTeacherLearningEvidencePublisher } from '../hooks/useTeacherLearningEvidencePublisher'
 import { classroomFriendlyError } from '../services'
 import {
   clearClassroomStudentSession,
@@ -80,7 +79,7 @@ const addLocationSummary = (target: LocationSummary, source: LocationSummary): L
   }
 }
 const PERSONAL_RESULTS_READ_ERROR = 'ไม่สามารถโหลดผลการตัดสินใจส่วนตัวได้ กรุณาลองใหม่'
-type TeacherResultTab = 'summary' | 'city' | 'evidence'
+type TeacherResultTab = 'summary' | 'learning' | 'city'
 
 export const ResultPage = () => {
   const roomId = (useParams().roomCode ?? '').toUpperCase()
@@ -96,22 +95,20 @@ export const ResultPage = () => {
   const roundsState = useRounds(isTeacher ? roomId : '')
   const crisisResultsState = useCrisisResults(isTeacher ? roomId : '')
   const playersState = usePlayers(isTeacher ? roomId : '')
-  const assessmentEvidenceState = useAssessmentEvidence(
-    roomId,
+  const learningEvidencePublisher = useTeacherLearningEvidencePublisher(
+    roomState.data,
     isTeacher && roomState.data?.status === 'finished',
   )
+  const assessmentEvidenceState = learningEvidencePublisher.evidenceState
   const playerState = usePlayer(hasStudentSession ? roomId : '', studentPlayerId)
   const personalResultsState = usePersonalDecisionResults(hasStudentSession ? roomId : '', studentPlayerId, hasStudentSession ? uid : '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [activeTeacherTab, setActiveTeacherTab] = useState<TeacherResultTab>('summary')
   const [activeBuildingId, setActiveBuildingId] = useState<LocationId | null>(null)
-  useSoundLoop('ambience', selectResultAmbience(
-    roomState.data?.status,
-    roomState.data?.cityScore,
-    roomState.data?.cityLevel,
-    activeBuildingId,
-  ))
+  const publishingLearningEvidence = learningEvidencePublisher.publishing
+  const room = roomState.data
+  const liveLearningEvidence = learningEvidencePublisher.liveEvidence
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
@@ -136,7 +133,6 @@ export const ResultPage = () => {
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [activeBuildingId])
 
-  const room = roomState.data
   const cycleRounds = useMemo(() => room ? roundsState.data.filter((round) => round.gameCycle === room.gameCycle).sort((a, b) => a.questionNumber - b.questionNumber) : [], [room, roundsState.data])
   const cycleCrises = useMemo(() => room ? crisisResultsState.data.filter((result) => result.gameCycle === room.gameCycle).sort((a, b) => a.eventIndex - b.eventIndex) : [], [crisisResultsState.data, room])
 
@@ -148,8 +144,9 @@ export const ResultPage = () => {
   const isPublicFinishedResult = !isTeacher && !hasStudentSession && room.status === 'finished'
   if (isPublicFinishedResult) {
     const publicBuildingLevels = normalizeBuildingLevels(room.buildingLevels)
-    const publicTabs: readonly [Exclude<TeacherResultTab, 'evidence'>, string][] = [
+    const publicTabs: readonly [TeacherResultTab, string][] = [
       ['summary', 'สรุป'],
+      ['learning', 'ผลการเรียนรู้'],
       ['city', 'รายละเอียดเมือง'],
     ]
     return (
@@ -168,6 +165,7 @@ export const ResultPage = () => {
               <section className="teacher-answer-summary" aria-labelledby="public-answer-summary-title"><h2 id="public-answer-summary-title">ผลการตัดสินใจสะสม</h2><div><article className="is-integrity"><span>✓</span><p>สุจริต<strong>{room.integrityTotal.toLocaleString('th-TH')}</strong></p></article><article className="is-corruption"><span>!</span><p>ทุจริต<strong>{room.corruptionTotal.toLocaleString('th-TH')}</strong></p></article><article className="is-timeout"><span>?</span><p>ไม่ตอบ<strong>{room.timeoutTotal.toLocaleString('th-TH')}</strong></p></article></div></section>
               <section className="teacher-building-summary" aria-labelledby="public-building-summary-title"><div className="teacher-section-heading"><div><h2 id="public-building-summary-title">สถานะอาคารทั้ง 7 แห่ง</h2><p>แสดงเฉพาะระดับอาคารสุดท้ายจากข้อมูลรวมระดับห้อง</p></div></div><div className="teacher-building-summary__grid">{RESULT_BUILDINGS.map((building) => { const level = publicBuildingLevels[building.buildingId]; return <article className={level > 0 ? 'is-positive' : level < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><span>{building.icon}</span><p>{building.label}<small>{BUILDING_LEVEL_LABELS[level]}</small></p><strong>Lv.{level > 0 ? '+' : ''}{level}</strong></article> })}</div></section>
             </article> : null}
+            {activeTeacherTab === 'learning' ? <section aria-labelledby="public-result-tab-learning" id="public-result-panel-learning" role="tabpanel"><FinishedLearningEvidenceSection evidence={room.publicLearningEvidence ?? null} room={room} /></section> : null}
             {activeTeacherTab === 'city' ? <section className="teacher-result-details public-result-details" aria-labelledby="public-result-tab-city" id="public-result-panel-city" role="tabpanel">
               <section className="public-result-city-preview"><div className="teacher-section-heading"><div><h2>ภาพเมืองสุดท้าย</h2><p>{formatCityLevel(room.cityLevel)} • {Math.round(room.cityScore).toLocaleString('th-TH')} / 1,000 คะแนน</p></div></div><div className="public-result-city-preview__scene"><CityScene buildingLevels={publicBuildingLevels} cityLevel={room.cityLevel} /></div></section>
               <section className="teacher-result-levels"><div className="teacher-section-heading"><div><h2>ระดับเมือง</h2><p>เกณฑ์คะแนนรวมของเมือง</p></div></div><div className="teacher-result-levels__grid">{CITY_LEVEL_STEPS.map((step) => <article className={step.id === room.cityLevel ? 'is-current' : ''} key={step.id}><span>{CITY_RESULT_EMOJI[step.id]}</span><strong>{formatCityLevel(step.id)}</strong><small>{step.range} คะแนน</small></article>)}</div></section>
@@ -233,7 +231,7 @@ export const ResultPage = () => {
     if (studentSession?.roomId === roomId) clearClassroomStudentSession()
     navigate('/')
   }
-  const teacherError = error || roomState.error || roundsState.error || crisisResultsState.error || playersState.error
+  const teacherError = error || learningEvidencePublisher.publicationError || roomState.error || roundsState.error || crisisResultsState.error || playersState.error
 
   if (!isTeacher && hasStudentSession) {
     const personalCurrent = personalResultsState.data.filter((result) => result.gameCycle === room.gameCycle)
@@ -287,8 +285,8 @@ export const ResultPage = () => {
         <nav className="teacher-result-tabs" aria-label="ส่วนข้อมูลผลลัพธ์" role="tablist">
           {([
             ['summary', 'สรุป'],
+            ['learning', 'ผลการเรียนรู้'],
             ['city', 'รายละเอียดเมือง'],
-            ['evidence', 'หลักฐานครู'],
           ] as const).map(([tab, label]) => (
             <button aria-controls={`teacher-result-panel-${tab}`} aria-selected={activeTeacherTab === tab} className={activeTeacherTab === tab ? 'is-active' : ''} id={`teacher-result-tab-${tab}`} key={tab} onClick={() => setActiveTeacherTab(tab)} role="tab" type="button">{label}</button>
           ))}
@@ -305,8 +303,8 @@ export const ResultPage = () => {
             <section className="teacher-result-answer-details"><div className="teacher-section-heading"><div><h2>สรุปคำตอบ</h2><p>ข้อมูลรวมของห้องเรียน ไม่แสดงผลรายบุคคล</p></div></div><div className="teacher-result-answer-table" role="table"><div className="is-heading" role="row"><span role="columnheader">ประเภทการตัดสินใจ</span><span role="columnheader">รอบล่าสุด</span><span role="columnheader">สัดส่วน</span><span role="columnheader">สะสมทั้งหมด</span></div><div role="row"><strong role="cell">สุจริตรอบล่าสุด</strong><span role="cell">{latestTotals.integrityCount}</span><span role="cell">{percentage(latestTotals.integrityCount)}%</span><span role="cell">สุจริตสะสม {room.integrityTotal}</span></div><div role="row"><strong role="cell">ทุจริตรอบล่าสุด</strong><span role="cell">{latestTotals.corruptionCount}</span><span role="cell">{percentage(latestTotals.corruptionCount)}%</span><span role="cell">ทุจริตสะสม {room.corruptionTotal}</span></div><div role="row"><strong role="cell">ไม่ตอบรอบล่าสุด</strong><span role="cell">{latestTotals.timeoutCount}</span><span role="cell">{percentage(latestTotals.timeoutCount)}%</span><span role="cell">ไม่ตอบสะสม {room.timeoutTotal}</span></div></div></section>
             <section className="teacher-result-building-details"><div className="teacher-section-heading"><div><h2>ผลลัพธ์อาคาร</h2><p>รายละเอียดจากข้อมูลจริงที่สรุปแล้วในรอบนี้</p></div></div><div className="teacher-result-building-details__grid">{buildingResults.map((building) => <article className={building.average > 0 ? 'is-positive' : building.average < 0 ? 'is-negative' : 'is-neutral'} key={building.id}><header><span>{building.icon}</span><div><h3>{building.label}</h3><p>Lv.{building.level > 0 ? '+' : ''}{building.level} • {BUILDING_LEVEL_LABELS[building.level]}</p></div><strong>{signed(building.average)}</strong></header><dl><div><dt>สุจริต</dt><dd>{building.summary.integrityCount}</dd></div><div><dt>ทุจริต</dt><dd>{building.summary.corruptionCount}</dd></div><div><dt>ไม่ตอบ</dt><dd>{building.summary.timeoutCount}</dd></div></dl><button onClick={() => setActiveBuildingId(building.id)} type="button">ดูรายละเอียด</button></article>)}</div></section>
           </section> : null}
-          {activeTeacherTab === 'evidence' ? <section className="teacher-result-evidence-panel" aria-labelledby="teacher-result-tab-evidence" id="teacher-result-panel-evidence" role="tabpanel">
-            {room.status === 'finished' ? <TeacherEvidenceSummarySection error={assessmentEvidenceState.error} loading={assessmentEvidenceState.loading} players={playersState.data} records={assessmentEvidenceState.data} /> : null}
+          {activeTeacherTab === 'learning' ? <section className="teacher-result-evidence-panel" aria-labelledby="teacher-result-tab-learning" id="teacher-result-panel-learning" role="tabpanel">
+            {room.status === 'finished' ? <FinishedLearningEvidenceSection evidence={liveLearningEvidence ?? room.publicLearningEvidence ?? null} publishing={publishingLearningEvidence} room={room} /> : null}
             {showTeacherObservationSection ? <TeacherObservationSection isTeacher={isTeacher} providedObservation={observationEvidence} roomId={roomId} useProvidedObservation={room.status === 'finished'} /> : null}
           </section> : null}
         </div>

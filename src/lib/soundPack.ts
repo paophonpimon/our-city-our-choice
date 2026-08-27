@@ -150,6 +150,11 @@ export class SoundPackController {
     this.pendingEffects.delete(effectKey)
   }
 
+  stopEffect(soundId: SoundId): void {
+    const audio = this.cache.get(soundId)
+    if (audio) safelyPause(audio)
+  }
+
   setLoop(channel: SoundLoopChannel, soundId: SoundId | null): void {
     if (this.desiredLoops.get(channel) === soundId) return
     this.stopActiveLoop(channel)

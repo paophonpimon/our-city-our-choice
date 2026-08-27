@@ -8,6 +8,7 @@ import {
 export const useUiClickSound = (): void => {
   useEffect(() => {
     const handleClick = (event: MouseEvent): void => {
+      if (/^\/result\/[^/]+\/?$/.test(window.location.pathname)) return
       soundPackController.noteUserGesture()
       const target = event.target instanceof Element ? event.target : null
       const control = target?.closest('button, [role="button"]')
@@ -25,7 +26,10 @@ export const useSoundEffectOnce = (soundId: SoundId | null, triggerKey: string |
     if (!soundId || !triggerKey) return undefined
     const effectKey = `${soundId}:${triggerKey}`
     soundPackController.playEffectOnce(soundId, effectKey)
-    return () => soundPackController.cancelPendingEffect(effectKey)
+    return () => {
+      soundPackController.cancelPendingEffect(effectKey)
+      soundPackController.stopEffect(soundId)
+    }
   }, [soundId, triggerKey])
 }
 

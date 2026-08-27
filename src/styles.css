@@ -6046,6 +6046,66 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .student-cycle-result__error { background: #fff0ee; color: #bf3f39; }
 .student-cycle-result__home { width: 100%; background: #126ed4 !important; color: white !important; }
 
+/* Finished Result — privacy-safe learning evidence tab. */
+.finished-learning { display: grid; gap: 14px; min-height: 100%; padding: 18px; color: #173b58; }
+.finished-learning > section,
+.finished-learning__columns > section { padding: 16px; border: 1px solid #cddfeb; border-radius: 18px; background: rgb(250 253 255 / 96%); }
+.finished-learning__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; border: 1px solid #bcd8e9; border-radius: 18px; background: linear-gradient(135deg, #eff9ff, #fff); }
+.finished-learning__heading p { margin: 0; color: #b07a15; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+.finished-learning__heading h2 { margin: 2px 0; color: #124a73; font-size: clamp(25px, 2.6vw, 36px); }
+.finished-learning__heading span,
+.finished-learning__heading small { color: #668095; font-size: 13px; }
+.finished-learning__completeness,
+.finished-learning__means,
+.finished-learning__changes,
+.finished-learning__simulation-grid { display: grid; gap: 10px; }
+.finished-learning__completeness { grid-template-columns: repeat(4, 1fr); }
+.finished-learning__means,
+.finished-learning__changes { grid-template-columns: repeat(3, 1fr); margin-top: 12px; }
+.finished-learning__completeness article,
+.finished-learning__means article,
+.finished-learning__changes article,
+.finished-learning__simulation-grid article { display: grid; gap: 4px; padding: 13px; border: 1px solid #cfe1ec; border-radius: 14px; background: white; }
+.finished-learning__completeness span,
+.finished-learning__means span,
+.finished-learning__changes span,
+.finished-learning__simulation-grid span { color: #637d91; font-size: 13px; }
+.finished-learning__completeness strong { color: #174f77; font-size: 23px; }
+.finished-learning__means strong { color: #115889; font-size: clamp(28px, 3vw, 40px); }
+.finished-learning__means strong small { font-size: 14px; }
+.finished-learning__means .is-gain { border-color: #a9d8be; background: #f0faf4; }
+.finished-learning__means .is-gain strong { color: #16814e; }
+.finished-learning__changes article { grid-template-columns: 1fr auto; }
+.finished-learning__changes strong { grid-row: 1 / 3; grid-column: 2; color: #24506f; font-size: 28px; }
+.finished-learning__changes small { color: #72899a; font-size: 11px; }
+.finished-learning__changes .is-improved { border-color: #acd9c1; background: #f0faf4; }
+.finished-learning__changes .is-improved strong { color: #168451; }
+.finished-learning__changes .is-decreased { border-color: #eabfbb; background: #fff5f3; }
+.finished-learning__changes .is-decreased strong { color: #c9443d; }
+.finished-learning__empty { margin: 12px 0 0; padding: 12px; border: 1px solid #e4c678; border-radius: 12px; background: #fff9e8; color: #72561c; font-weight: 700; text-align: center; }
+.finished-learning__interpretation,
+.finished-learning__simulation-note { margin: 12px 0 0; padding: 12px 14px; border-left: 4px solid #d1a33b; border-radius: 0 11px 11px 0; background: #fff9e9; color: #655021; font-weight: 700; line-height: 1.5; }
+.finished-learning__columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.finished-learning__observation-grid { display: grid; gap: 8px; }
+.finished-learning__observation-grid article { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 9px; border: 1px solid #d2e2ec; border-radius: 12px; background: white; }
+.finished-learning__observation-grid article > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 10px; background: #dceefa; color: #176296; font-weight: 800; }
+.finished-learning__observation-grid article > div { display: grid; gap: 2px; }
+.finished-learning__observation-grid article small { color: #718899; }
+.finished-learning__observation-grid article b { color: #165d91; font-size: 18px; }
+.finished-learning__observation-mean { display: flex; justify-content: space-between; margin: 10px 0 0; padding: 11px; border-radius: 11px; background: #eaf6fd; }
+.finished-learning__reflection-total { display: flex; align-items: baseline; gap: 10px; padding: 14px; border-radius: 13px; background: #eaf6fd; }
+.finished-learning__reflection-total strong { color: #135b87; font-size: 30px; }
+.finished-learning__reflection-total span { color: #57768c; font-weight: 700; }
+.finished-learning__columns section > p:last-child { color: #657d90; line-height: 1.5; }
+.finished-learning__simulation-grid { grid-template-columns: repeat(6, 1fr); }
+.finished-learning__simulation-grid article { text-align: center; }
+.finished-learning__simulation-grid strong { color: #164f76; font-size: 27px; }
+.finished-learning__simulation-grid small { color: #758a9b; }
+.finished-learning__reconciliation { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin-top: 11px; padding: 12px; border: 1px solid #cddfe9; border-radius: 12px; background: #f7fbfd; }
+.finished-learning__reconciliation p { margin: 0; }
+.finished-learning__reconciliation.is-match { border-color: #a9d7bd; background: #effaf4; }
+.finished-learning__reconciliation.is-mismatch { border-color: #e5bc75; background: #fff8e8; }
+
 @media (max-width: 1250px) and (orientation: landscape) {
   .teacher-result-topbar { width: calc(100% - 18px); min-height: 62px; margin: 8px auto; }
   .teacher-result-topbar > div { gap: 8px; padding: 6px 10px; }
@@ -6088,6 +6148,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-result-levels__grid { grid-template-columns: 1fr; }
   .teacher-result-answer-table { overflow-x: auto; }
   .teacher-result-answer-table > div { min-width: 680px; }
+  .finished-learning__completeness,
+  .finished-learning__simulation-grid { grid-template-columns: repeat(2, 1fr); }
+  .finished-learning__columns { grid-template-columns: 1fr; }
   .student-cycle-result { padding: 12px; }
   .student-decision-counters { grid-template-columns: 1fr; }
   .student-decision-counters article { min-height: 90px; }
@@ -6108,6 +6171,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .teacher-result-actions { grid-template-columns: 1fr; }
   .teacher-result-building-details dl,
   .teacher-building-modal dl { grid-template-columns: 1fr; }
+  .finished-learning__completeness,
+  .finished-learning__means,
+  .finished-learning__changes,
+  .finished-learning__simulation-grid,
+  .finished-learning__reconciliation { grid-template-columns: 1fr; }
   .teacher-result-hero h1,
   .student-cycle-result__header h1 { font-size: 34px; }
 }

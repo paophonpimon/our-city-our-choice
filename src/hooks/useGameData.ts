@@ -20,7 +20,7 @@ import type {
   PublicRoomQuestion,
 } from '../types/classroomGame'
 
-interface Loadable<T> {
+export interface Loadable<T> {
   data: T
   loading: boolean
   error: string
