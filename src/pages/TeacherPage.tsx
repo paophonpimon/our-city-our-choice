@@ -23,7 +23,7 @@ import { useAnswers, useCrisisResults, usePlayers, usePreAssessments, useRoom, u
 import { useCountdown } from '../hooks/useCountdown'
 import { enterFullscreenSafely } from '../hooks/useFullscreen'
 import { useSoundEffectOnce, useSoundLoop } from '../hooks/useSoundPack'
-import { selectCutsceneSound, selectYearTransitionAccent, shouldDuckTeacherBgm } from '../lib/soundPack'
+import { selectCutsceneSound, shouldDuckTeacherBgm, soundPackController } from '../lib/soundPack'
 import { classroomFriendlyError } from '../services'
 import { loadGoogleSheetsQuestions } from '../services/googleSheetsQuestions'
 import {
@@ -270,13 +270,8 @@ export const TeacherPage = () => {
   const crisisAlertTrigger = room?.status === 'crisis-intro' && room.currentCrisisEventId
     ? `${room.roomId}:${room.gameCycle}:${room.currentCrisisEventId}`
     : null
-  const yearTransitionAccent = selectYearTransitionAccent(yearCutscene?.phase)
-  const yearTransitionAccentTrigger = yearTransitionAccent && yearCutscene
-    ? `${yearCutscene.transitionId}:year-transition`
-    : null
   const teacherBgmDucked = shouldDuckTeacherBgm(room?.status, yearCutscene !== null)
   useSoundEffectOnce('alertCrisis', crisisAlertTrigger)
-  useSoundEffectOnce(yearTransitionAccent, yearTransitionAccentTrigger)
   useSoundLoop('cutscene', selectCutsceneSound(yearCutscene?.phase))
   useEffect(() => {
     teacherSoundtrackRef.current?.setDucked(teacherBgmDucked)
@@ -880,6 +875,10 @@ export const TeacherPage = () => {
       setYearCutscene({ ...cutscene, phase: 'text-leaving' })
       await waitForPresentation(timing.textFade)
       if (!boundaryIsCurrent()) return
+      soundPackController.playEffectOnce(
+        'sceneRooster',
+        `${cutscene.transitionId}:year-transition`,
+      )
       setYearCutscene({ ...cutscene, phase: 'leaving' })
       await waitForPresentation(timing.reveal)
       if (!boundaryIsCurrent()) return
@@ -972,6 +971,7 @@ export const TeacherPage = () => {
       <>
       <TeacherSoundtrack mode={teacherSoundtrackMode} ref={teacherSoundtrackRef} />
       <main className={`teacher-crisis-page teacher-crisis-page--${room.status}${crisisRevealPhase ? ` teacher-crisis-page--${crisisRevealPhase}` : ''}`}>
+        {room.status === 'crisis-intro' ? <div className="teacher-crisis-alert-overlay" aria-hidden="true" /> : null}
         <TeacherEmergencyEndControl className="teacher-emergency-end--crisis" disabled={busy} roomId={room.roomId} />
         <div className="teacher-crisis-city" aria-hidden="true">
           <CityScene

@@ -198,9 +198,6 @@ export const selectRoleDrawAccent = (
 export const selectCutsceneSound = (phase: string | null | undefined): SoundId | null =>
   phase === 'entering' || phase === 'holding' ? 'cutsceneTyping' : null
 
-export const selectYearTransitionAccent = (phase: string | null | undefined): SoundId | null =>
-  phase === 'leaving' ? 'sceneRooster' : null
-
 export const shouldDuckTeacherBgm = (
   status: ClassroomRoomStatus | undefined,
   cutsceneActive: boolean,

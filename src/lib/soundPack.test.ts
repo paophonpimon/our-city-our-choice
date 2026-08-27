@@ -6,7 +6,6 @@ import {
   selectGameAmbience,
   selectResultAmbience,
   selectRoleDrawAccent,
-  selectYearTransitionAccent,
   shouldDuckTeacherBgm,
   SOUND_PACK,
   SoundPackController,
@@ -51,8 +50,6 @@ describe('Sound Pack V1 selection', () => {
     expect(selectCutsceneSound('text-leaving')).toBeNull()
     expect(selectCutsceneSound('leaving')).toBeNull()
     expect(selectCutsceneSound(null)).toBeNull()
-    expect(selectYearTransitionAccent('holding')).toBeNull()
-    expect(selectYearTransitionAccent('leaving')).toBe('sceneRooster')
     expect(shouldDuckTeacherBgm('round-result', false)).toBe(true)
     expect(shouldDuckTeacherBgm('crisis-intro', false)).toBe(true)
     expect(shouldDuckTeacherBgm('playing', true)).toBe(true)
@@ -68,11 +65,40 @@ describe('Sound Pack V1 selection', () => {
     expect(gamePage).not.toContain('alertCrisis')
     expect(teacherPage.match(/useSoundEffectOnce\('alertCrisis'/g)).toHaveLength(1)
     expect(teacherPage).toContain("room?.status === 'crisis-intro'")
+    expect(teacherPage).toContain('`${room.roomId}:${room.gameCycle}:${room.currentCrisisEventId}`')
     expect(roleDrawPage).not.toContain('sceneRooster')
-    expect(teacherPage).toContain('useSoundEffectOnce(yearTransitionAccent, yearTransitionAccentTrigger)')
-    expect(teacherPage).toContain('`${yearCutscene.transitionId}:year-transition`')
+    expect(teacherPage).not.toContain('useSoundEffectOnce(yearTransitionAccent')
     expect(teacherPage).toContain('transitionId: `${roomAtStart}:${room.gameCycle}:${questionAtStart}:presentation-${run}`')
     expect(teacherPage).toContain("useSoundLoop('cutscene', selectCutsceneSound(yearCutscene?.phase))")
+  })
+
+  it('plays cached rooster directly once at each completed year-cutscene boundary', () => {
+    const teacherPage = readFileSync(new URL('../pages/TeacherPage.tsx', import.meta.url), 'utf8')
+    const textFadeWait = teacherPage.indexOf('await waitForPresentation(timing.textFade)')
+    const currentBoundaryGuard = teacherPage.indexOf('if (!boundaryIsCurrent()) return', textFadeWait)
+    const roosterPlayback = teacherPage.indexOf('soundPackController.playEffectOnce(', currentBoundaryGuard)
+    const leavingTransition = teacherPage.indexOf("setYearCutscene({ ...cutscene, phase: 'leaving' })", roosterPlayback)
+
+    expect(textFadeWait).toBeGreaterThan(-1)
+    expect(currentBoundaryGuard).toBeGreaterThan(textFadeWait)
+    expect(roosterPlayback).toBeGreaterThan(currentBoundaryGuard)
+    expect(leavingTransition).toBeGreaterThan(roosterPlayback)
+    expect(teacherPage.slice(roosterPlayback, leavingTransition)).toContain("'sceneRooster'")
+    expect(teacherPage.slice(roosterPlayback, leavingTransition)).toContain('`${cutscene.transitionId}:year-transition`')
+    expect(teacherPage).not.toContain('await soundPackController.playEffectOnce')
+  })
+
+  it('shows the non-blocking red alert only for teacher Crisis intro with a reduced-motion tint', () => {
+    const gamePage = readFileSync(new URL('../pages/GamePage.tsx', import.meta.url), 'utf8')
+    const teacherPage = readFileSync(new URL('../pages/TeacherPage.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
+
+    expect(gamePage).not.toContain('teacher-crisis-alert-overlay')
+    expect(teacherPage).toContain("room.status === 'crisis-intro' ? <div className=\"teacher-crisis-alert-overlay\" aria-hidden=\"true\" /> : null")
+    expect(teacherPage).not.toMatch(/teacher-crisis-alert-overlay[^>]+on(?:Click|AnimationEnd)=/)
+    expect(styles).toMatch(/\.teacher-crisis-alert-overlay \{[\s\S]*?pointer-events: none;[\s\S]*?animation: teacher-crisis-alert-pulse 1\.35s ease-out both;/)
+    expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.teacher-crisis-alert-overlay \{ animation: teacher-crisis-alert-reduced \.6s ease-out both; \}/)
+    expect(styles).toMatch(/@keyframes teacher-crisis-alert-reduced \{\s*from \{ opacity: \.32; \}\s*to \{ opacity: 0; \}\s*\}/)
   })
 
   it('reduces normal BGM output by 40%, ducks it during transition, and restores it for gameplay', () => {
@@ -166,14 +192,20 @@ describe('SoundPackController', () => {
 
   it('plays rooster once for each unique year-cutscene presentation identity', () => {
     const rooster = fakeAudio(SOUND_PACK.sceneRooster)
-    const controller = new SoundPackController(() => rooster)
+    const createAudio = vi.fn(() => rooster)
+    const controller = new SoundPackController(createAudio)
     controller.noteUserGesture()
 
     controller.playEffectOnce('sceneRooster', 'sceneRooster:ROOM:0:1:presentation-1:year-transition')
     controller.playEffectOnce('sceneRooster', 'sceneRooster:ROOM:0:1:presentation-1:year-transition')
+    rooster.currentTime = 7
     controller.playEffectOnce('sceneRooster', 'sceneRooster:ROOM:0:2:presentation-2:year-transition')
+    rooster.currentTime = 9
     controller.playEffectOnce('sceneRooster', 'sceneRooster:ROOM:1:1:presentation-3:year-transition')
 
+    expect(createAudio).toHaveBeenCalledOnce()
+    expect(createAudio).toHaveBeenCalledWith(SOUND_PACK.sceneRooster)
     expect(rooster.play).toHaveBeenCalledTimes(3)
+    expect(rooster.currentTime).toBe(0)
   })
 })

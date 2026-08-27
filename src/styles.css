@@ -5659,6 +5659,26 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   color: var(--teacher-crisis-navy);
   font-family: "Chakra Petch", sans-serif;
 }
+.teacher-crisis-alert-overlay {
+  position: fixed;
+  z-index: 4;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at center, rgb(255 72 60 / 6%) 22%, rgb(175 0 0 / 32%) 100%),
+    linear-gradient(rgb(220 18 18 / 16%), rgb(190 0 0 / 22%));
+  box-shadow: inset 0 0 8rem rgb(150 0 0 / 42%);
+  opacity: 0;
+  animation: teacher-crisis-alert-pulse 1.35s ease-out both;
+}
+@keyframes teacher-crisis-alert-pulse {
+  0% { opacity: 0; }
+  14% { opacity: .88; }
+  38% { opacity: .16; }
+  62% { opacity: .68; }
+  82% { opacity: .1; }
+  100% { opacity: 0; }
+}
 .teacher-crisis-city { position: absolute; inset: 0; opacity: .6; filter: saturate(.82) brightness(1.08); }
 .teacher-crisis-city .city-scene { width: 100%; height: 100%; object-fit: cover; }
 .teacher-crisis-page--holding .teacher-crisis-city { filter: saturate(.72) brightness(.94); }
@@ -6551,9 +6571,15 @@ img.game-home-cast {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .teacher-crisis-alert-overlay { animation: teacher-crisis-alert-reduced .6s ease-out both; }
   .teacher-crisis-resolution-cue span,
   .teacher-crisis-page--revealing .teacher-crisis-city { animation: none; }
   .teacher-crisis-page--resolving .teacher-crisis-city { filter: saturate(.72) brightness(.9); }
+}
+
+@keyframes teacher-crisis-alert-reduced {
+  from { opacity: .32; }
+  to { opacity: 0; }
 }
 
 .city-stage__utility-controls .teacher-audio-controls {
