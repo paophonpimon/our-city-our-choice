@@ -59,7 +59,7 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
   it('shows the latest city scene with city score plus every building score and level before assessment evidence', () => {
     const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
     const latestCityIndex = markup.indexOf('ผลเมืองและภาพเมืองล่าสุด')
-    const assessmentIndex = markup.indexOf('ผลการประเมิน PRE–POST')
+    const assessmentIndex = markup.indexOf('ผลการประเมินก่อน–หลัง (PRE–POST)')
 
     expect(latestCityIndex).toBeGreaterThan(-1)
     expect(latestCityIndex).toBeLessThan(assessmentIndex)
@@ -68,9 +68,9 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
     expect(markup).toContain('data-city-level="improving"')
     expect(markup).toContain('คะแนนและระดับอาคารล่าสุด')
     expect(markup).toContain('720')
-    expect(markup).toContain('Lv.+1')
+    expect(markup).toContain('ระดับ +1')
     expect(markup).toContain('80')
-    expect(markup).toContain('Lv.-2')
+    expect(markup).toContain('ระดับ -2')
   })
 
   it('omits report-derived curriculum, creativity, and improvement filler from the live evidence dashboard', () => {
@@ -84,7 +84,7 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
 
   it('renders complete matched evidence, five-point gain, all change groups, and calculation trace', () => {
     const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
-    expect(markup).toContain('ผลการประเมิน PRE–POST')
+    expect(markup).toContain('ผลการประเมินก่อน–หลัง (PRE–POST)')
     expect(markup).toContain('3 / 3')
     expect(markup).toContain('3.33')
     expect(markup).toContain('3.67')
@@ -92,11 +92,11 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
     expect(markup).toContain('Improved')
     expect(markup).toContain('Unchanged')
     expect(markup).toContain('Decreased')
-    expect(markup).toContain('33.3% ของ matched N=3')
+    expect(markup).toContain('33.3% ของผู้ที่จับคู่ได้ N=3')
     expect(markup).toContain('วิธีคำนวณผลการประเมิน')
-    expect(markup).toContain('แบบประเมิน PRE และ POST มีชุดละ 10 ข้อ ระดับ 1–5')
-    expect(markup).toContain('PRE เฉลี่ย</dt><dd>3.33 / 5')
-    expect(markup).toContain('POST เฉลี่ย</dt><dd>3.67 / 5')
+    expect(markup).toContain('แบบประเมินก่อนกิจกรรม (PRE) และหลังกิจกรรม (POST) มีชุดละ 10 ข้อ ระดับ 1–5')
+    expect(markup).toContain('ก่อนกิจกรรม (PRE) เฉลี่ย</dt><dd>3.33 / 5')
+    expect(markup).toContain('หลังกิจกรรม (POST) เฉลี่ย</dt><dd>3.67 / 5')
     expect(markup).not.toContain('คะแนนรวมเฉลี่ยที่เพิ่มขึ้น')
     expect(markup).not.toContain('จากคะแนนรวม 50')
     expect(markup).not.toContain('10–50')
@@ -104,7 +104,7 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
 
   it('renders current Observation scale and Reflection completion without raw Reflection text', () => {
     const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
-    expect(markup).toContain('Teacher Observation O1–O4')
+    expect(markup).toContain('แบบสังเกตของครู (Teacher Observation) O1–O4')
     expect(markup).toContain('3.00 / 4')
     expect(markup).toContain('แสดงพฤติกรรมได้ชัดเจนและสม่ำเสมอ')
     expect(markup).toContain('1 / 3')
@@ -117,7 +117,7 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
 
   it('shows missing matched and Observation evidence as unavailable rather than measured zero', () => {
     const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={[]} room={room} />)
-    expect(markup).toContain('ยังไม่มีข้อมูลเพียงพอสำหรับเปรียบเทียบ PRE–POST')
+    expect(markup).toContain('ยังไม่มีข้อมูลเพียงพอสำหรับเปรียบเทียบก่อน–หลัง (PRE–POST)')
     expect(markup).toContain('ยังไม่มีหลักฐานการสังเกตของครู')
     expect(markup).not.toContain('0.00 <small>/ 5</small>')
     expect(markup).not.toContain('0.00 / 4')
@@ -125,9 +125,9 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
 
   it('separates assessment, qualitative, Observation, and simulation evidence and reconciles 12 decisions', () => {
     const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
-    expect(markup).toContain('PRE 10 ข้อ')
-    expect(markup).toContain('สถานการณ์ 10 + Crisis 2')
-    expect(markup).toContain('Reflection 3 ข้อ')
+    expect(markup).toContain('ก่อนกิจกรรม (PRE) 10 ข้อ')
+    expect(markup).toContain('สถานการณ์ 10 + วิกฤต (Crisis) 2')
+    expect(markup).toContain('สะท้อนคิด (Reflection) 3 ข้อ')
     expect(markup).toContain('หลักฐานการตัดสินใจระหว่างสถานการณ์จำลอง')
     expect(markup).toContain('คาด 36')
     expect(markup).toContain('ระบบบันทึกจริง 36')

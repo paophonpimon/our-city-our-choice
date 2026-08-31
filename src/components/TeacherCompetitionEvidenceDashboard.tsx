@@ -43,7 +43,7 @@ const BUILDING_LEVEL_LABELS: Record<BuildingLevel, string> = {
 }
 
 const CRITERIA = [
-  ['1', 'Co-Design', '25', 'ใช้หลักฐาน Co-Design จากรายงาน/ภาคผนวก'],
+  ['1', 'การออกแบบร่วม (Co-Design)', '25', 'ใช้หลักฐานการออกแบบร่วมจากรายงาน/ภาคผนวก'],
   ['2', 'ความสอดคล้องกับหลักสูตร', '20', 'บริบทที่รายงานรองรับ'],
   ['3', 'การนำไปใช้และผลลัพธ์', '25', 'หลักฐานจากระบบ'],
   ['4', 'ความคิดสร้างสรรค์', '15', 'คุณลักษณะของนวัตกรรม'],
@@ -88,7 +88,7 @@ export const TeacherCompetitionEvidenceDashboard = ({
       </section>
 
       <header className="competition-evidence-hero">
-        <div><p>TEACHER COMPETITION EVIDENCE</p><h1>หลักฐานสำหรับนำเสนอกรรมการ</h1><span>ข้อมูลจริงจากกิจกรรมที่จบแล้ว • อ่านอย่างเดียว • ไม่แสดงข้อมูลรายบุคคล</span></div>
+        <div><p>หลักฐานสำหรับกรรมการ (Competition Evidence)</p><h1>หลักฐานสำหรับนำเสนอกรรมการ</h1><span>ข้อมูลจริงจากกิจกรรมที่จบแล้ว • อ่านอย่างเดียว • ไม่แสดงข้อมูลรายบุคคล</span></div>
         <dl>
           <div><dt>ห้อง</dt><dd>{room.roomId}</dd></div>
           <div><dt>วันเวลากิจกรรม</dt><dd>{formatActivityDate(room.createdAt)}</dd></div>
@@ -102,7 +102,7 @@ export const TeacherCompetitionEvidenceDashboard = ({
       {error ? <p className="competition-evidence-error" role="alert">{error}</p> : null}
 
       <section className={`competition-latest-city is-${room.cityLevel}`} aria-labelledby="competition-latest-city-title">
-        <div className="competition-section-heading"><p>LATEST CITY RESULT</p><h2 id="competition-latest-city-title">ผลเมืองและภาพเมืองล่าสุด</h2><span>สถานะสุดท้ายจากคำตอบในเกม แยกจากคะแนนแบบประเมิน PRE–POST</span></div>
+        <div className="competition-section-heading"><p>ผลเมืองล่าสุด (Latest City Result)</p><h2 id="competition-latest-city-title">ผลเมืองและภาพเมืองล่าสุด</h2><span>สถานะสุดท้ายจากคำตอบในเกม แยกจากคะแนนแบบประเมินก่อน–หลัง (PRE–POST)</span></div>
         <div className="competition-latest-city__layout">
           <div className="competition-latest-city__scene" aria-label={`ภาพเมืองล่าสุด สถานะ${formatCityLevel(room.cityLevel)}`}>
             <CityScene buildingLevels={buildingLevels} cityLevel={room.cityLevel} />
@@ -120,56 +120,56 @@ export const TeacherCompetitionEvidenceDashboard = ({
         <div className="competition-latest-city__buildings" aria-label="คะแนนและระดับอาคารล่าสุด">
           {BUILDINGS.map((building) => {
             const level = buildingLevels[building.id]
-            return <article key={building.id}><span>{building.icon}</span><div><strong>{building.label}</strong><small>{BUILDING_LEVEL_LABELS[level]}</small></div><p><b>{formatNumber(Math.round(buildingScores[building.id]))}</b><small>/ 1,000</small></p><em>Lv.{level > 0 ? '+' : ''}{level}</em></article>
+            return <article key={building.id}><span>{building.icon}</span><div><strong>{building.label}</strong><small>{BUILDING_LEVEL_LABELS[level]}</small></div><p><b>{formatNumber(Math.round(buildingScores[building.id]))}</b><small>/ 1,000</small></p><em>ระดับ {level > 0 ? '+' : ''}{level}</em></article>
           })}
         </div>
       </section>
 
       <section className="competition-evidence-flow" aria-labelledby="evidence-flow-title">
-        <div className="competition-section-heading"><p>WHAT WAS MEASURED?</p><h2 id="evidence-flow-title">เส้นทางหลักฐานตลอดกิจกรรม</h2><span>หลักฐานแต่ละแหล่งสนับสนุนกัน แต่แยกวิเคราะห์และไม่รวมเป็นคะแนนเดียว</span></div>
+        <div className="competition-section-heading"><p>สิ่งที่วัด (What Was Measured?)</p><h2 id="evidence-flow-title">เส้นทางหลักฐานตลอดกิจกรรม</h2><span>หลักฐานแต่ละแหล่งสนับสนุนกัน แต่แยกวิเคราะห์และไม่รวมเป็นคะแนนเดียว</span></div>
         <div className="competition-evidence-flow__steps">
-          <article><b>1</b><strong>PRE 10 ข้อ</strong><span>หลักฐานเชิงปริมาณก่อนกิจกรรม</span></article><i>→</i>
-          <article><b>2</b><strong>สถานการณ์ 10 + Crisis 2</strong><span>หลักฐานการตัดสินใจในสถานการณ์จำลอง</span></article><i>→</i>
-          <article><b>3</b><strong>POST 10 ข้อ</strong><span>หลักฐานเชิงปริมาณหลังจบกิจกรรม</span></article><i>→</i>
-          <article><b>4</b><strong>Reflection 3 ข้อ</strong><span>หลักฐานเชิงคุณภาพจากผู้เรียน</span></article><i>→</i>
-          <article><b>5</b><strong>Observation O1–O4</strong><span>หลักฐานการสังเกตจากครู</span></article>
+          <article><b>1</b><strong>ก่อนกิจกรรม (PRE) 10 ข้อ</strong><span>หลักฐานเชิงปริมาณก่อนกิจกรรม</span></article><i>→</i>
+          <article><b>2</b><strong>สถานการณ์ 10 + วิกฤต (Crisis) 2</strong><span>หลักฐานการตัดสินใจในสถานการณ์จำลอง</span></article><i>→</i>
+          <article><b>3</b><strong>หลังกิจกรรม (POST) 10 ข้อ</strong><span>หลักฐานเชิงปริมาณหลังจบกิจกรรม</span></article><i>→</i>
+          <article><b>4</b><strong>สะท้อนคิด (Reflection) 3 ข้อ</strong><span>หลักฐานเชิงคุณภาพจากผู้เรียน</span></article><i>→</i>
+          <article><b>5</b><strong>สังเกตโดยครู (Observation) O1–O4</strong><span>หลักฐานการสังเกตจากครู</span></article>
         </div>
       </section>
 
       <section className="competition-assessment" aria-labelledby="competition-assessment-title">
-        <div className="competition-section-heading"><p>QUANTITATIVE EVIDENCE</p><h2 id="competition-assessment-title">ผลการประเมิน PRE–POST</h2><span>เปรียบเทียบเฉพาะผู้เรียนที่มี PRE และ POST ครบทั้งสองช่วง</span></div>
+        <div className="competition-section-heading"><p>หลักฐานเชิงปริมาณ (Quantitative Evidence)</p><h2 id="competition-assessment-title">ผลการประเมินก่อน–หลัง (PRE–POST)</h2><span>เปรียบเทียบเฉพาะผู้เรียนที่มีแบบประเมินก่อนกิจกรรม (PRE) และหลังกิจกรรม (POST) ครบทั้งสองช่วง</span></div>
         <div className="competition-completeness-grid" aria-label="ความครบถ้วนของหลักฐาน">
           <article><span>ผู้เข้าร่วมทั้งหมด</span><strong>{formatNumber(assessment.participantCount)}</strong><small>คน</small></article>
-          <article><span>PRE ครบ</span><strong>{assessment.preCompleteCount} / {assessment.participantCount}</strong><small>{formatPercent(assessment.preCompletionPercent)}</small></article>
-          <article><span>POST ครบ</span><strong>{assessment.postCompleteCount} / {assessment.participantCount}</strong><small>{formatPercent(assessment.postCompletionPercent)}</small></article>
-          <article><span>จับคู่ PRE–POST</span><strong>{matched.matchedCount}</strong><small>คู่ข้อมูลสมบูรณ์</small></article>
-          <article><span>Reflection ครบ</span><strong>{assessment.reflectionCompleteCount} / {assessment.participantCount}</strong><small>{formatPercent(assessment.reflectionCompletionPercent)}</small></article>
-          <article><span>Teacher Observation</span><strong>{assessment.observation ? 'Recorded' : 'Not Recorded'}</strong><small>{assessment.observation ? 'บันทึกแล้ว' : 'ยังไม่มีข้อมูล'}</small></article>
+          <article><span>ก่อนกิจกรรม (PRE) ครบ</span><strong>{assessment.preCompleteCount} / {assessment.participantCount}</strong><small>{formatPercent(assessment.preCompletionPercent)}</small></article>
+          <article><span>หลังกิจกรรม (POST) ครบ</span><strong>{assessment.postCompleteCount} / {assessment.participantCount}</strong><small>{formatPercent(assessment.postCompletionPercent)}</small></article>
+          <article><span>จับคู่ก่อน–หลัง (PRE–POST)</span><strong>{matched.matchedCount}</strong><small>คู่ข้อมูลสมบูรณ์</small></article>
+          <article><span>แบบสะท้อนคิด (Reflection) ครบ</span><strong>{assessment.reflectionCompleteCount} / {assessment.participantCount}</strong><small>{formatPercent(assessment.reflectionCompletionPercent)}</small></article>
+          <article><span>แบบสังเกตของครู (Teacher Observation)</span><strong>{assessment.observation ? 'บันทึกแล้ว' : 'ยังไม่บันทึก'}</strong><small>{assessment.observation ? 'ข้อมูลครบถ้วน' : 'ยังไม่มีข้อมูล'}</small></article>
         </div>
 
-        {!hasMatchedEvidence && !loading ? <p className="competition-no-evidence">ยังไม่มีข้อมูลเพียงพอสำหรับเปรียบเทียบ PRE–POST</p> : null}
+        {!hasMatchedEvidence && !loading ? <p className="competition-no-evidence">ยังไม่มีข้อมูลเพียงพอสำหรับเปรียบเทียบก่อน–หลัง (PRE–POST)</p> : null}
         <div className="competition-primary-metrics">
-          <article><span>ค่าเฉลี่ย PRE [1–5]</span><strong>{hasMatchedEvidence ? formatFixed(matched.preMean) : '—'} <small>/ 5</small></strong></article>
-          <article><span>ค่าเฉลี่ย POST [1–5]</span><strong>{hasMatchedEvidence ? formatFixed(matched.postMean) : '—'} <small>/ 5</small></strong></article>
+          <article><span>ค่าเฉลี่ยก่อนกิจกรรม (PRE) [1–5]</span><strong>{hasMatchedEvidence ? formatFixed(matched.preMean) : '—'} <small>/ 5</small></strong></article>
+          <article><span>ค่าเฉลี่ยหลังกิจกรรม (POST) [1–5]</span><strong>{hasMatchedEvidence ? formatFixed(matched.postMean) : '—'} <small>/ 5</small></strong></article>
           <article className="is-gain"><span>คะแนนเฉลี่ยที่เพิ่มขึ้น [1–5]</span><strong>{hasMatchedEvidence ? formatSigned(matched.meanGainFivePoint) : '—'} <small>คะแนน</small></strong></article>
         </div>
         <div className="competition-change-grid">
-          <article className="is-improved"><span>Improved</span><strong>{hasMatchedEvidence ? matched.improvedCount : '—'}</strong><small>{hasMatchedEvidence ? `${formatPercent(matched.improvedPercent)} ของ matched N=${matched.matchedCount}` : 'ยังไม่มีข้อมูล'}</small></article>
-          <article><span>Unchanged</span><strong>{hasMatchedEvidence ? matched.unchangedCount : '—'}</strong><small>{hasMatchedEvidence ? `${formatPercent(matched.unchangedPercent)} ของ matched N=${matched.matchedCount}` : 'ยังไม่มีข้อมูล'}</small></article>
-          <article className="is-decreased"><span>Decreased</span><strong>{hasMatchedEvidence ? matched.decreasedCount : '—'}</strong><small>{hasMatchedEvidence ? `${formatPercent(matched.decreasedPercent)} ของ matched N=${matched.matchedCount}` : 'ยังไม่มีข้อมูล'}</small></article>
+          <article className="is-improved"><span>ดีขึ้น (Improved)</span><strong>{hasMatchedEvidence ? matched.improvedCount : '—'}</strong><small>{hasMatchedEvidence ? `${formatPercent(matched.improvedPercent)} ของผู้ที่จับคู่ได้ N=${matched.matchedCount}` : 'ยังไม่มีข้อมูล'}</small></article>
+          <article><span>คงเดิม (Unchanged)</span><strong>{hasMatchedEvidence ? matched.unchangedCount : '—'}</strong><small>{hasMatchedEvidence ? `${formatPercent(matched.unchangedPercent)} ของผู้ที่จับคู่ได้ N=${matched.matchedCount}` : 'ยังไม่มีข้อมูล'}</small></article>
+          <article className="is-decreased"><span>ลดลง (Decreased)</span><strong>{hasMatchedEvidence ? matched.decreasedCount : '—'}</strong><small>{hasMatchedEvidence ? `${formatPercent(matched.decreasedPercent)} ของผู้ที่จับคู่ได้ N=${matched.matchedCount}` : 'ยังไม่มีข้อมูล'}</small></article>
         </div>
         <p className="competition-interpretation">ผลการประเมินสะท้อนการเปลี่ยนแปลงระยะสั้นด้านความตระหนักและแนวโน้มการตัดสินใจหลังเข้าร่วมกิจกรรม</p>
 
         <details className="competition-calculation-trace">
           <summary>วิธีคำนวณผลการประเมิน</summary>
           <div>
-            <p>ผู้เข้าร่วม {assessment.participantCount} คน → PRE ครบ {assessment.preCompleteCount} คน → POST ครบ {assessment.postCompleteCount} คน → จับคู่ PRE–POST ได้ {matched.matchedCount} คน</p>
-            <p>แบบประเมิน PRE และ POST มีชุดละ 10 ข้อ ระดับ 1–5 ระบบจับคู่ข้อมูลก่อนและหลังของผู้เรียนคนเดียวกัน จากนั้นหาค่าเฉลี่ยจากคำตอบ 10 ข้อ และเปรียบเทียบค่าเฉลี่ยก่อน–หลัง</p>
+            <p>ผู้เข้าร่วม {assessment.participantCount} คน → ก่อนกิจกรรม (PRE) ครบ {assessment.preCompleteCount} คน → หลังกิจกรรม (POST) ครบ {assessment.postCompleteCount} คน → จับคู่ก่อน–หลัง (PRE–POST) ได้ {matched.matchedCount} คน</p>
+            <p>แบบประเมินก่อนกิจกรรม (PRE) และหลังกิจกรรม (POST) มีชุดละ 10 ข้อ ระดับ 1–5 ระบบจับคู่ข้อมูลก่อนและหลังของผู้เรียนคนเดียวกัน จากนั้นหาค่าเฉลี่ยจากคำตอบ 10 ข้อ และเปรียบเทียบค่าเฉลี่ยก่อน–หลัง</p>
             {hasMatchedEvidence ? <dl>
-              <div><dt>PRE เฉลี่ย</dt><dd>{formatFixed(matched.preMean)} / 5</dd></div>
-              <div><dt>POST เฉลี่ย</dt><dd>{formatFixed(matched.postMean)} / 5</dd></div>
+              <div><dt>ก่อนกิจกรรม (PRE) เฉลี่ย</dt><dd>{formatFixed(matched.preMean)} / 5</dd></div>
+              <div><dt>หลังกิจกรรม (POST) เฉลี่ย</dt><dd>{formatFixed(matched.postMean)} / 5</dd></div>
               <div><dt>คะแนนเฉลี่ยที่เพิ่มขึ้น</dt><dd>{formatFixed(matched.postMean)} − {formatFixed(matched.preMean)} = {formatSigned(matched.meanGainFivePoint)} คะแนน</dd></div>
-              <div><dt>Improved / Unchanged / Decreased</dt><dd>จำนวนแต่ละกลุ่ม / matched N={matched.matchedCount} × 100</dd></div>
+              <div><dt>ดีขึ้น / คงเดิม / ลดลง (Improved / Unchanged / Decreased)</dt><dd>จำนวนแต่ละกลุ่ม / ผู้ที่จับคู่ได้ N={matched.matchedCount} × 100</dd></div>
             </dl> : <p>ยังไม่มีข้อมูลเพียงพอ จึงไม่คำนวณค่าเฉลี่ยหรือหารด้วยศูนย์</p>}
           </div>
         </details>
@@ -177,7 +177,7 @@ export const TeacherCompetitionEvidenceDashboard = ({
 
       <div className="competition-evidence-columns">
         <section className="competition-observation" aria-labelledby="competition-observation-title">
-          <div className="competition-section-heading"><p>TEACHER EVIDENCE</p><h2 id="competition-observation-title">Teacher Observation O1–O4</h2><span>แบบสังเกตพฤติกรรมชั้นเรียน แยกจากคะแนน PRE–POST</span></div>
+          <div className="competition-section-heading"><p>หลักฐานจากครู (Teacher Evidence)</p><h2 id="competition-observation-title">แบบสังเกตของครู (Teacher Observation) O1–O4</h2><span>แบบสังเกตพฤติกรรมชั้นเรียน แยกจากคะแนนก่อน–หลัง (PRE–POST)</span></div>
           {assessment.observation ? <>
             <div className="competition-observation-grid">
               {OBSERVATION_DIMENSIONS.map((dimension) => {
@@ -186,34 +186,34 @@ export const TeacherCompetitionEvidenceDashboard = ({
                 return <article key={dimension.id}><span>{dimension.code}</span><div><strong>{dimension.title}</strong><small>{label}</small></div><b>{score} / 4</b></article>
               })}
             </div>
-            <p className="competition-observation-average">ค่าเฉลี่ย Observation <strong>{formatFixed(assessment.observationMean!)} / 4</strong></p>
+            <p className="competition-observation-average">ค่าเฉลี่ยการสังเกต (Observation) <strong>{formatFixed(assessment.observationMean!)} / 4</strong></p>
             {assessment.observation.notes ? <div className="competition-teacher-notes"><strong>บันทึกเพิ่มเติมของครู</strong><p>{assessment.observation.notes}</p></div> : null}
           </> : <p className="competition-no-evidence">ยังไม่มีหลักฐานการสังเกตของครู</p>}
         </section>
 
         <section className="competition-reflection" aria-labelledby="competition-reflection-title">
-          <div className="competition-section-heading"><p>QUALITATIVE EVIDENCE</p><h2 id="competition-reflection-title">Reflection ของผู้เรียน</h2><span>หลักฐานเชิงคุณภาพ ไม่ให้คะแนนและไม่สรุปข้อความอัตโนมัติ</span></div>
+          <div className="competition-section-heading"><p>หลักฐานเชิงคุณภาพ (Qualitative Evidence)</p><h2 id="competition-reflection-title">การสะท้อนคิดของผู้เรียน (Reflection)</h2><span>หลักฐานเชิงคุณภาพ ไม่ให้คะแนนและไม่สรุปข้อความอัตโนมัติ</span></div>
           <div className="competition-reflection-total"><strong>{assessment.reflectionCompleteCount} / {assessment.participantCount}</strong><span>ส่งครบ • {formatPercent(assessment.reflectionCompletionPercent)}</span></div>
           <ol>{REFLECTION_PROMPTS.map((prompt, index) => <li key={prompt}><span>R{index + 1}</span>{prompt}</li>)}</ol>
-          <p>แดชบอร์ดไม่แสดงคำตอบต้นฉบับรายบุคคล ข้อความ Reflection ยังคงเป็นหลักฐานส่วนตัวสำหรับครู</p>
+          <p>แดชบอร์ดไม่แสดงคำตอบต้นฉบับรายบุคคล ข้อความสะท้อนคิด (Reflection) ยังคงเป็นหลักฐานส่วนตัวสำหรับครู</p>
         </section>
       </div>
 
       <section className="competition-simulation" aria-labelledby="competition-simulation-title">
-        <div className="competition-section-heading"><p>SIMULATION / IMPLEMENTATION EVIDENCE</p><h2 id="competition-simulation-title">หลักฐานการตัดสินใจระหว่างสถานการณ์จำลอง</h2><span>สถานการณ์หลัก 10 ข้อ + Crisis 2 เหตุการณ์ต่อหนึ่งรอบเกมที่จบ</span></div>
+        <div className="competition-section-heading"><p>หลักฐานจากสถานการณ์จำลอง (Simulation Evidence)</p><h2 id="competition-simulation-title">หลักฐานการตัดสินใจระหว่างสถานการณ์จำลอง</h2><span>สถานการณ์หลัก 10 ข้อ + วิกฤต (Crisis) 2 เหตุการณ์ต่อหนึ่งรอบเกมที่จบ</span></div>
         <div className="competition-simulation-grid">
           <article><span>สถานการณ์หลักที่จบ</span><strong>{simulation.normalScenariosCompleted}</strong></article>
-          <article><span>Crisis ที่จบ</span><strong>{simulation.crisisScenariosCompleted}</strong></article>
+          <article><span>เหตุการณ์วิกฤต (Crisis) ที่จบ</span><strong>{simulation.crisisScenariosCompleted}</strong></article>
           <article><span>ผู้เข้าร่วม</span><strong>{room.lockedPlayerCount}</strong></article>
-          <article className="is-integrity"><span>Integrity</span><strong>{formatNumber(room.integrityTotal)}</strong></article>
-          <article className="is-corruption"><span>Corruption</span><strong>{formatNumber(room.corruptionTotal)}</strong></article>
-          <article><span>Timeout</span><strong>{formatNumber(room.timeoutTotal)}</strong></article>
+          <article className="is-integrity"><span>สุจริต (Integrity)</span><strong>{formatNumber(room.integrityTotal)}</strong></article>
+          <article className="is-corruption"><span>ทุจริต (Corruption)</span><strong>{formatNumber(room.corruptionTotal)}</strong></article>
+          <article><span>ไม่ตอบทันเวลา (Timeout)</span><strong>{formatNumber(room.timeoutTotal)}</strong></article>
         </div>
         <div className={`competition-reconciliation ${simulation.reconciles === true ? 'is-match' : simulation.reconciles === false ? 'is-mismatch' : ''}`}>
           <strong>ตรวจสอบจำนวนโอกาสตัดสินใจ</strong>
           {simulation.expectedDecisionOpportunities === null ? <p>ยังไม่มีรอบเกมที่จบเพียงพอสำหรับคำนวณจำนวนที่คาด</p> : <p>คาด {formatNumber(simulation.expectedDecisionOpportunities)} = ผู้เข้าร่วม {room.lockedPlayerCount} × 12 × {room.completedGameCount} รอบ • ระบบบันทึกจริง {formatNumber(simulation.actualDecisionOutcomes)} {simulation.reconciles ? '✓ ตรงกัน' : '⚠ ไม่ตรงกัน โปรดตรวจสอบข้อมูลห้องและความหมายของรอบที่บันทึก'}</p>}
         </div>
-        <div className="competition-building-grid">{BUILDINGS.map((building) => { const level = buildingLevels[building.id]; return <article key={building.id}><span>{building.icon}</span><div><strong>{building.label}</strong><small>{BUILDING_LEVEL_LABELS[level]}</small></div><b>Lv.{level > 0 ? '+' : ''}{level}</b></article> })}</div>
+        <div className="competition-building-grid">{BUILDINGS.map((building) => { const level = buildingLevels[building.id]; return <article key={building.id}><span>{building.icon}</span><div><strong>{building.label}</strong><small>{BUILDING_LEVEL_LABELS[level]}</small></div><b>ระดับ {level > 0 ? '+' : ''}{level}</b></article> })}</div>
         <p className="competition-separation-note">ข้อมูลส่วนนี้เป็นผลจากกลไกสถานการณ์จำลอง ใช้เป็นหลักฐานการเข้าร่วมและการตัดสินใจระหว่างกิจกรรม ไม่ใช้แทนคะแนนประเมินก่อน–หลัง และไม่ใช้สรุประดับคุณธรรมหรือความซื่อสัตย์รายบุคคล</p>
       </section>
 

@@ -56,9 +56,9 @@ describe('FinishedLearningEvidenceSection', () => {
     expect(markup).toContain('2.88')
     expect(markup).toContain('3.38')
     expect(markup).toContain('+0.50')
-    expect(markup).toContain('74.1% ของ matched N=27')
-    expect(markup).toContain('14.8% ของ matched N=27')
-    expect(markup).toContain('11.1% ของ matched N=27')
+    expect(markup).toContain('74.1% ของผู้ที่จับคู่ได้ N=27')
+    expect(markup).toContain('14.8% ของผู้ที่จับคู่ได้ N=27')
+    expect(markup).toContain('11.1% ของผู้ที่จับคู่ได้ N=27')
     expect(markup).not.toMatch(/\/\s*50|10[–-]50|คะแนนรวมเฉลี่ย/)
   })
 
@@ -100,7 +100,7 @@ describe('FinishedLearningEvidenceSection', () => {
     const markup = renderToStaticMarkup(<FinishedLearningEvidenceSection evidence={evidence} room={room} />)
     expect(markup).toContain('32 × 12 × 1 = <strong>384</strong>')
     expect(markup).toContain('202 + 182 + 0 = <strong>384</strong> ✓ ตรงกัน')
-    expect(markup).toContain('ข้อมูลเกมแยกจากคะแนนประเมิน PRE–POST')
+    expect(markup).toContain('ข้อมูลเกมแยกจากคะแนนประเมินก่อน–หลัง (PRE–POST)')
   })
 
   it('renders no identity, raw-response, ownership, or private-note fields', () => {
