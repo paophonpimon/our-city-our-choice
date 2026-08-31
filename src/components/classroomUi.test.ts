@@ -486,6 +486,9 @@ describe('classroom UI contracts', () => {
     expect(cityStage).toContain("score > 0 ? '😊' : score < 0 ? '😟' : '😐'")
     expect(cityStage).toContain('ผลกระทบอาคารสะสม')
     expect(cityStage).toContain('รวมรอบที่ผ่านมาและรอบปัจจุบัน')
+    expect(cityStage).toContain('className="city-stage__impact-network"')
+    expect(cityStage).toContain('className="city-stage__impact-trunk"')
+    expect(cityStage).toContain('className="city-stage__impact-branch"')
     expect(cityStage).not.toContain('ผลกระทบอาคารล่าสุด')
   })
 

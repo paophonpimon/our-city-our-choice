@@ -3881,8 +3881,30 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 }
 .city-stage__building-activity h2 { margin: 0; color: #fff; font-size: clamp(.8rem, 1vw, 1.05rem); font-weight: 1000; text-shadow: 0 1px .4rem rgb(0 0 0 / 48%); }
 .city-stage__building-activity > p { margin: .08rem 0 .5rem; color: rgb(225 241 250 / 76%); font-size: clamp(.53rem, .64vw, .68rem); }
-.city-stage__building-activity > div { display: grid; gap: clamp(.25rem, .55vh, .42rem); }
+.city-stage__building-activity > .city-stage__impact-network {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  align-content: stretch;
+  gap: clamp(.25rem, .55vh, .42rem);
+  padding-left: 1.35rem;
+}
+.city-stage__impact-trunk {
+  position: absolute;
+  z-index: 0;
+  top: .7rem;
+  bottom: .7rem;
+  left: .34rem;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgb(146 213 245 / 30%), rgb(119 197 235 / 82%) 18%, rgb(119 197 235 / 82%) 82%, rgb(146 213 245 / 30%));
+  box-shadow: 0 0 .45rem rgb(99 191 235 / 28%);
+  pointer-events: none;
+}
 .city-stage__building-activity article {
+  --impact-network-color: #d7b14e;
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
@@ -3890,27 +3912,66 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   min-height: clamp(2rem, 4.1vh, 2.75rem);
   padding: .28rem .42rem;
   border: 1px solid rgb(255 255 255 / 15%);
+  border-left: 3px solid var(--impact-network-color);
   border-radius: .7rem;
   background: rgb(255 255 255 / 10%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 8%);
+  box-shadow: inset 0 1px rgb(255 255 255 / 8%), 0 .18rem .45rem rgb(0 16 28 / 10%);
 }
-.city-stage__building-icon { display: grid; width: 1.45rem; place-items: center; font-size: clamp(.8rem, 1vw, 1.05rem); }
+.city-stage__impact-branch {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 1.02rem;
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--impact-network-color), color-mix(in srgb, var(--impact-network-color) 68%, white));
+  box-shadow: 0 0 .35rem color-mix(in srgb, var(--impact-network-color) 32%, transparent);
+  pointer-events: none;
+}
+.city-stage__impact-branch::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: .48rem;
+  height: .48rem;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgb(255 255 255 / 84%);
+  border-radius: 50%;
+  background: var(--impact-network-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--impact-network-color) 18%, transparent), 0 0 .45rem color-mix(in srgb, var(--impact-network-color) 38%, transparent);
+  content: '';
+}
+.city-stage__building-icon {
+  display: grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--impact-network-color) 30%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--impact-network-color) 10%, rgb(255 255 255 / 10%));
+  font-size: clamp(.8rem, 1vw, 1.05rem);
+}
 .city-stage__building-activity article > strong { overflow: hidden; color: #f5fbff; font-size: clamp(.58rem, .72vw, .75rem); font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
 .city-stage__building-activity output { min-width: 2.8rem; font-size: clamp(.72rem, .92vw, .98rem); font-weight: 1000; text-align: right; text-shadow: 0 .12rem .22rem rgb(0 0 0 / 58%); }
 .city-stage__building-mood { font-size: clamp(.72rem, .9vw, .95rem); }
-.city-stage__building-activity article.is-positive { border-color: rgb(86 237 163 / 33%); background: linear-gradient(90deg, rgb(31 129 86 / 18%), rgb(255 255 255 / 8%)); }
+.city-stage__building-activity article.is-positive { --impact-network-color: #43d58c; border-color: rgb(86 237 163 / 33%); border-left-color: var(--impact-network-color); background: linear-gradient(90deg, rgb(31 129 86 / 18%), rgb(255 255 255 / 8%)); }
 .city-stage__building-activity article.is-positive output { color: #74f5b5; }
-.city-stage__building-activity article.is-negative { border-color: rgb(255 115 105 / 34%); background: linear-gradient(90deg, rgb(157 43 41 / 20%), rgb(255 255 255 / 8%)); }
+.city-stage__building-activity article.is-negative { --impact-network-color: #ef665d; border-color: rgb(255 115 105 / 34%); border-left-color: var(--impact-network-color); background: linear-gradient(90deg, rgb(157 43 41 / 20%), rgb(255 255 255 / 8%)); }
 .city-stage__building-activity article.is-negative output { color: #ff8b80; }
+.city-stage__building-activity article.is-neutral { --impact-network-color: #d7b14e; border-left-color: var(--impact-network-color); background: linear-gradient(90deg, rgb(160 125 43 / 14%), rgb(255 255 255 / 8%)); }
 .city-stage__building-activity article.is-neutral output { color: #dce8ef; }
 
 @media (min-width: 768px) and (max-width: 1366px) and (orientation: landscape) {
   .city-stage__building-activity { left: .45rem; width: clamp(9.4rem, 17vw, 12rem); max-height: calc(100% - 4.8rem); padding: .5rem; border-radius: .85rem; }
   .city-stage__building-activity h2 { font-size: .68rem; }
   .city-stage__building-activity > p { margin-bottom: .3rem; font-size: .48rem; }
-  .city-stage__building-activity > div { gap: .18rem; }
+  .city-stage__building-activity > .city-stage__impact-network { gap: .18rem; padding-left: 1rem; }
+  .city-stage__impact-trunk { top: .5rem; bottom: .5rem; left: .25rem; }
   .city-stage__building-activity article { min-height: clamp(1.65rem, 4.2vh, 2.1rem); grid-template-columns: auto minmax(0, 1fr) auto auto; gap: .2rem; padding: .18rem .28rem; border-radius: .5rem; }
-  .city-stage__building-icon { width: 1rem; font-size: .7rem; }
+  .city-stage__impact-branch { width: .75rem; }
+  .city-stage__impact-branch::before { width: .36rem; height: .36rem; border-width: 1px; }
+  .city-stage__building-icon { width: 1.15rem; height: 1.15rem; font-size: .7rem; }
   .city-stage__building-activity article > strong { font-size: .5rem; }
   .city-stage__building-activity output { min-width: 2rem; font-size: .63rem; }
   .city-stage__building-mood { font-size: .62rem; }
@@ -3918,7 +3979,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 @media (max-width: 767px), (orientation: portrait) {
   .city-stage__building-activity { top: auto; right: .5rem; bottom: .5rem; left: .5rem; width: auto; max-height: 55%; transform: none; }
-  .city-stage__building-activity > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .city-stage__building-activity > .city-stage__impact-network { grid-template-columns: 1fr; }
 }
 
 /* Pannable city view and the final right-column information layout. */
@@ -3977,7 +4038,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 }
 .city-stage__side-panel .city-stage__building-activity h2 { color: #245486; font-size: clamp(.78rem, 1vw, 1.05rem); text-shadow: none; }
 .city-stage__side-panel .city-stage__building-activity > p { margin: .05rem 0 .45rem; color: #6a8095; }
-.city-stage__side-panel .city-stage__building-activity > div { min-height: 0; align-content: stretch; gap: clamp(.25rem, .65vh, .48rem); }
+.city-stage__side-panel .city-stage__building-activity > .city-stage__impact-network { min-height: 0; align-content: stretch; gap: clamp(.25rem, .65vh, .48rem); }
 .city-stage__side-panel .city-stage__building-activity article {
   min-height: 0;
   border-color: rgb(79 131 170 / 17%);
@@ -3985,11 +4046,13 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   box-shadow: inset 0 1px rgb(255 255 255 / 80%);
 }
 .city-stage__side-panel .city-stage__building-activity article > strong { color: #294763; }
-.city-stage__side-panel .city-stage__building-activity article.is-positive { border-color: rgb(43 169 103 / 26%); background: rgb(222 248 233 / 64%); }
+.city-stage__side-panel .city-stage__building-activity article.is-positive { border-color: rgb(43 169 103 / 26%); border-left-color: var(--impact-network-color); background: linear-gradient(90deg, rgb(217 247 230 / 88%), rgb(255 255 255 / 58%)); }
 .city-stage__side-panel .city-stage__building-activity article.is-positive output { color: #159153; text-shadow: none; }
-.city-stage__side-panel .city-stage__building-activity article.is-negative { border-color: rgb(221 80 72 / 25%); background: rgb(255 229 226 / 68%); }
+.city-stage__side-panel .city-stage__building-activity article.is-negative { border-color: rgb(221 80 72 / 25%); border-left-color: var(--impact-network-color); background: linear-gradient(90deg, rgb(255 225 222 / 88%), rgb(255 255 255 / 58%)); }
 .city-stage__side-panel .city-stage__building-activity article.is-negative output { color: #d84039; text-shadow: none; }
-.city-stage__side-panel .city-stage__building-activity article.is-neutral output { color: #677c90; text-shadow: none; }
+.city-stage__side-panel .city-stage__building-activity article.is-neutral { border-color: rgb(185 146 52 / 25%); border-left-color: var(--impact-network-color); background: linear-gradient(90deg, rgb(250 241 210 / 82%), rgb(255 255 255 / 58%)); }
+.city-stage__side-panel .city-stage__building-activity article.is-neutral output { color: #8a6a19; text-shadow: none; }
+.city-stage__side-panel .city-stage__building-icon { background: color-mix(in srgb, var(--impact-network-color) 9%, white); }
 
 .city-stage__vote-overlay {
   position: absolute;
@@ -4021,7 +4084,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .city-stage__side-panel .city-stage__building-activity { width: auto; max-height: none; padding: .48rem; }
   .city-stage__side-panel .city-stage__building-activity h2 { font-size: .68rem; }
   .city-stage__side-panel .city-stage__building-activity > p { margin-bottom: .25rem; font-size: .48rem; }
-  .city-stage__side-panel .city-stage__building-activity > div { gap: .16rem; }
+  .city-stage__side-panel .city-stage__building-activity > .city-stage__impact-network { gap: .16rem; padding-left: .9rem; }
+  .city-stage__side-panel .city-stage__impact-trunk { left: .2rem; }
+  .city-stage__side-panel .city-stage__impact-branch { width: .7rem; }
   .city-stage__side-panel .city-stage__building-activity article { min-height: 0; padding: .16rem .25rem; }
   .city-stage__vote-overlay { bottom: .45rem; left: .45rem; width: min(52%, 22rem); padding: .4rem .5rem; border-radius: .7rem; }
   .city-stage__vote-overlay h2 { margin-bottom: .22rem; font-size: .58rem; }

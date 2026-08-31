@@ -1203,12 +1203,14 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
         <section className="city-stage__right-card city-stage__building-activity" aria-label="ผลกระทบสะสมของแต่ละอาคาร">
           <h2>ผลกระทบอาคารสะสม</h2>
           <p>รวมรอบที่ผ่านมาและรอบปัจจุบัน</p>
-          <div>
+          <div className="city-stage__impact-network">
+            <span className="city-stage__impact-trunk" aria-hidden="true" />
             {BUILDING_IMPACT_ITEMS.map((building) => {
               const score = cumulativeBuildingImpacts[building.id]
               const tone = score > 0 ? 'is-positive' : score < 0 ? 'is-negative' : 'is-neutral'
               return (
                 <article className={tone} key={building.id}>
+                  <span className="city-stage__impact-branch" aria-hidden="true" />
                   <span className="city-stage__building-icon" aria-hidden="true">{building.icon}</span>
                   <strong>{building.label}</strong>
                   <output>{signed(score)}</output>
