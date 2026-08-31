@@ -10,6 +10,7 @@ import {
   createAnswerKey,
   createBalancedRoleOffsets,
   createRoleRotation,
+  formatCityLevel,
   formatQuestionProgressLabel,
   getRoleForCycle,
   isGameCycle,
@@ -19,6 +20,11 @@ import {
 } from './ourCity'
 
 describe('Our City roles', () => {
+  it('uses a Thai city-level prefix in user-facing labels', () => {
+    expect(formatCityLevel('critical')).toBe('ระดับ -2 แย่มาก')
+    expect(formatCityLevel('prosperous')).toBe('ระดับ +2 พัฒนา')
+  })
+
   it('defines exactly 8 unique confirmed role IDs', () => {
     expect(ROLE_IDS).toHaveLength(8)
     expect(new Set(ROLE_IDS).size).toBe(8)

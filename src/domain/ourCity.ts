@@ -96,7 +96,7 @@ export const CITY_LEVEL_LABELS = {
 } as const satisfies Record<CityLevel, string>
 
 export const formatCityLevel = (level: CityLevel): string =>
-  `Lv.${CITY_LEVEL_VALUES[level]} ${CITY_LEVEL_LABELS[level]}`
+  `ระดับ ${CITY_LEVEL_VALUES[level] > 0 ? '+' : ''}${CITY_LEVEL_VALUES[level]} ${CITY_LEVEL_LABELS[level]}`
 
 export const GAME_STATUSES = ['lobby', 'role-draw', 'playing', 'round-result', 'game-result', 'finished'] as const
 

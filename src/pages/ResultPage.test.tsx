@@ -47,4 +47,9 @@ describe('ResultPage finished learning evidence publication lifecycle', () => {
     expect(publicBranch).toContain('public-result-summary-city-title">ภาพเมืองล่าสุด')
     expect(publicBranch).toContain('<CityScene buildingLevels={publicBuildingLevels} cityLevel={room.cityLevel} />')
   })
+
+  it('labels building levels in Thai instead of an unexplained English abbreviation', () => {
+    expect(resultPage).not.toContain('Lv.')
+    expect(resultPage).toContain("<strong>ระดับ {level > 0 ? '+' : ''}{level}</strong>")
+  })
 })
