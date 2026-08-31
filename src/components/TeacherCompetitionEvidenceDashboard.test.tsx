@@ -20,6 +20,7 @@ const room: ClassroomRoom = {
   cityScore: 640,
   cityLevel: 'improving',
   buildingLevels: { school: 1, construction: -1, market: 2, hospital: 0, police: 1, municipality: -2, newsAgency: 2 },
+  buildingScores: { school: 720, construction: 320, market: 920, hospital: 540, police: 760, municipality: 80, newsAgency: 880 },
   integrityTotal: 20,
   corruptionTotal: 10,
   timeoutTotal: 6,
@@ -55,6 +56,23 @@ const records: ClassroomAssessmentRecord[] = [
 ]
 
 describe('TeacherCompetitionEvidenceDashboard', () => {
+  it('shows the latest city scene with city score plus every building score and level before assessment evidence', () => {
+    const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
+    const latestCityIndex = markup.indexOf('ผลเมืองและภาพเมืองล่าสุด')
+    const assessmentIndex = markup.indexOf('ผลการประเมิน PRE–POST')
+
+    expect(latestCityIndex).toBeGreaterThan(-1)
+    expect(latestCityIndex).toBeLessThan(assessmentIndex)
+    expect(markup).toContain('คะแนนเมืองล่าสุด')
+    expect(markup).toContain('640')
+    expect(markup).toContain('data-city-level="improving"')
+    expect(markup).toContain('คะแนนและระดับอาคารล่าสุด')
+    expect(markup).toContain('720')
+    expect(markup).toContain('Lv.+1')
+    expect(markup).toContain('80')
+    expect(markup).toContain('Lv.-2')
+  })
+
   it('renders complete matched evidence, five-point gain, all change groups, and calculation trace', () => {
     const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
     expect(markup).toContain('ผลการประเมิน PRE–POST')

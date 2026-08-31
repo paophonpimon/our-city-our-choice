@@ -3,13 +3,19 @@ import {
   OBSERVATION_SCALE,
   REFLECTION_PROMPTS,
 } from '../domain/assessment'
-import { normalizeBuildingLevels, type BuildingId, type BuildingLevel } from '../domain/cityBuildings'
+import {
+  normalizeBuildingLevels,
+  normalizeBuildingScores,
+  type BuildingId,
+  type BuildingLevel,
+} from '../domain/cityBuildings'
 import {
   calculateCompetitionAssessmentEvidence,
   calculateCompetitionSimulationEvidence,
 } from '../domain/competitionEvidence'
 import { formatCityLevel } from '../domain/ourCity'
 import type { ClassroomAssessmentRecord, ClassroomRoom } from '../types/classroomGame'
+import { CityScene } from './CityScene'
 
 interface TeacherCompetitionEvidenceDashboardProps {
   room: ClassroomRoom
@@ -94,6 +100,7 @@ export const TeacherCompetitionEvidenceDashboard = ({
     room.timeoutTotal,
   )
   const buildingLevels = normalizeBuildingLevels(room.buildingLevels)
+  const buildingScores = normalizeBuildingScores(room.buildingScores, room.buildingLevels)
   const { matched } = assessment
   const hasMatchedEvidence = matched.matchedCount > 0
 
@@ -120,6 +127,30 @@ export const TeacherCompetitionEvidenceDashboard = ({
 
       {loading ? <p className="competition-evidence-state">กำลังโหลดหลักฐานการประเมิน…</p> : null}
       {error ? <p className="competition-evidence-error" role="alert">{error}</p> : null}
+
+      <section className={`competition-latest-city is-${room.cityLevel}`} aria-labelledby="competition-latest-city-title">
+        <div className="competition-section-heading"><p>LATEST CITY RESULT</p><h2 id="competition-latest-city-title">ผลเมืองและภาพเมืองล่าสุด</h2><span>สถานะสุดท้ายจากคำตอบในเกม แยกจากคะแนนแบบประเมิน PRE–POST</span></div>
+        <div className="competition-latest-city__layout">
+          <div className="competition-latest-city__scene" aria-label={`ภาพเมืองล่าสุด สถานะ${formatCityLevel(room.cityLevel)}`}>
+            <CityScene buildingLevels={buildingLevels} cityLevel={room.cityLevel} />
+          </div>
+          <aside className="competition-latest-city__summary">
+            <div className="competition-latest-city__score"><span>คะแนนเมืองล่าสุด</span><strong>{formatNumber(Math.round(room.cityScore))}</strong><small>/ 1,000 คะแนน</small></div>
+            <dl>
+              <div><dt>สถานะเมือง</dt><dd>{formatCityLevel(room.cityLevel)}</dd></div>
+              <div><dt>การตัดสินใจทั้งหมด</dt><dd>{formatNumber(simulation.actualDecisionOutcomes)} ครั้ง</dd></div>
+              <div><dt>ผู้เข้าร่วม</dt><dd>{formatNumber(room.lockedPlayerCount)} คน</dd></div>
+              <div><dt>รอบเกมที่จบ</dt><dd>{formatNumber(room.completedGameCount)} รอบ</dd></div>
+            </dl>
+          </aside>
+        </div>
+        <div className="competition-latest-city__buildings" aria-label="คะแนนและระดับอาคารล่าสุด">
+          {BUILDINGS.map((building) => {
+            const level = buildingLevels[building.id]
+            return <article key={building.id}><span>{building.icon}</span><div><strong>{building.label}</strong><small>{BUILDING_LEVEL_LABELS[level]}</small></div><p><b>{formatNumber(Math.round(buildingScores[building.id]))}</b><small>/ 1,000</small></p><em>Lv.{level > 0 ? '+' : ''}{level}</em></article>
+          })}
+        </div>
+      </section>
 
       <section className="competition-evidence-flow" aria-labelledby="evidence-flow-title">
         <div className="competition-section-heading"><p>WHAT WAS MEASURED?</p><h2 id="evidence-flow-title">เส้นทางหลักฐานตลอดกิจกรรม</h2><span>หลักฐานแต่ละแหล่งสนับสนุนกัน แต่แยกวิเคราะห์และไม่รวมเป็นคะแนนเดียว</span></div>

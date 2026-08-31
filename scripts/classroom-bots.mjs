@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { deleteApp, initializeApp } from 'firebase/app'
 import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth'
 import {
@@ -33,6 +34,8 @@ const maxQuestion = Number(argumentValue('--max-question', 10))
 const earlyCorruptThrough = Number(argumentValue('--early-corrupt-through', 0))
 const lateCorruptFrom = Number(argumentValue('--late-corrupt-from', 0))
 const cycleFlip = process.argv.includes('--cycle-flip')
+const buildingSpreadWorstCity = process.argv.includes('--building-spread-worst-city')
+const envFile = String(argumentValue('--env-file', '.env.local')).trim()
 const target = String(argumentValue('--target', 'firebase')).trim().toLowerCase()
 const useEmulator = target === 'emulator'
 
@@ -58,8 +61,48 @@ if (!Number.isInteger(earlyCorruptThrough) || earlyCorruptThrough < 0 || earlyCo
 if (!Number.isInteger(lateCorruptFrom) || lateCorruptFrom < 0 || lateCorruptFrom > 10) {
   throw new Error('--late-corrupt-from ต้องเป็นจำนวนเต็มระหว่าง 0-10')
 }
-if ([earlyCorruptThrough > 0, lateCorruptFrom > 0, cycleFlip].filter(Boolean).length > 1) {
+if ([earlyCorruptThrough > 0, lateCorruptFrom > 0, cycleFlip, buildingSpreadWorstCity].filter(Boolean).length > 1) {
   throw new Error('เลือกใช้โปรไฟล์คำตอบได้ครั้งละหนึ่งแบบเท่านั้น')
+}
+if (!envFile) throw new Error('--env-file ต้องไม่เป็นค่าว่าง')
+
+const BUILDING_LEVEL_BY_ROLE = Object.freeze({
+  doctor: -2,
+  municipal: -2,
+  police: -1,
+  teacher: -2,
+  merchant: 1,
+  contractor: 0,
+  student: -2,
+  journalist: 2,
+})
+
+const NORMAL_INTEGRITY_COUNT_BY_LEVEL = Object.freeze({
+  '-2': 0,
+  '-1': 8,
+  0: 7,
+  1: 9,
+  2: 10,
+})
+
+const shouldChooseIntegrityForSpreadQuestion = (roleId, questionNumber, clientIndex, gameCycle) => {
+  if (gameCycle !== 0) return clientIndex < Math.round(botCount * integrityRate)
+  const level = BUILDING_LEVEL_BY_ROLE[roleId]
+  const integrityCount = NORMAL_INTEGRITY_COUNT_BY_LEVEL[String(level)]
+  if (!Number.isInteger(integrityCount)) throw new Error(`ไม่มีเป้าหมายระดับอาคารสำหรับอาชีพ ${roleId}`)
+  // Each player gets the exact cumulative outcome count needed by the target
+  // building level, but the corrupt questions rotate by player so a live
+  // classroom sees mixed choices instead of one robotic block.
+  return ((questionNumber - 1 + clientIndex) % 10) < integrityCount
+}
+
+const shouldChooseIntegrityForSpreadCrisis = (roleId, eventIndex, clientIndex, gameCycle) => {
+  if (gameCycle !== 0) return clientIndex < Math.round(botCount * integrityRate)
+  const level = BUILDING_LEVEL_BY_ROLE[roleId]
+  if (level === -2 || level === -1) return false
+  // Lv.0/+1/+2 each need one integrity and one corruption crisis. Alternate
+  // which crisis is positive per player to keep both events visibly mixed.
+  return eventIndex === (clientIndex % 2) + 1
 }
 
 const integrityRateForQuestion = (questionNumber, gameCycle) =>
@@ -128,7 +171,7 @@ const loadIntegrityChoiceIds = async () => {
   }))
 }
 
-const envText = await readFile(new URL('../.env.local', import.meta.url), 'utf8')
+const envText = await readFile(resolve(process.cwd(), envFile), 'utf8')
 const env = Object.fromEntries(
   envText
     .split(/\r?\n/)
@@ -173,6 +216,8 @@ const submittedRounds = new Set()
 const submittedCrisisEvents = new Set()
 const integrityChoiceIds = await loadIntegrityChoiceIds()
 let answerInProgress = null
+let preAssessmentInProgress = false
+let preAssessmentSubmitted = false
 let stopRoomSubscription = () => undefined
 let shuttingDown = false
 let keepAliveTimer = null
@@ -202,7 +247,17 @@ const joinClient = async (client) => {
 
   const playerReference = doc(client.db, 'rooms', roomId, 'players', client.playerId)
   const existing = await getDoc(playerReference)
-  if (existing.exists()) throw new Error(`ชื่อ ${client.nickname} ถูกใช้แล้วในห้อง`)
+  if (existing.exists()) {
+    if (existing.data().nicknameKey !== client.nicknameKey) throw new Error(`ชื่อ ${client.nickname} ถูกใช้แล้วในห้อง`)
+    // Anonymous sessions are intentionally recoverable. Reclaim only this
+    // deterministic bot player so a restarted runner can continue PRE and
+    // gameplay without adding duplicate roster entries.
+    await setDoc(playerReference, {
+      ownerUid: client.uid,
+      lastSeenAt: serverTimestamp(),
+    }, { merge: true })
+    return
+  }
 
   await setDoc(playerReference, {
     playerId: client.playerId,
@@ -217,6 +272,39 @@ const joinClient = async (client) => {
     joinedAt: serverTimestamp(),
     lastSeenAt: serverTimestamp(),
   })
+}
+
+const submitPreAssessments = async () => {
+  if (preAssessmentSubmitted || preAssessmentInProgress) return
+  preAssessmentInProgress = true
+  try {
+    const results = await Promise.all(clients.map((client) => {
+      const responses = Array.from({ length: 10 }, (_, questionIndex) =>
+        1 + ((client.index + questionIndex * 2) % 5))
+      return setDoc(doc(client.db, 'rooms', roomId, 'assessments', `pre::${client.playerId}`), {
+        schemaVersion: 1,
+        recordType: 'pre',
+        roomId,
+        playerId: client.playerId,
+        ownerUid: client.uid,
+        responses,
+        submittedAt: serverTimestamp(),
+      }).then(
+        () => ({ status: 'fulfilled' }),
+        (reason) => ({ status: 'rejected', reason }),
+      )
+    }))
+    const failures = results.filter((result) => result.status === 'rejected')
+    if (failures.length > 0) {
+      const firstError = failures[0].reason instanceof Error ? failures[0].reason.message : String(failures[0].reason)
+      console.error(`[bots] แบบประเมินก่อนกิจกรรม: สำเร็จ ${botCount - failures.length}/${botCount}; ล้มเหลว ${failures.length}: ${firstError}`)
+      return
+    }
+    preAssessmentSubmitted = true
+    console.log(`[bots] แบบประเมินก่อนกิจกรรม: ส่งครบ ${botCount}/${botCount}`)
+  } finally {
+    preAssessmentInProgress = false
+  }
 }
 
 const answerCurrentQuestion = async (room) => {
@@ -246,7 +334,10 @@ const answerCurrentQuestion = async (room) => {
         const integrityChoiceId = integrityChoiceIds.get(question.questionId)
         if (!integrityChoiceId) throw new Error(`ไม่มีเฉลยสำหรับ ${question.questionId}`)
         const integrityBotCount = Math.round(botCount * integrityRateForQuestion(room.currentQuestionNumber, room.gameCycle))
-        const targetChoiceId = client.index < integrityBotCount
+        const choosesIntegrity = buildingSpreadWorstCity
+          ? shouldChooseIntegrityForSpreadQuestion(player.roleId, room.currentQuestionNumber, client.index, room.gameCycle)
+          : client.index < integrityBotCount
+        const targetChoiceId = choosesIntegrity
           ? integrityChoiceId
           : question.choices.find((choiceItem) => choiceItem.id !== integrityChoiceId)?.id
         const choice = question.choices.find((choiceItem) => choiceItem.id === targetChoiceId)
@@ -302,7 +393,10 @@ const answerCurrentCrisis = async (room) => {
       const result = await Promise.resolve().then(async () => {
         const player = players.get(client.playerId)
         if (!player?.roleId) throw new Error(`${client.nickname} ยังไม่มีอาชีพ`)
-        const stance = client.index < integrityBotCount ? 'integrity' : 'corruption'
+        const choosesIntegrity = buildingSpreadWorstCity
+          ? shouldChooseIntegrityForSpreadCrisis(player.roleId, room.currentCrisisEventIndex, client.index, room.gameCycle)
+          : client.index < integrityBotCount
+        const stance = choosesIntegrity ? 'integrity' : 'corruption'
         const answerId = `${room.gameCycle}::${client.playerId}::crisis::${room.currentCrisisEventId}`
         await setDoc(doc(client.db, 'rooms', roomId, 'answers', answerId), {
           recordType: 'crisis',
@@ -354,7 +448,16 @@ const shutdown = async (signal) => {
 process.on('SIGINT', () => { void shutdown('SIGINT') })
 process.on('SIGTERM', () => { void shutdown('SIGTERM') })
 
-console.log(`[bots] กำลังสร้าง ${botCount} เซสชันสำหรับห้อง ${roomId} บน ${EXPECTED_PROJECT_ID}; ${cycleFlip ? 'ชุดแรกสุจริตทั้งหมด ชุดถัดไปทุจริตทั้งหมด' : earlyCorruptThrough > 0 ? `ทุจริตทั้งหมดถึงข้อ ${earlyCorruptThrough} แล้วสุจริตทั้งหมด` : lateCorruptFrom > 0 ? `สุจริตทั้งหมดถึงข้อ ${lateCorruptFrom - 1} แล้วทุจริตทั้งหมด` : `สุจริต ${Math.round(integrityRate * 100)}%`}; เว้นคำตอบ ${staggerMs}ms; ถึงข้อ ${maxQuestion}`)
+const profileDescription = buildingSpreadWorstCity
+  ? 'ชุดแรกเมือง 0; อาคาร -2,-1,0,+1,+2 แบบกระจาย'
+  : cycleFlip
+    ? 'ชุดแรกสุจริตทั้งหมด ชุดถัดไปทุจริตทั้งหมด'
+    : earlyCorruptThrough > 0
+      ? `ทุจริตทั้งหมดถึงข้อ ${earlyCorruptThrough} แล้วสุจริตทั้งหมด`
+      : lateCorruptFrom > 0
+        ? `สุจริตทั้งหมดถึงข้อ ${lateCorruptFrom - 1} แล้วทุจริตทั้งหมด`
+        : `สุจริต ${Math.round(integrityRate * 100)}%`
+console.log(`[bots] กำลังสร้าง ${botCount} เซสชันสำหรับห้อง ${roomId} บน ${firebaseConfig.projectId}; ${profileDescription}; เว้นคำตอบ ${staggerMs}ms; ถึงข้อ ${maxQuestion}`)
 for (let start = 0; start < botCount; start += 8) {
   const batch = await Promise.all(
     Array.from({ length: Math.min(8, botCount - start) }, (_, offset) => createClient(start + offset)),
@@ -375,6 +478,11 @@ console.log('[bots] พร้อมตอบอัตโนมัติเมื
 stopRoomSubscription = onSnapshot(doc(monitorDb, 'rooms', roomId), (snapshot) => {
   if (!snapshot.exists()) return
   const room = snapshot.data()
+  if (room.preAssessmentOpened) {
+    void submitPreAssessments().catch((error) => {
+      console.error(`[bots] ส่งแบบประเมินก่อนกิจกรรมไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
+    })
+  }
   if (room.status === 'playing' && Number.isInteger(room.currentQuestionNumber) && room.currentQuestionNumber > 0) {
     void answerCurrentQuestion(room).catch((error) => {
       console.error(`[bots] ตอบคำถามไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)

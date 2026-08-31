@@ -31,4 +31,10 @@ describe('ResultPage finished learning evidence publication lifecycle', () => {
     expect(resultPage).not.toMatch(/onClick=\{[^}]*publishLearningEvidence/)
     expect(resultPage).not.toMatch(/button[^>]+publishLearningEvidence/)
   })
+
+  it('keeps an explicit latest-city scene inside the teacher summary instead of relying on the page background', () => {
+    expect(resultPage).toContain('className="teacher-result-city-preview"')
+    expect(resultPage).toContain('ภาพเมืองล่าสุด')
+    expect(resultPage).toContain('<CityScene buildingLevels={buildingLevels} cityLevel={room.cityLevel} />')
+  })
 })
