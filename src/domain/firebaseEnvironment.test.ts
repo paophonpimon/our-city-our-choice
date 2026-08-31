@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { assertStagingBuildNotUsingProduction, FIREBASE_PROJECT_IDS, resolveFirebaseEnvironmentName } from './firebaseEnvironment'
+import {
+  assertStagingBuildNotUsingProduction,
+  FIREBASE_PROJECT_IDS,
+  resolveCityLayoutRuntime,
+  resolveFirebaseEnvironmentName,
+} from './firebaseEnvironment'
 
 describe('resolveFirebaseEnvironmentName', () => {
   it('recognizes the production project id (unchanged production behavior)', () => {
@@ -16,6 +21,16 @@ describe('resolveFirebaseEnvironmentName', () => {
     expect(resolveFirebaseEnvironmentName('some-other-project')).toBeNull()
     expect(resolveFirebaseEnvironmentName('')).toBeNull()
     expect(resolveFirebaseEnvironmentName('our-city-our-choice-dev')).toBeNull()
+  })
+})
+
+describe('resolveCityLayoutRuntime', () => {
+  it('uses central Published layout only in staging', () => {
+    expect(resolveCityLayoutRuntime('staging')).toBe('staging')
+  })
+
+  it('uses committed frozen placements in production', () => {
+    expect(resolveCityLayoutRuntime('production')).toBe('production')
   })
 })
 

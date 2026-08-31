@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ClassroomRoom, ClassroomRoundResult } from '../types/classroomGame'
 import { formatCityLevel } from '../domain/ourCity'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
-import { SCORE_POSITIONS } from './locationScoreDisplay'
 import { CityScene, type BuildingEffectTone } from './CityScene'
 import type { BuildingTransitionDirection } from '../domain/cityPresentation'
 import {
@@ -20,22 +19,27 @@ import {
   type BuildingLevels,
   type BuildingLevel,
   type CitySceneBuildingPlacement,
+  type CitySceneBuildingLabelPlacement,
   type CitySceneProfileId,
 } from '../domain/cityBuildings'
 import { CityBirdsAnimation } from './CityBirdsAnimation'
 import { CityCloudsAnimation } from './CityCloudsAnimation'
 import { FullscreenToggle } from './FullscreenToggle'
 import {
-  clearLayoutPlacement,
-  clearLayoutScene,
-  exportAllEffectivePlacements,
-  getLayoutPlacement,
-  readCityLayoutOverrides,
+  ALL_BUILDING_LEVELS,
+  cityLayoutDraftId,
+  cityLayoutLabelDraftId,
+  labelOverridesToDraftRecords,
+  overridesToDraftRecords,
   resolveEffectivePlacement,
-  setLayoutPlacement,
-  writeCityLayoutOverrides,
-  type CityLayoutOverrides,
+  resolveLayoutEditorPlacement,
+  resolveProductionPlacement,
+  type CityLayoutLabelDraftRecord,
+  type CityLayoutModelDraftRecord,
+  type SceneLayoutOverrides,
 } from '../domain/cityLayoutOverrides'
+import { useCityLayoutManager } from '../hooks/useCityLayoutManager'
+import { calculateCumulativeBuildingImpact } from './buildingImpactDisplay'
 
 const CITY_LEVEL_MESSAGES: Record<ClassroomRoom['cityLevel'], string> = {
   critical: 'เมืองอยู่ในระดับแย่มาก ต้องร่วมกันแก้ไขอย่างเร่งด่วน',
@@ -71,16 +75,6 @@ const BUILDING_IMPACT_ITEMS: readonly { id: LocationId; label: string; icon: str
   { id: 'news-office', label: 'สำนักข่าว', icon: '📡' },
 ]
 
-const BUILDING_LABEL_POSITIONS: Record<LocationId, { x: number; y: number }> = {
-  school: { x: SCORE_POSITIONS.school.x, y: 29 },
-  construction: { x: 65, y: 19 },
-  market: { x: 83, y: 43 },
-  hospital: { x: SCORE_POSITIONS.hospital.x, y: 66 },
-  'police-station': { x: 65, y: 61 },
-  'municipal-office': { x: 50, y: 89 },
-  'news-office': { x: 81, y: 79 },
-}
-
 const BUILDING_EFFECT_POSITIONS: Record<LocationId, { x: number; y: number; size: number }> = {
   school: { x: 31, y: 24, size: 19 },
   construction: { x: 61, y: 22, size: 20 },
@@ -93,6 +87,8 @@ const BUILDING_EFFECT_POSITIONS: Record<LocationId, { x: number; y: number; size
 
 interface CityStageProps {
   room: ClassroomRoom
+  layoutMode?: boolean
+  onExitLayoutMode?: () => void
   visualCityLevel?: ClassroomRoom['cityLevel']
   visualBuildingLevels?: BuildingLevels
   buildingTransitions?: Partial<Record<BuildingId, BuildingTransitionDirection>>
@@ -134,6 +130,16 @@ interface LayoutDragState {
   startPlacement: CitySceneBuildingPlacement
 }
 
+interface LabelLayoutDragState {
+  buildingId: BuildingId
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  startPlacement: CitySceneBuildingLabelPlacement
+}
+
+type LayoutCalibrationTarget = 'model' | 'label'
+
 const LAYOUT_BUILDING_LABELS: Record<BuildingId, string> = {
   school: 'โรงเรียน',
   construction: 'ไซต์ก่อสร้าง',
@@ -150,11 +156,6 @@ const LAYOUT_SCENE_LABELS: Record<CitySceneProfileId, string> = {
   developed: 'เมืองเจริญ',
 }
 
-const readStoredCityLayout = (): CityLayoutOverrides => {
-  if (typeof window === 'undefined') return {}
-  return readCityLayoutOverrides()
-}
-
 const EMPTY_CITY_CONTENT_FRAME: CityContentFrame = { left: 0, top: 0, width: 0, height: 0 }
 
 const clampCityZoom = (value: number): number => Math.min(CITY_ZOOM_MAX, Math.max(CITY_ZOOM_MIN, value))
@@ -169,12 +170,13 @@ const readStoredCityZoom = (): number => {
   }
 }
 
-export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildingTransitions, remainingSeconds, answerCount, previewCityScore, roundImpact, locationImpacts, roundHistory = [], controls, utilityControls, children }: CityStageProps) => {
+export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel, visualBuildingLevels, buildingTransitions, remainingSeconds, answerCount, previewCityScore, roundImpact, locationImpacts, roundHistory = [], controls, utilityControls, children }: CityStageProps) => {
   const scoreTarget = previewCityScore ?? room.cityScore
   const previousScore = useRef(scoreTarget)
   const cityCanvasRef = useRef<HTMLElement | null>(null)
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; origin: CityPan } | null>(null)
   const layoutDragRef = useRef<LayoutDragState | null>(null)
+  const labelLayoutDragRef = useRef<LabelLayoutDragState | null>(null)
   const [displayScore, setDisplayScore] = useState(scoreTarget)
   const [cityZoom, setCityZoom] = useState(readStoredCityZoom)
   const [cityPan, setCityPan] = useState<CityPan>({ x: 0, y: 0 })
@@ -182,30 +184,76 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [selectedBuildingId, setSelectedBuildingId] = useState<LocationId | null>(null)
   const [cityContentFrame, setCityContentFrame] = useState<CityContentFrame>(EMPTY_CITY_CONTENT_FRAME)
-  const isLayoutMode = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('layout') === '1'
+  const isLayoutMode = layoutMode ?? (typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('layout') === '1')
+  const layoutManager = useCityLayoutManager(isLayoutMode)
   const [layoutSceneId, setLayoutSceneId] = useState<CitySceneProfileId>(() =>
     resolveCitySceneProfile(visualCityLevel ?? room.cityLevel).id)
   const [layoutModelLevel, setLayoutModelLevel] = useState<BuildingLevel>(0)
   const [layoutSelectedBuilding, setLayoutSelectedBuilding] = useState<BuildingId>('school')
-  const [layoutOverrides, setLayoutOverrides] = useState<CityLayoutOverrides>(readStoredCityLayout)
-  const [layoutFeedback, setLayoutFeedback] = useState('บันทึกอัตโนมัติในเครื่องนี้')
+  const [layoutCalibrationTarget, setLayoutCalibrationTarget] = useState<LayoutCalibrationTarget>('model')
+  const [publishReviewed, setPublishReviewed] = useState(false)
   const displayedCityLevel = visualCityLevel ?? room.cityLevel
   const displayedSceneProfile = isLayoutMode
     ? CITY_SCENE_PROFILES[layoutSceneId]
     : resolveCitySceneProfile(displayedCityLevel)
-  const displayedPlacementOverrides = layoutOverrides[displayedSceneProfile.id]
+  const displayedPlacementOverrides = useMemo<SceneLayoutOverrides | undefined>(() => {
+    if (!isLayoutMode) return undefined
+    return Object.fromEntries(BUILDING_IDS.map((building) => [
+      building,
+      Object.fromEntries(ALL_BUILDING_LEVELS.map((level) => {
+        const resolved = resolveLayoutEditorPlacement(
+          layoutManager.draft,
+          layoutManager.publishedLayout,
+          displayedSceneProfile.id,
+          building,
+          level,
+        )
+        return [level, { x: resolved.x, y: resolved.y, scaleX: resolved.scaleX, scaleY: resolved.scaleY }]
+      })),
+    ])) as SceneLayoutOverrides
+  }, [displayedSceneProfile.id, isLayoutMode, layoutManager.draft, layoutManager.publishedLayout])
   const displayedBuildingLevels = isLayoutMode
     ? Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, layoutModelLevel])) as BuildingLevels
     : normalizeBuildingLevels(visualBuildingLevels ?? room.buildingLevels)
+  const previousDisplayedBuildingLevelsRef = useRef<BuildingLevels>(displayedBuildingLevels)
+  const activeLabelTransitionsRef = useRef<Partial<Record<BuildingId, { from: BuildingLevel; to: BuildingLevel }>>>({})
+  for (const buildingId of BUILDING_IDS) {
+    if (buildingTransitions?.[buildingId]) {
+      activeLabelTransitionsRef.current[buildingId] ??= {
+        from: previousDisplayedBuildingLevelsRef.current[buildingId],
+        to: displayedBuildingLevels[buildingId],
+      }
+    } else {
+      delete activeLabelTransitionsRef.current[buildingId]
+    }
+  }
+  useEffect(() => {
+    previousDisplayedBuildingLevelsRef.current = displayedBuildingLevels
+  }, [displayedBuildingLevels])
   const alignPointToDisplayedScene = (locationId: LocationId, point: { x: number; y: number }) => {
     const buildingId = LOCATION_BUILDING[locationId]
-    const placement = resolveEffectivePlacement(
-      displayedPlacementOverrides, displayedSceneProfile.id, buildingId, displayedBuildingLevels[buildingId],
-    )
+    const placement = isLayoutMode
+      ? resolveEffectivePlacement(displayedPlacementOverrides, displayedSceneProfile.id, buildingId, displayedBuildingLevels[buildingId])
+      : resolveProductionPlacement(layoutManager.publishedLayout, displayedSceneProfile.id, buildingId, displayedBuildingLevels[buildingId])
     return {
       x: (placement.x + point.x / 100 * CITY_STAGE_WIDTH * placement.scaleX) / CITY_STAGE_WIDTH * 100,
       y: (placement.y + point.y / 100 * CITY_STAGE_HEIGHT * placement.scaleY) / CITY_STAGE_HEIGHT * 100,
+    }
+  }
+  const getDisplayedLabelPosition = (locationId: LocationId): { x: number; y: number } => {
+    const buildingId = LOCATION_BUILDING[locationId]
+    const resolved = resolveLayoutEditorPlacement(
+      layoutManager.draft,
+      layoutManager.publishedLayout,
+      displayedSceneProfile.id,
+      buildingId,
+      displayedBuildingLevels[buildingId],
+      layoutManager.labelDraft,
+    )
+    return {
+      x: resolved.labelX / CITY_STAGE_WIDTH * 100,
+      y: resolved.labelY / CITY_STAGE_HEIGHT * 100,
     }
   }
   const displayedBuildingEffects = Object.fromEntries(
@@ -218,9 +266,18 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
       ]]
     }),
   ) as Partial<Record<(typeof LOCATION_BUILDING)[LocationId], BuildingEffectTone>>
+  const cumulativeBuildingImpacts = Object.fromEntries(
+    BUILDING_IMPACT_ITEMS.map((building) => [building.id, calculateCumulativeBuildingImpact({
+      currentGameCycle: room.gameCycle,
+      currentQuestionNumber: room.currentQuestionNumber,
+      currentLocationImpacts: locationImpacts,
+      locationId: building.id,
+      roundHistory,
+    })]),
+  ) as Record<LocationId, number>
   const selectedBuilding = BUILDING_IMPACT_ITEMS.find((building) => building.id === selectedBuildingId) ?? null
   const selectedBuildingPosition = selectedBuildingId
-    ? alignPointToDisplayedScene(selectedBuildingId, BUILDING_LABEL_POSITIONS[selectedBuildingId])
+    ? getDisplayedLabelPosition(selectedBuildingId)
     : null
   const selectedHistory = selectedBuildingId
     ? roundHistory
@@ -236,63 +293,155 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
     participants: totals.participants + summary.participantCount,
   }), { integrity: 0, corruption: 0, timeout: 0, score: 0, participants: 0 })
   const selectedAverage = selectedTotals.participants > 0 ? selectedTotals.score / selectedTotals.participants : 0
-  const getEffectiveLayoutPlacement = (buildingId: BuildingId): CitySceneBuildingPlacement =>
-    getLayoutPlacement(layoutOverrides, layoutSceneId, buildingId, layoutModelLevel)
+  const getEffectiveLayoutPlacement = (buildingId: BuildingId): CitySceneBuildingPlacement => {
+    const resolved = resolveLayoutEditorPlacement(
+      layoutManager.draft,
+      layoutManager.publishedLayout,
+      layoutSceneId,
+      buildingId,
+      layoutModelLevel,
+    )
+    return { x: resolved.x, y: resolved.y, scaleX: resolved.scaleX, scaleY: resolved.scaleY }
+  }
+
+  const getEffectiveLabelLayoutPlacement = (buildingId: BuildingId): CitySceneBuildingLabelPlacement => {
+    const resolved = resolveLayoutEditorPlacement(
+      layoutManager.draft,
+      layoutManager.publishedLayout,
+      layoutSceneId,
+      buildingId,
+      layoutModelLevel,
+      layoutManager.labelDraft,
+    )
+    return { labelX: resolved.labelX, labelY: resolved.labelY }
+  }
 
   const updateLayoutPlacement = (
     buildingId: BuildingId,
     update: Partial<CitySceneBuildingPlacement> | ((current: CitySceneBuildingPlacement) => CitySceneBuildingPlacement),
   ): void => {
-    setLayoutOverrides((currentOverrides) => {
-      const currentPlacement = getLayoutPlacement(currentOverrides, layoutSceneId, buildingId, layoutModelLevel)
-      const nextPlacement = typeof update === 'function'
-        ? update(currentPlacement)
-        : { ...currentPlacement, ...update }
-      return setLayoutPlacement(currentOverrides, layoutSceneId, buildingId, layoutModelLevel, nextPlacement)
-    })
-    setLayoutFeedback('บันทึกอัตโนมัติแล้ว')
+    const currentPlacement = getEffectiveLayoutPlacement(buildingId)
+    const nextPlacement = typeof update === 'function'
+      ? update(currentPlacement)
+      : { ...currentPlacement, ...update }
+    layoutManager.saveDraft([{
+      scene: layoutSceneId,
+      building: buildingId,
+      level: layoutModelLevel,
+      ...nextPlacement,
+      updatedAt: Date.now(),
+    }])
+    setPublishReviewed(false)
   }
 
   // Only clears this scene + building + model level. Every other level (and
   // every other scene) this building has been calibrated for is untouched.
   const resetLayoutBuilding = (buildingId: BuildingId): void => {
-    setLayoutOverrides((currentOverrides) => clearLayoutPlacement(currentOverrides, layoutSceneId, buildingId, layoutModelLevel))
-    setLayoutFeedback(`คืนค่า ${LAYOUT_BUILDING_LABELS[buildingId]} Lv.${layoutModelLevel} แล้ว`)
+    void layoutManager.deleteDraft([cityLayoutDraftId(layoutSceneId, buildingId, layoutModelLevel)])
+    setPublishReviewed(false)
   }
 
-  // Wide, explicit reset: clears every building AND every model level saved
-  // for this one scene. Requires confirmation since it can discard a lot of
-  // calibration work (up to 7 buildings x 5 levels) in one action.
-  const resetLayoutScene = (): void => {
+  const updateLabelLayoutPlacement = (
+    buildingId: BuildingId,
+    update: Partial<CitySceneBuildingLabelPlacement>
+      | ((current: CitySceneBuildingLabelPlacement) => CitySceneBuildingLabelPlacement),
+  ): void => {
+    const currentPlacement = getEffectiveLabelLayoutPlacement(buildingId)
+    const nextPlacement = typeof update === 'function'
+      ? update(currentPlacement)
+      : { ...currentPlacement, ...update }
+    layoutManager.saveDraft([{
+      scene: layoutSceneId,
+      building: buildingId,
+      level: layoutModelLevel,
+      ...nextPlacement,
+      updatedAt: Date.now(),
+    }])
+    setPublishReviewed(false)
+  }
+
+  const resetLayoutLabel = (buildingId: BuildingId): void => {
+    void layoutManager.deleteDraft([cityLayoutLabelDraftId(layoutSceneId, buildingId, layoutModelLevel)])
+    setPublishReviewed(false)
+  }
+
+  const clearAllDraft = (): void => {
     const confirmed = window.confirm(
-      `คืนค่าฉาก${LAYOUT_SCENE_LABELS[layoutSceneId]}ทั้งหมดใช่ไหม? การกระทำนี้จะล้างค่าที่ปรับไว้ของทุกอาคารและทุกโมเดล (Lv.-2 ถึง Lv.+2) ในฉากนี้ ฉากอื่นและอาคาร/โมเดลที่ปรับในฉากอื่นจะไม่ถูกแตะต้อง`,
+      'ยกเลิก Draft ทั้งหมด 105 จุดใช่ไหม? Published ที่ใช้งานจริงจะไม่เปลี่ยนแปลง',
     )
     if (!confirmed) return
-    setLayoutOverrides((currentOverrides) => clearLayoutScene(currentOverrides, layoutSceneId))
-    setLayoutFeedback(`คืนค่าฉาก${LAYOUT_SCENE_LABELS[layoutSceneId]}ทั้งหมดแล้ว`)
+    void layoutManager.deleteDraft(overridesToDraftRecords(layoutManager.draft).map((record) =>
+      cityLayoutDraftId(record.scene, record.building, record.level)).concat(
+        labelOverridesToDraftRecords(layoutManager.labelDraft).map((record) =>
+          cityLayoutLabelDraftId(record.scene, record.building, record.level)),
+      ))
+    setPublishReviewed(false)
   }
 
-  const copyLayoutJson = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(layoutOverrides, null, 2))
-      setLayoutFeedback('คัดลอก JSON แล้ว (มีทุกฉาก/อาคาร/โมเดลที่ปรับไว้) ส่งให้ Codex นำไปใส่ในโปรเจกต์ได้เลย')
-    } catch {
-      setLayoutFeedback('คัดลอกไม่ได้ กรุณาอนุญาต Clipboard ในเบราว์เซอร์')
-    }
+  const copyPlacementToLevels = (): void => {
+    if (!window.confirm(`ใช้ตำแหน่ง ${LAYOUT_BUILDING_LABELS[layoutSelectedBuilding]} นี้กับทั้ง 5 ระดับในฉาก${LAYOUT_SCENE_LABELS[layoutSceneId]}ใช่ไหม?`)) return
+    const placement = getEffectiveLayoutPlacement(layoutSelectedBuilding)
+    layoutManager.saveDraft(ALL_BUILDING_LEVELS.map((level): CityLayoutModelDraftRecord => ({
+      scene: layoutSceneId,
+      building: layoutSelectedBuilding,
+      level,
+      ...placement,
+      updatedAt: Date.now(),
+    })))
+    setPublishReviewed(false)
   }
 
-  // Recovery/export only: reads the same effective-placement computation
-  // CityScene renders with (saved override, else scene/base + per-level
-  // fallback) for all 3 scenes x 7 buildings x 5 levels = 105 records. Never
-  // writes to storage, never migrates, never changes what is on screen.
-  const copyAllEffectivePlacements = async (): Promise<void> => {
-    try {
-      const records = exportAllEffectivePlacements(layoutOverrides)
-      await navigator.clipboard.writeText(JSON.stringify(records, null, 2))
-      setLayoutFeedback(`คัดลอกค่าตำแหน่งทั้งหมดแล้ว (${records.length} รายการ: 3 ฉาก x 7 อาคาร x 5 โมเดล)`)
-    } catch {
-      setLayoutFeedback('คัดลอกไม่ได้ กรุณาอนุญาต Clipboard ในเบราว์เซอร์')
-    }
+  const copyPlacementToScenes = (): void => {
+    if (!window.confirm(`ใช้ตำแหน่ง ${LAYOUT_BUILDING_LABELS[layoutSelectedBuilding]} Lv.${layoutModelLevel} นี้กับทั้ง 3 ฉากใช่ไหม?`)) return
+    const placement = getEffectiveLayoutPlacement(layoutSelectedBuilding)
+    layoutManager.saveDraft((Object.keys(LAYOUT_SCENE_LABELS) as CitySceneProfileId[]).map((scene): CityLayoutModelDraftRecord => ({
+      scene,
+      building: layoutSelectedBuilding,
+      level: layoutModelLevel,
+      ...placement,
+      updatedAt: Date.now(),
+    })))
+    setPublishReviewed(false)
+  }
+
+  const copyLabelPlacementToLevels = (): void => {
+    if (!window.confirm(`ใช้ตำแหน่งป้าย ${LAYOUT_BUILDING_LABELS[layoutSelectedBuilding]} นี้กับทั้ง 5 ระดับในฉาก${LAYOUT_SCENE_LABELS[layoutSceneId]}ใช่ไหม?`)) return
+    const placement = getEffectiveLabelLayoutPlacement(layoutSelectedBuilding)
+    layoutManager.saveDraft(ALL_BUILDING_LEVELS.map((level): CityLayoutLabelDraftRecord => ({
+      scene: layoutSceneId,
+      building: layoutSelectedBuilding,
+      level,
+      ...placement,
+      updatedAt: Date.now(),
+    })))
+    setPublishReviewed(false)
+  }
+
+  const copyLabelPlacementToScenes = (): void => {
+    if (!window.confirm(`ใช้ตำแหน่งป้าย ${LAYOUT_BUILDING_LABELS[layoutSelectedBuilding]} Lv.${layoutModelLevel} นี้กับทั้ง 3 ฉากใช่ไหม?`)) return
+    const placement = getEffectiveLabelLayoutPlacement(layoutSelectedBuilding)
+    layoutManager.saveDraft((Object.keys(LAYOUT_SCENE_LABELS) as CitySceneProfileId[]).map((scene): CityLayoutLabelDraftRecord => ({
+      scene,
+      building: layoutSelectedBuilding,
+      level: layoutModelLevel,
+      ...placement,
+      updatedAt: Date.now(),
+    })))
+    setPublishReviewed(false)
+  }
+
+  const copyLabelPlacementEverywhere = (): void => {
+    if (!window.confirm(`ใช้ตำแหน่งป้าย ${LAYOUT_BUILDING_LABELS[layoutSelectedBuilding]} นี้กับทุกระดับและทุกฉากรวม 15 จุดใช่ไหม? การทำงานนี้เปลี่ยนเฉพาะตำแหน่งป้าย`)) return
+    const placement = getEffectiveLabelLayoutPlacement(layoutSelectedBuilding)
+    layoutManager.saveDraft((Object.keys(LAYOUT_SCENE_LABELS) as CitySceneProfileId[]).flatMap((scene) =>
+      ALL_BUILDING_LEVELS.map((level): CityLayoutLabelDraftRecord => ({
+        scene,
+        building: layoutSelectedBuilding,
+        level,
+        ...placement,
+        updatedAt: Date.now(),
+      }))))
+    setPublishReviewed(false)
   }
 
   const startLayoutDrag = (event: React.PointerEvent<HTMLButtonElement>, buildingId: BuildingId): void => {
@@ -329,6 +478,38 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
     if (layoutDragRef.current?.pointerId === pointerId) layoutDragRef.current = null
   }
 
+  const startLabelLayoutDrag = (event: React.PointerEvent<HTMLButtonElement>, buildingId: BuildingId): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setLayoutSelectedBuilding(buildingId)
+    labelLayoutDragRef.current = {
+      buildingId,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startPlacement: { ...getEffectiveLabelLayoutPlacement(buildingId) },
+    }
+  }
+
+  const moveLayoutLabel = (event: React.PointerEvent<HTMLButtonElement>): void => {
+    const drag = labelLayoutDragRef.current
+    const canvas = cityCanvasRef.current
+    if (!drag || drag.pointerId !== event.pointerId || !canvas) return
+    event.preventDefault()
+    event.stopPropagation()
+    const bounds = canvas.getBoundingClientRect()
+    if (bounds.width <= 0 || bounds.height <= 0) return
+    updateLabelLayoutPlacement(drag.buildingId, {
+      labelX: Math.round((drag.startPlacement.labelX + (event.clientX - drag.startClientX) / bounds.width * CITY_STAGE_WIDTH) * 100) / 100,
+      labelY: Math.round((drag.startPlacement.labelY + (event.clientY - drag.startClientY) / bounds.height * CITY_STAGE_HEIGHT) * 100) / 100,
+    })
+  }
+
+  const stopLabelLayoutDrag = (pointerId: number): void => {
+    if (labelLayoutDragRef.current?.pointerId === pointerId) labelLayoutDragRef.current = null
+  }
+
   const nudgeLayoutBuilding = (buildingId: BuildingId, x: number, y: number): void => {
     updateLayoutPlacement(buildingId, (current) => ({
       ...current,
@@ -337,12 +518,26 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
     }))
   }
 
+  const nudgeLayoutLabel = (buildingId: BuildingId, x: number, y: number): void => {
+    updateLabelLayoutPlacement(buildingId, (current) => ({
+      labelX: Math.round((current.labelX + x) * 100) / 100,
+      labelY: Math.round((current.labelY + y) * 100) / 100,
+    }))
+  }
+
   const selectedLayoutPlacement = getEffectiveLayoutPlacement(layoutSelectedBuilding)
-  // Diagnostic only: does this exact scene/building/level have a saved v2
-  // override, or is it currently riding on the scene/base fallback?
-  const selectedLayoutSource = resolveEffectivePlacement(
-    layoutOverrides[layoutSceneId], layoutSceneId, layoutSelectedBuilding, layoutModelLevel,
-  ).source
+  const selectedLabelLayoutPlacement = getEffectiveLabelLayoutPlacement(layoutSelectedBuilding)
+  const selectedLayoutResolution = resolveLayoutEditorPlacement(
+    layoutManager.draft,
+    layoutManager.publishedLayout,
+    layoutSceneId,
+    layoutSelectedBuilding,
+    layoutModelLevel,
+    layoutManager.labelDraft,
+  )
+  const selectedLayoutSource = layoutCalibrationTarget === 'model'
+    ? selectedLayoutResolution.source
+    : selectedLayoutResolution.labelSource
 
   const canvasWidth = cityContentFrame.left * 2 + cityContentFrame.width
   const canvasHeight = cityContentFrame.top * 2 + cityContentFrame.height
@@ -393,14 +588,6 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
       // The controls still work when storage is unavailable.
     }
   }, [cityZoom])
-
-  useEffect(() => {
-    try {
-      writeCityLayoutOverrides(layoutOverrides)
-    } catch {
-      setLayoutFeedback('เบราว์เซอร์ไม่อนุญาตให้บันทึกค่าพิกัด')
-    }
-  }, [layoutOverrides])
 
   useEffect(() => {
     setCityPan((current) => clampPan(current, cityZoom))
@@ -561,7 +748,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
             cityLevel={displayedCityLevel}
             sceneProfileId={displayedSceneProfile.id}
           />
-          <div
+          {layoutManager.publishedReady ? <div
             className="city-stage__scene-overlays"
             style={{
               left: cityContentFrame.left,
@@ -600,28 +787,56 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
             </div>
             <div className="city-stage__building-labels">
               {BUILDING_IMPACT_ITEMS.map((building) => {
-                const labelPosition = alignPointToDisplayedScene(building.id, BUILDING_LABEL_POSITIONS[building.id])
+                const labelPosition = getDisplayedLabelPosition(building.id)
+                const buildingId = LOCATION_BUILDING[building.id]
+                const displayedLevel = displayedBuildingLevels[buildingId]
+                const transitionLevels = activeLabelTransitionsRef.current[buildingId]
+                const levelLabel = transitionLevels
+                  ? `Lv.${transitionLevels.from} ไป Lv.${transitionLevels.to}`
+                  : `Lv.${displayedLevel}`
                 return (
                   <button
-                  aria-label={`ดูประวัติคะแนน${building.label}`}
+                  aria-label={`ดูประวัติคะแนน${building.label} ${levelLabel}`}
                   aria-pressed={selectedBuildingId === building.id}
-                  className={selectedBuildingId === building.id ? 'is-selected' : ''}
+                  className={`${selectedBuildingId === building.id ? 'is-selected' : ''}${isLayoutMode && layoutCalibrationTarget === 'label' && layoutManager.canEdit && !layoutManager.busy ? ' is-label-editing' : ''}${isLayoutMode && layoutCalibrationTarget === 'label' && layoutSelectedBuilding === buildingId ? ' is-layout-selected' : ''}`}
                   key={building.id}
-                  onClick={() => setSelectedBuildingId((current) => current === building.id ? null : building.id)}
-                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => {
+                    if (isLayoutMode && layoutCalibrationTarget === 'label') {
+                      setLayoutSelectedBuilding(buildingId)
+                      return
+                    }
+                    setSelectedBuildingId((current) => current === building.id ? null : building.id)
+                  }}
+                  onLostPointerCapture={(event) => stopLabelLayoutDrag(event.pointerId)}
+                  onPointerDown={(event) => {
+                    if (isLayoutMode && layoutCalibrationTarget === 'label' && layoutManager.canEdit && !layoutManager.busy) startLabelLayoutDrag(event, buildingId)
+                    else event.stopPropagation()
+                  }}
+                  onPointerMove={(event) => moveLayoutLabel(event)}
+                  onPointerUp={(event) => stopLabelLayoutDrag(event.pointerId)}
                   style={{
                     '--building-label-x': `${labelPosition.x}%`,
                     '--building-label-y': `${labelPosition.y}%`,
                   } as React.CSSProperties}
                   type="button"
                 >
-                  <i>{building.icon}</i>{building.label}
-                  <small aria-hidden="true">ดูข้อมูล</small>
+                  <span className="city-stage__building-label-name">{building.label}</span>
+                  <span className="city-stage__building-label-level" aria-hidden="true">
+                    {transitionLevels ? (
+                      <>
+                        <span>Lv.{transitionLevels.from}</span>
+                        <b>▸</b>
+                        <span className={transitionLevels.to < 0 ? 'is-negative' : transitionLevels.to > 0 ? 'is-positive' : ''}>
+                          Lv.{transitionLevels.to}
+                        </span>
+                      </>
+                    ) : <span>Lv.{displayedLevel}</span>}
+                  </span>
                   </button>
                 )
               })}
             </div>
-            {isLayoutMode ? (
+            {isLayoutMode && layoutCalibrationTarget === 'model' ? (
               <div className="city-layout-handles" aria-label="จุดลากปรับตำแหน่งอาคาร">
                 {BUILDING_IMPACT_ITEMS.map((building) => {
                   const buildingId = LOCATION_BUILDING[building.id]
@@ -630,6 +845,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
                     <button
                       aria-label={`ลากปรับตำแหน่ง${building.label}`}
                       className={layoutSelectedBuilding === buildingId ? 'is-selected' : ''}
+                      disabled={!layoutManager.canEdit || layoutManager.busy}
                       key={buildingId}
                       onClick={(event) => {
                         event.stopPropagation()
@@ -665,7 +881,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
                 })}
               </div>
             ) : null}
-          </div>
+          </div> : null}
         </figure>
         {selectedBuilding && selectedBuildingId && selectedBuildingAnchor ? (
           <aside
@@ -768,11 +984,15 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
             <header>
               <div>
                 <small>SCENE CALIBRATION</small>
-                <strong>จัดตำแหน่งโมเดล</strong>
+                <strong>{layoutCalibrationTarget === 'model' ? 'จัดตำแหน่งโมเดล' : 'จัดตำแหน่งป้ายชื่อ'}</strong>
               </div>
               <button
                 aria-label="ปิดโหมดจัดตำแหน่ง"
                 onClick={() => {
+                  if (onExitLayoutMode) {
+                    onExitLayoutMode()
+                    return
+                  }
                   const url = new URL(window.location.href)
                   url.searchParams.delete('layout')
                   window.location.assign(url.toString())
@@ -781,35 +1001,44 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
               >×</button>
             </header>
 
-            <div className="city-layout-panel__selectors">
-              <label>
+            <section className="city-layout-panel__access" aria-live="polite">
+              {layoutManager.isStagingLayoutEditor ? (
+                <p><strong>STAGING LAYOUT EDITOR</strong><span>Central Draft autosave พร้อมใช้งาน</span></p>
+              ) : (
+                <p><strong>Production ปิดการแก้ไข Layout</strong><span>ใช้พิกัด frozen ที่อยู่ใน source เท่านั้น</span></p>
+              )}
+            </section>
+
+            {layoutManager.legacyDraft ? (
+              <section className="city-layout-panel__legacy">
+                <strong>พบค่าปรับตำแหน่งเดิมในเครื่องนี้</strong>
+                <div>
+                  <button disabled={!layoutManager.canEdit} onClick={layoutManager.importLegacy} type="button">นำเข้าเป็น Draft</button>
+                  <button onClick={() => layoutManager.setLegacyDraft(null)} type="button">ไม่ใช้</button>
+                </div>
+              </section>
+            ) : null}
+
+            <fieldset disabled={!layoutManager.canEdit || layoutManager.busy}>
+              <div className="city-layout-panel__selector-group city-layout-panel__target-mode">
+                <span>สิ่งที่ต้องการปรับ</span>
+                <div>
+                  <button className={layoutCalibrationTarget === 'model' ? 'is-selected' : ''} onClick={() => setLayoutCalibrationTarget('model')} type="button">ปรับโมเดล</button>
+                  <button className={layoutCalibrationTarget === 'label' ? 'is-selected' : ''} onClick={() => setLayoutCalibrationTarget('label')} type="button">ปรับป้ายชื่อ</button>
+                </div>
+              </div>
+              <div className="city-layout-panel__selector-group">
                 <span>ฉาก</span>
-                <select
-                  onChange={(event) => {
-                    setLayoutSceneId(event.target.value as CitySceneProfileId)
-                    setLayoutFeedback('เปลี่ยนฉากสำหรับปรับตำแหน่งแล้ว')
-                  }}
-                  value={layoutSceneId}
-                >
-                  {(Object.keys(LAYOUT_SCENE_LABELS) as CitySceneProfileId[]).map((sceneId) => (
-                    <option key={sceneId} value={sceneId}>{LAYOUT_SCENE_LABELS[sceneId]}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>โมเดลทดสอบ</span>
-                <select
-                  onChange={(event) => setLayoutModelLevel(Number(event.target.value) as BuildingLevel)}
-                  value={layoutModelLevel}
-                >
-                  <option value={0}>Lv.0 ปกติ</option>
-                  <option value={1}>Lv.1 ดีขึ้น</option>
-                  <option value={2}>Lv.2 ดี</option>
-                  <option value={-1}>Lv.-1 โทรม</option>
-                  <option value={-2}>Lv.-2 พังมาก</option>
-                </select>
-              </label>
-            </div>
+                <div>{(Object.keys(LAYOUT_SCENE_LABELS) as CitySceneProfileId[]).map((sceneId) => (
+                  <button className={layoutSceneId === sceneId ? 'is-selected' : ''} key={sceneId} onClick={() => setLayoutSceneId(sceneId)} type="button">{LAYOUT_SCENE_LABELS[sceneId]}</button>
+                ))}</div>
+              </div>
+              <div className="city-layout-panel__selector-group">
+                <span>Model level</span>
+                <div>{ALL_BUILDING_LEVELS.map((level) => (
+                  <button className={layoutModelLevel === level ? 'is-selected' : ''} key={level} onClick={() => setLayoutModelLevel(level)} type="button">{level > 0 ? `+${level}` : level}</button>
+                ))}</div>
+              </div>
 
             <dl
               aria-label="สถานะการปรับตำแหน่งปัจจุบัน"
@@ -820,7 +1049,7 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
                 margin: 0,
                 padding: '.4rem .5rem',
                 borderRadius: '.5rem',
-                background: selectedLayoutSource === 'override' ? '#eafbf1' : '#fff7e8',
+                background: selectedLayoutSource === 'DRAFT' ? '#eafbf1' : selectedLayoutSource === 'PUBLISHED' ? '#edf5ff' : '#fff7e8',
                 color: '#4a5a68',
                 fontSize: '.5rem',
                 lineHeight: 1.4,
@@ -830,9 +1059,9 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
               <div><dt style={{ display: 'inline', fontWeight: 700 }}>อาคาร: </dt><dd style={{ display: 'inline', margin: 0 }}>{LAYOUT_BUILDING_LABELS[layoutSelectedBuilding]}</dd></div>
               <div><dt style={{ display: 'inline', fontWeight: 700 }}>โมเดล: </dt><dd style={{ display: 'inline', margin: 0 }}>Lv.{layoutModelLevel > 0 ? `+${layoutModelLevel}` : layoutModelLevel}</dd></div>
               <div>
-                <dt style={{ display: 'inline', fontWeight: 700 }}>แหล่งค่า: </dt>
-                <dd style={{ display: 'inline', margin: 0, color: selectedLayoutSource === 'override' ? '#267651' : '#a5680f' }}>
-                  {selectedLayoutSource === 'override' ? 'ค่าที่ปรับเอง (บันทึกไว้)' : 'ค่าเริ่มต้น/สำรอง (ยังไม่ได้ปรับ)'}
+                <dt style={{ display: 'inline', fontWeight: 700 }}>{layoutCalibrationTarget === 'model' ? 'แหล่งค่าโมเดล: ' : 'แหล่งค่าป้าย: '}</dt>
+                <dd style={{ display: 'inline', margin: 0 }}>
+                  <span className={`city-layout-source is-${selectedLayoutSource.toLowerCase()}`}>{selectedLayoutSource}</span>
                 </dd>
               </div>
             </dl>
@@ -848,10 +1077,14 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
               ))}
             </div>
 
-            <p className="city-layout-panel__hint">ลากหมุดบนตึก หรือกดลูกศรเพื่อขยับ 1px · Shift + ลูกศร = 0.25px</p>
+            <p className="city-layout-panel__hint">
+              {layoutCalibrationTarget === 'model'
+                ? 'ลากหมุดบนตึก หรือกดลูกศรเพื่อขยับโมเดล'
+                : 'ลากป้ายชื่อ หรือกดลูกศรเพื่อขยับป้าย 1px · Shift + ลูกศร = 0.25px'}
+            </p>
 
             <div className="city-layout-panel__values">
-              {(['x', 'y', 'scaleX', 'scaleY'] as const).map((field) => (
+              {layoutCalibrationTarget === 'model' ? (['x', 'y', 'scaleX', 'scaleY'] as const).map((field) => (
                 <label key={field}>
                   <span>{field}</span>
                   <input
@@ -865,28 +1098,90 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
                     value={Math.round(selectedLayoutPlacement[field] * 1000) / 1000}
                   />
                 </label>
+              )) : (['labelX', 'labelY'] as const).map((field) => (
+                <label key={field}>
+                  <span>{field === 'labelX' ? 'Label X' : 'Label Y'}</span>
+                  <input
+                    inputMode="decimal"
+                    onChange={(event) => {
+                      const value = Number(event.target.value)
+                      if (Number.isFinite(value)) updateLabelLayoutPlacement(layoutSelectedBuilding, { [field]: value })
+                    }}
+                    step="0.25"
+                    type="number"
+                    value={Math.round(selectedLabelLayoutPlacement[field] * 100) / 100}
+                  />
+                </label>
               ))}
             </div>
 
-            <div className="city-layout-panel__nudge" aria-label="ขยับอาคารทีละหนึ่งพิกเซล">
-              <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, 0, -1)} type="button">↑</button>
-              <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, -1, 0)} type="button">←</button>
-              <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, 1, 0)} type="button">→</button>
-              <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, 0, 1)} type="button">↓</button>
+            <div className="city-layout-panel__nudge" aria-label={layoutCalibrationTarget === 'model' ? 'ขยับอาคาร' : 'ขยับป้ายชื่อ'}>
+              {layoutCalibrationTarget === 'model' ? (
+                <>
+                  <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, 0, -1)} type="button">↑</button>
+                  <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, -1, 0)} type="button">←</button>
+                  <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, 1, 0)} type="button">→</button>
+                  <button onClick={() => nudgeLayoutBuilding(layoutSelectedBuilding, 0, 1)} type="button">↓</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={(event) => nudgeLayoutLabel(layoutSelectedBuilding, 0, event.shiftKey ? -.25 : -1)} type="button">↑</button>
+                  <button onClick={(event) => nudgeLayoutLabel(layoutSelectedBuilding, event.shiftKey ? -.25 : -1, 0)} type="button">←</button>
+                  <button onClick={(event) => nudgeLayoutLabel(layoutSelectedBuilding, event.shiftKey ? .25 : 1, 0)} type="button">→</button>
+                  <button onClick={(event) => nudgeLayoutLabel(layoutSelectedBuilding, 0, event.shiftKey ? .25 : 1)} type="button">↓</button>
+                </>
+              )}
             </div>
 
             <div className="city-layout-panel__actions">
-              <button onClick={() => resetLayoutBuilding(layoutSelectedBuilding)} type="button">คืนค่าตึกนี้ (Lv. ปัจจุบัน)</button>
-              <button onClick={resetLayoutScene} type="button">คืนค่าทั้งฉาก (ทุกตึก ทุกโมเดล)</button>
-              <button className="is-primary" onClick={() => void copyLayoutJson()} type="button">คัดลอก JSON</button>
-              {/* Temporary recovery export: full 105-combination effective placement dump, read-only, no storage writes. */}
-              <button
-                onClick={() => void copyAllEffectivePlacements()}
-                style={{ gridColumn: '1 / -1' }}
-                type="button"
-              >คัดลอกค่าตำแหน่งทั้งหมด</button>
+              {layoutCalibrationTarget === 'model' ? (
+                <>
+                  <button onClick={copyPlacementToLevels} type="button">ใช้ตำแหน่งนี้กับทั้ง 5 ระดับ</button>
+                  <button onClick={copyPlacementToScenes} type="button">ใช้ตำแหน่งนี้กับทั้ง 3 ฉาก</button>
+                  <button onClick={() => resetLayoutBuilding(layoutSelectedBuilding)} type="button">คืน Draft จุดนี้</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={copyLabelPlacementToLevels} type="button">ใช้ตำแหน่งป้ายนี้กับทั้ง 5 ระดับ</button>
+                  <button onClick={copyLabelPlacementToScenes} type="button">ใช้ตำแหน่งป้ายนี้กับทั้ง 3 ฉาก</button>
+                  <button onClick={copyLabelPlacementEverywhere} type="button">ใช้กับทุกระดับและทุกฉาก</button>
+                  <button onClick={() => resetLayoutLabel(layoutSelectedBuilding)} type="button">คืนตำแหน่งป้ายจุดนี้</button>
+                </>
+              )}
+              <button className="is-danger" onClick={clearAllDraft} type="button">ยกเลิก Draft ทั้งหมด</button>
             </div>
-            <output className="city-layout-panel__feedback" aria-live="polite">{layoutFeedback}</output>
+            </fieldset>
+
+            <section className="city-layout-panel__publish">
+              <p>Draft changes: <strong>{layoutManager.draftCount}</strong></p>
+              <p>Label Draft changes: <strong>{layoutManager.labelDraftCount}</strong></p>
+              <p>Resolved combinations: <strong>{layoutManager.resolvedCount} / 105</strong></p>
+              <button disabled={!layoutManager.canEdit || layoutManager.busy} onClick={() => setPublishReviewed(true)} type="button">ตรวจสอบก่อนเผยแพร่</button>
+              <button
+                className="is-primary"
+                disabled={!layoutManager.canEdit || layoutManager.busy || !publishReviewed}
+                onClick={() => {
+                  if (!window.confirm('เผยแพร่ตำแหน่งครบ 105 จุดให้ทุกห้องเรียนใช้งานจริงใช่ไหม?')) return
+                  void layoutManager.publish().then((snapshot) => { if (snapshot) setPublishReviewed(false) })
+                }}
+                type="button"
+              >ใช้ตำแหน่งชุดนี้จริง</button>
+              {layoutManager.publishedLayout ? (
+                <p className="city-layout-panel__published"><strong>เผยแพร่แล้ว ✓</strong><span>Version: {layoutManager.publishedLayout.versionId}</span><span>105 / 105 positions</span><span>Published at: {new Date(layoutManager.publishedLayout.publishedAt).toLocaleString('th-TH')}</span></p>
+              ) : <p>ยังไม่มี Published config — เกมปกติใช้ frozen default</p>}
+            </section>
+
+            {layoutManager.canEdit && layoutManager.versions.length > 0 ? (
+              <section className="city-layout-panel__versions">
+                <strong>เวอร์ชันล่าสุด</strong>
+                {layoutManager.versions.map((version) => (
+                  <div key={version.versionId}><span>{version.versionId}</span><button disabled={layoutManager.busy || version.versionId === layoutManager.publishedLayout?.versionId} onClick={() => {
+                    if (window.confirm(`กลับไปใช้เวอร์ชัน ${version.versionId} ใช่ไหม?`)) void layoutManager.rollback(version.versionId)
+                  }} type="button">กลับไปใช้เวอร์ชันนี้</button></div>
+                ))}
+              </section>
+            ) : null}
+            <output className="city-layout-panel__feedback" aria-live="polite">{layoutManager.feedback}</output>
           </aside>
         ), document.body) : null}
         <div className="city-stage__atmosphere" aria-hidden="true">
@@ -905,12 +1200,12 @@ export const CityStage = ({ room, visualCityLevel, visualBuildingLevels, buildin
           <div className="city-stage__status-progress"><i style={{ width: `${CITY_LEVEL_PROGRESS[displayedCityLevel]}%` }} /></div>
           <p>เส้นทางสู่เมืองโปร่งใส <span aria-hidden="true">⚑</span></p>
         </section>
-        <section className="city-stage__right-card city-stage__building-activity" aria-label="ผลกระทบล่าสุดของแต่ละอาคาร">
-          <h2>ผลกระทบอาคารล่าสุด</h2>
-          <p>{locationImpacts ? `ผลจากข้อที่ ${Math.max(1, room.status === 'round-result' ? room.currentQuestionNumber : room.currentQuestionNumber - 1)}` : 'รอผลจากข้อแรก'}</p>
+        <section className="city-stage__right-card city-stage__building-activity" aria-label="ผลกระทบสะสมของแต่ละอาคาร">
+          <h2>ผลกระทบอาคารสะสม</h2>
+          <p>รวมรอบที่ผ่านมาและรอบปัจจุบัน</p>
           <div>
             {BUILDING_IMPACT_ITEMS.map((building) => {
-              const score = locationImpacts?.[building.id].scoreAverage ?? 0
+              const score = cumulativeBuildingImpacts[building.id]
               const tone = score > 0 ? 'is-positive' : score < 0 ? 'is-negative' : 'is-neutral'
               return (
                 <article className={tone} key={building.id}>

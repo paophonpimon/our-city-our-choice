@@ -9,6 +9,7 @@ export const FIREBASE_PROJECT_IDS = {
 } as const
 
 export type FirebaseEnvironmentName = keyof typeof FIREBASE_PROJECT_IDS
+export type CityLayoutRuntime = 'staging' | 'production'
 
 export const resolveFirebaseEnvironmentName = (projectId: string | undefined | null): FirebaseEnvironmentName | null => {
   const match = (Object.entries(FIREBASE_PROJECT_IDS) as [FirebaseEnvironmentName, string][]).find(
@@ -16,6 +17,9 @@ export const resolveFirebaseEnvironmentName = (projectId: string | undefined | n
   )
   return match ? match[0] : null
 }
+
+export const resolveCityLayoutRuntime = (environmentName: FirebaseEnvironmentName): CityLayoutRuntime =>
+  environmentName === 'staging' ? 'staging' : 'production'
 
 /**
  * A `vite build --mode staging` build (see package.json's build:staging)

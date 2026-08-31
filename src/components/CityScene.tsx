@@ -12,11 +12,13 @@ import {
   type BuildingAssetPlacement,
   type BuildingId,
   type BuildingLevels,
+  type CitySceneBuildingPlacement,
   type CitySceneProfileId,
 } from '../domain/cityBuildings'
-import { resolveEffectivePlacement, type EffectivePlacementRecord, type SceneLayoutOverrides } from '../domain/cityLayoutOverrides'
+import { resolveEffectivePlacement, resolveProductionPlacement, type SceneLayoutOverrides } from '../domain/cityLayoutOverrides'
 import type { BuildingTransitionDirection } from '../domain/cityPresentation'
 import type { CityLevel } from '../domain/ourCity'
+import { usePublishedCityLayout } from '../context/CityLayoutContext'
 
 export type BuildingEffectTone = 'integrity' | 'corruption'
 
@@ -37,6 +39,15 @@ export const CityScene = ({
   cityLevel = 'neutral',
   sceneProfileId,
 }: CitySceneProps) => {
+  const { publishedLayout, status } = usePublishedCityLayout()
+  if (status === 'unresolved') {
+    return (
+      <div className="city-scene city-scene--layout-loading" role="status" aria-live="polite">
+        <span aria-hidden="true" />
+        <strong>กำลังโหลดผังเมือง...</strong>
+      </div>
+    )
+  }
   const levels = normalizeBuildingLevels(buildingLevels)
   const sceneProfile = sceneProfileId ? CITY_SCENE_PROFILES[sceneProfileId] : resolveCitySceneProfile(cityLevel)
   // Resolve every building's scene placement AND its model-level asset
@@ -58,9 +69,11 @@ export const CityScene = ({
   const scenePlacements = Object.fromEntries(
     BUILDING_IDS.map((buildingId) => [
       buildingId,
-      resolveEffectivePlacement(buildingPlacementOverrides, sceneProfile.id, buildingId, levels[buildingId]),
+      buildingPlacementOverrides
+        ? resolveEffectivePlacement(buildingPlacementOverrides, sceneProfile.id, buildingId, levels[buildingId])
+        : resolveProductionPlacement(publishedLayout, sceneProfile.id, buildingId, levels[buildingId]),
     ]),
-  ) as Record<BuildingId, EffectivePlacementRecord>
+  ) as unknown as Record<BuildingId, CitySceneBuildingPlacement>
   const groundAnchors = Object.fromEntries(
     BUILDING_IDS.map((buildingId) => [
       buildingId,

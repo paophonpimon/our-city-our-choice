@@ -46,6 +46,18 @@ import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, updateBuildingScores } f
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
 import { createCrisisAnswerId, createCrisisResultId } from './classroomFirestore'
+import {
+  CITY_LAYOUT_SCHEMA_VERSION,
+  cityLayoutDraftId,
+  cityLayoutLabelDraftId,
+  isCompleteCityLayout,
+  isLabelCityLayoutDraftRecord,
+  isSaneCityLayoutLabelPlacement,
+  isSaneCityLayoutPlacement,
+  type CityLayoutDraftRecord,
+  type CityLayoutPublishedSnapshot,
+  type CompleteCityLayoutPlacements,
+} from '../domain/cityLayoutOverrides'
 
 interface DemoClassroomRoomState {
   room: ClassroomRoom
@@ -60,6 +72,11 @@ interface DemoClassroomRoomState {
 
 interface DemoClassroomState {
   rooms: Record<string, DemoClassroomRoomState>
+  cityLayout?: {
+    draft: Record<string, CityLayoutDraftRecord>
+    published: CityLayoutPublishedSnapshot | null
+    versions: Record<string, CityLayoutPublishedSnapshot>
+  }
 }
 
 const STORAGE_KEY = 'our_city_classroom_demo_state_v2'
@@ -171,6 +188,11 @@ const getRoomState = (state: DemoClassroomState, roomId: string): DemoClassroomR
   return roomState
 }
 
+const getCityLayoutState = (state: DemoClassroomState): NonNullable<DemoClassroomState['cityLayout']> => {
+  state.cityLayout ??= { draft: {}, published: null, versions: {} }
+  return state.cityLayout
+}
+
 const assertTeacher = (room: ClassroomRoom, teacherSessionId: string): void => {
   if (room.teacherSessionId !== teacherSessionId) throw new Error('ผู้ใช้:ไม่มีสิทธิ์ควบคุมห้องนี้')
 }
@@ -191,6 +213,7 @@ export const setRoomFieldsForTests = (roomId: string, patch: Partial<ClassroomRo
 
 export class DemoClassroomGameService implements ClassroomGameService {
   readonly isDemo = true
+  readonly cityLayoutRuntime = 'staging' as const
 
   async ensureSession(): Promise<string> {
     if (typeof sessionStorage !== 'undefined') {
@@ -201,6 +224,83 @@ export class DemoClassroomGameService implements ClassroomGameService {
       return uid
     }
     return `demo-${createId()}`
+  }
+
+  subscribePublishedCityLayout(listener: (layout: CityLayoutPublishedSnapshot | null) => void, onError: (message: string) => void): () => void {
+    void onError
+    const emit = (): void => emitNow(getCityLayoutState(readState()).published, listener)
+    emit()
+    return listen(emit)
+  }
+
+  subscribeCityLayoutDraft(editorUid: string, listener: (records: CityLayoutDraftRecord[]) => void, onError: (message: string) => void): () => void {
+    void editorUid
+    void onError
+    const emit = (): void => {
+      const state = readState()
+      emitNow(Object.values(getCityLayoutState(state).draft), listener)
+    }
+    emit()
+    return listen(emit)
+  }
+
+  subscribeCityLayoutVersions(editorUid: string, listener: (versions: CityLayoutPublishedSnapshot[]) => void, onError: (message: string) => void): () => void {
+    void editorUid
+    void onError
+    const emit = (): void => {
+      const state = readState()
+      emitNow(Object.values(getCityLayoutState(state).versions).sort((left, right) => right.publishedAt - left.publishedAt).slice(0, 10), listener)
+    }
+    emit()
+    return listen(emit)
+  }
+
+  async saveCityLayoutDraft(editorUid: string, records: readonly CityLayoutDraftRecord[]): Promise<void> {
+    void editorUid
+    const state = readState()
+    const layout = getCityLayoutState(state)
+    for (const record of records) {
+      if (isLabelCityLayoutDraftRecord(record)) {
+        if (!isSaneCityLayoutLabelPlacement(record)) throw new Error('ผู้ใช้:ค่าตำแหน่งป้าย Layout ไม่ถูกต้อง')
+        layout.draft[cityLayoutLabelDraftId(record.scene, record.building, record.level)] = { ...record, updatedAt: Date.now() }
+      } else {
+        if (!isSaneCityLayoutPlacement(record)) throw new Error('ผู้ใช้:ค่าตำแหน่ง Layout ไม่ถูกต้อง')
+        layout.draft[cityLayoutDraftId(record.scene, record.building, record.level)] = { ...record, updatedAt: Date.now() }
+      }
+    }
+    writeState(state)
+  }
+
+  async deleteCityLayoutDraft(editorUid: string, draftIds: readonly string[]): Promise<void> {
+    void editorUid
+    const state = readState()
+    const layout = getCityLayoutState(state)
+    for (const draftId of draftIds) delete layout.draft[draftId]
+    writeState(state)
+  }
+
+  async publishCityLayout(editorUid: string, placements: CompleteCityLayoutPlacements): Promise<CityLayoutPublishedSnapshot> {
+    void editorUid
+    const state = readState()
+    if (!isCompleteCityLayout(placements)) throw new Error('ผู้ใช้:Layout ต้องมีตำแหน่งที่ถูกต้องครบ 105 จุด')
+    const publishedAt = Date.now()
+    const versionId = `v-${publishedAt}-${createId().slice(0, 8)}`
+    const snapshot: CityLayoutPublishedSnapshot = { schemaVersion: CITY_LAYOUT_SCHEMA_VERSION, versionId, placements: clone(placements), publishedAt }
+    const layout = getCityLayoutState(state)
+    layout.versions[versionId] = clone(snapshot)
+    layout.published = clone(snapshot)
+    writeState(state)
+    return snapshot
+  }
+
+  async rollbackCityLayout(editorUid: string, versionId: string): Promise<void> {
+    void editorUid
+    const state = readState()
+    const layout = getCityLayoutState(state)
+    const version = layout.versions[versionId]
+    if (!version) throw new Error('ผู้ใช้:ไม่พบเวอร์ชัน Layout ที่เลือก')
+    layout.published = { ...clone(version), publishedAt: Date.now() }
+    writeState(state)
   }
 
   async createRoom(teacherSessionId: string, questionDurationSec: number): Promise<ClassroomRoom> {

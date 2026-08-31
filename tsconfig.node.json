@@ -14,5 +14,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["vite.config.ts", "vitest.rules.config.ts", "eslint.config.js", "firestore-tests"]
+  "include": ["vite.config.ts", "vitest.rules.config.ts", "vitest.staging-rules.config.ts", "eslint.config.js", "firestore-tests"]
 }

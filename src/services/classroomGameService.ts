@@ -18,6 +18,11 @@ import type {
   PublicRoomQuestion,
 } from '../types/classroomGame'
 import type { ReflectionInput, TeacherObservationInput } from '../domain/assessment'
+import type {
+  CityLayoutDraftRecord,
+  CityLayoutPublishedSnapshot,
+  CompleteCityLayoutPlacements,
+} from '../domain/cityLayoutOverrides'
 
 export const isKnownAssessmentRecordType = (
   value: unknown,
@@ -38,7 +43,27 @@ export const canEmergencyTerminate = (status: ClassroomRoomStatus): boolean =>
 
 export interface ClassroomGameService {
   readonly isDemo: boolean
+  /** Remote central layout exists only in staging/demo calibration environments. Production is frozen-source only. */
+  readonly cityLayoutRuntime: 'staging' | 'production'
   ensureSession(): Promise<string>
+  subscribePublishedCityLayout(
+    listener: (layout: CityLayoutPublishedSnapshot | null) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
+  subscribeCityLayoutDraft(
+    editorUid: string,
+    listener: (records: CityLayoutDraftRecord[]) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
+  subscribeCityLayoutVersions(
+    editorUid: string,
+    listener: (versions: CityLayoutPublishedSnapshot[]) => void,
+    onError: (message: string) => void,
+  ): ClassroomUnsubscribe
+  saveCityLayoutDraft(editorUid: string, records: readonly CityLayoutDraftRecord[]): Promise<void>
+  deleteCityLayoutDraft(editorUid: string, draftIds: readonly string[]): Promise<void>
+  publishCityLayout(editorUid: string, placements: CompleteCityLayoutPlacements): Promise<CityLayoutPublishedSnapshot>
+  rollbackCityLayout(editorUid: string, versionId: string): Promise<void>
   createRoom(teacherSessionId: string, questionDurationSec: number): Promise<ClassroomRoom>
   joinRoom(input: ClassroomJoinInput, ownerUid: string): Promise<ClassroomPlayer>
   submitPreAssessment(roomId: string, playerId: string, ownerUid: string, responses: number[]): Promise<void>

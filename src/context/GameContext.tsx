@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { classroomFriendlyError, classroomGameServicePromise, type ClassroomGameService } from '../services'
 import { CityLoader } from '../components/CityLoader'
+import { CityLayoutProvider } from './CityLayoutContext'
 
 interface GameContextValue {
   service: ClassroomGameService
@@ -71,7 +72,11 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     )
   }
 
-  return <GameContext.Provider value={value}>{children}</GameContext.Provider>
+  return (
+    <GameContext.Provider value={value}>
+      <CityLayoutProvider service={value.service}>{children}</CityLayoutProvider>
+    </GameContext.Provider>
+  )
 }
 
 // Hook และ Provider อยู่ไฟล์เดียวกันเพื่อให้ขอบเขต context ชัดเจน

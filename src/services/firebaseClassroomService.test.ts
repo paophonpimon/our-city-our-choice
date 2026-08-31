@@ -100,6 +100,40 @@ describe('firebaseClassroomService.terminateActivity — explicit emergency life
   })
 })
 
+describe('firebaseClassroomService — central city layout persistence', () => {
+  const source = readSource('./firebaseClassroomService.ts')
+
+  it('loads normal gameplay layout from one current document, never 105 listeners or Draft', () => {
+    const start = source.indexOf('subscribePublishedCityLayout(')
+    const end = source.indexOf('subscribeCityLayoutDraft(', start)
+    const subscription = source.slice(start, end)
+    expect(subscription).toContain("doc(db, 'cityLayoutPublished/current')")
+    expect(subscription).toContain('parseCityLayoutPublishedSnapshot(snapshot.data())')
+    expect(subscription).not.toContain("collection(db, 'cityLayoutDraft')")
+  })
+
+  it('validates all placements before atomically writing immutable version plus current pointer', () => {
+    const start = source.indexOf('async publishCityLayout(')
+    const end = source.indexOf('async rollbackCityLayout(', start)
+    const publish = source.slice(start, end)
+    expect(publish).toContain('if (!isCompleteCityLayout(placements))')
+    expect(publish).toContain('batch.set(doc(db, `cityLayoutVersions/${versionId}`), writeValue)')
+    expect(publish).toContain("batch.set(doc(db, 'cityLayoutPublished/current'), writeValue)")
+    expect(publish).toContain('await batch.commit()')
+  })
+
+  it('rolls current back from an existing immutable version without writing the historical document', () => {
+    const start = source.indexOf('async rollbackCityLayout(')
+    const end = source.indexOf('async createRoom(', start)
+    const rollback = source.slice(start, end)
+    expect(rollback).toContain('getDoc(doc(db, `cityLayoutVersions/${versionId}`))')
+    expect(rollback).toContain("setDoc(doc(db, 'cityLayoutPublished/current')")
+    expect(rollback).toContain('storedVersion?.schemaVersion === 1 ? 1 : CITY_LAYOUT_SCHEMA_VERSION')
+    expect(rollback).toContain('storedSchemaVersion === 1 ? storedVersion?.placements : version.placements')
+    expect(rollback).not.toContain('cityLayoutVersions/${versionId}`), {')
+  })
+})
+
 describe('firebaseClassroomService.publishLearningEvidence — safe lifecycle aggregate', () => {
   const source = readSource('./firebaseClassroomService.ts')
   const start = source.indexOf('async publishLearningEvidence(')

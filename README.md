@@ -110,6 +110,31 @@ firebase deploy --only firestore:rules
 
 ตรวจ `firestore.rules` และทดสอบด้วย Firebase Emulator ก่อนใช้กับคะแนนจริงทุกครั้ง
 
+## ปรับผังเมืองบน Staging
+
+ระบบปรับผังเมืองใช้ Firebase project `our-city-our-choice-staging` แยกจาก production โดยเด็ดขาด ให้สร้าง `.env.staging.local` จาก `.env.example` แล้วกรอกค่า `VITE_FIREBASE_*` ของ staging ให้ครบทั้ง 6 ค่า คำสั่ง staging จะหยุดทันทีหากไฟล์ไม่ครบหรือชี้ไป production
+
+```bash
+npm run dev:staging
+npm run build:staging
+npm run test:rules:staging
+npm run deploy:staging
+```
+
+ระหว่างทดสอบบน staging ให้เปิด `/layout-editor` เพื่อเข้าสู่หน้าเฉพาะสำหรับปรับตำแหน่งโมเดลและป้ายอาคาร (`/teacher?layout=1` ยังใช้ได้เพื่อรองรับลิงก์เดิม) การแก้ไขจะบันทึกเป็น Draft กลางอัตโนมัติและยังไม่กระทบหน้าผู้เล่นจนกด Publish ทุกครั้งที่ Publish ระบบจะตรวจว่าครบ 3 ฉาก × 7 อาคาร × 5 ระดับ รวม 105 ตำแหน่ง และสร้าง version สำหรับ rollback
+
+เมื่อยืนยันผังบน staging แล้ว ให้ดึง Published version ล่าสุดมา freeze ลง source ก่อนนำขึ้น production:
+
+```bash
+npm run layout:freeze-staging
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+`layout:freeze-staging` แก้เฉพาะตารางที่มี marker ใน `src/domain/cityBuildings.ts` และไม่ deploy, commit หรือ push ให้อัตโนมัติ ต้องตรวจ `git diff` ก่อน commit เสมอ ส่วน Firestore rules ของ production ปิดการอ่านและเขียน collection สำหรับปรับผังทั้งหมด และใช้เฉพาะค่าที่ freeze อยู่ใน source
+
 ## Production build
 
 ```bash

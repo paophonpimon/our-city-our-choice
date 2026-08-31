@@ -8,6 +8,8 @@ import {
   getDocs,
   initializeFirestore,
   onSnapshot,
+  orderBy,
+  limit,
   query,
   runTransaction,
   serverTimestamp,
@@ -30,7 +32,11 @@ import {
 } from '../domain/assessment'
 import { assertPersonalOutcomeTotals, resolveCrisisPersonalResults, resolveQuestionPersonalResults } from '../domain/personalDecisionResults'
 import { computeChoiceOrderByQuestion, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
-import { assertStagingBuildNotUsingProduction, resolveFirebaseEnvironmentName } from '../domain/firebaseEnvironment'
+import {
+  assertStagingBuildNotUsingProduction,
+  resolveCityLayoutRuntime,
+  resolveFirebaseEnvironmentName,
+} from '../domain/firebaseEnvironment'
 import { randomRoomId } from '../domain/roomCode'
 import {
   assignRolesForCycle,
@@ -71,6 +77,26 @@ import { canEmergencyTerminate, classroomFriendlyError, isKnownAssessmentRecordT
 import { deriveBuildingLevels, INITIAL_BUILDING_SCORES, normalizeBuildingLevels, normalizeBuildingScores, updateBuildingScores } from '../domain/cityBuildings'
 import { getCrisisEvent, getCrisisEventAfterQuestion, scoreCrisisEvent, type CrisisEventId, type CrisisEventIndex } from '../domain/cityCrisisEvents'
 import { isCrisisAnswerRecord, isQuestionAnswerRecord, type ClassroomCrisisResult } from '../types/classroomGame'
+import {
+  BUILDING_IDS,
+  isBuildingLevel,
+  type BuildingId,
+  type BuildingLevel,
+  type CitySceneProfileId,
+} from '../domain/cityBuildings'
+import {
+  CITY_LAYOUT_SCHEMA_VERSION,
+  cityLayoutDraftId,
+  cityLayoutLabelDraftId,
+  isCompleteCityLayout,
+  isLabelCityLayoutDraftRecord,
+  isSaneCityLayoutLabelPlacement,
+  isSaneCityLayoutPlacement,
+  parseCityLayoutPublishedSnapshot,
+  type CityLayoutDraftRecord,
+  type CityLayoutPublishedSnapshot,
+  type CompleteCityLayoutPlacements,
+} from '../domain/cityLayoutOverrides'
 import { createCrisisAnswerId } from './classroomFirestore'
 // DIAGNOSTIC FLIGHT RECORDER — opt-in via ?debug=2, see src/debug/flightRecorder.ts.
 // Only timestamps stages of closeCrisisEvent that already exist below - no
@@ -99,6 +125,7 @@ if (!firebaseEnvironmentName) {
     `ผู้ใช้:Firebase Project ID ต้องเป็นหนึ่งใน our-city-our-choice, our-city-our-choice-staging เท่านั้น`,
   )
 }
+const cityLayoutRuntime = resolveCityLayoutRuntime(firebaseEnvironmentName)
 try {
   assertStagingBuildNotUsingProduction(import.meta.env.MODE, firebaseEnvironmentName)
 } catch (error) {
@@ -180,6 +207,54 @@ const mapPublicLearningEvidence = (value: unknown): ClassroomPublicLearningEvide
     reflectionCompletionPercent: data.reflectionCompletionPercent as number | null,
     observation,
   }
+}
+
+const CITY_LAYOUT_SCENES: readonly CitySceneProfileId[] = ['degraded', 'normal', 'developed']
+
+const mapCityLayoutDraft = (id: string, value: unknown): CityLayoutDraftRecord | null => {
+  if (!value || typeof value !== 'object') return null
+  const data = value as Record<string, unknown>
+  const scene = data.scene
+  const building = data.building
+  const level = data.level
+  const placement = { x: data.x, y: data.y, scaleX: data.scaleX, scaleY: data.scaleY }
+  const labelPlacement = { labelX: data.labelX, labelY: data.labelY }
+  if (!CITY_LAYOUT_SCENES.includes(scene as CitySceneProfileId)
+    || !BUILDING_IDS.includes(building as BuildingId)
+    || !isBuildingLevel(level)) return null
+  if (id === cityLayoutLabelDraftId(scene as CitySceneProfileId, building as BuildingId, level)
+    && isSaneCityLayoutLabelPlacement(labelPlacement)) return {
+    scene: scene as CitySceneProfileId,
+    building: building as BuildingId,
+    level: level as BuildingLevel,
+    labelX: labelPlacement.labelX,
+    labelY: labelPlacement.labelY,
+    updatedAt: toMillis(data.updatedAt) ?? 0,
+  }
+  if (id !== cityLayoutDraftId(scene as CitySceneProfileId, building as BuildingId, level)
+    || !isSaneCityLayoutPlacement(placement)) return null
+  return {
+    scene: scene as CitySceneProfileId,
+    building: building as BuildingId,
+    level: level as BuildingLevel,
+    x: placement.x,
+    y: placement.y,
+    scaleX: placement.scaleX,
+    scaleY: placement.scaleY,
+    updatedAt: toMillis(data.updatedAt) ?? 0,
+  }
+}
+
+const requireLayoutEditorSession = (editorUid: string): void => {
+  if (firebaseEnvironmentName !== 'staging') throw new Error('ผู้ใช้:Production ปิดการแก้ไข Layout กลาง')
+  if (!auth.currentUser || auth.currentUser.uid !== editorUid) throw new Error('ผู้ใช้:ไม่มีสิทธิ์แก้ไข Layout กลาง')
+}
+
+const newCityLayoutVersionId = (): string => {
+  const suffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID().slice(0, 8)
+    : Math.random().toString(36).slice(2, 10)
+  return `v-${Date.now()}-${suffix}`
 }
 
 const mapRoom = (data: DocumentData): ClassroomRoom => {
@@ -427,6 +502,7 @@ const writePersonalResults = async (
 
 export class FirebaseClassroomGameService implements ClassroomGameService {
   readonly isDemo = false
+  readonly cityLayoutRuntime = cityLayoutRuntime
 
   async ensureSession(): Promise<string> {
     if (!firebaseSessionPromise) {
@@ -446,6 +522,103 @@ export class FirebaseClassroomGameService implements ClassroomGameService {
       })
     }
     return firebaseSessionPromise
+  }
+
+  subscribePublishedCityLayout(listener: (layout: CityLayoutPublishedSnapshot | null) => void, onError: (message: string) => void): () => void {
+    return onSnapshot(
+      doc(db, 'cityLayoutPublished/current'),
+      (snapshot) => listener(snapshot.exists() ? parseCityLayoutPublishedSnapshot(snapshot.data()) : null),
+      onErrorMessage(onError),
+    )
+  }
+
+  subscribeCityLayoutDraft(editorUid: string, listener: (records: CityLayoutDraftRecord[]) => void, onError: (message: string) => void): () => void {
+    requireLayoutEditorSession(editorUid)
+    return onSnapshot(
+      collection(db, 'cityLayoutDraft'),
+      (snapshot) => listener(snapshot.docs.flatMap((item) => {
+        const record = mapCityLayoutDraft(item.id, item.data())
+        return record ? [record] : []
+      })),
+      onErrorMessage(onError),
+    )
+  }
+
+  subscribeCityLayoutVersions(editorUid: string, listener: (versions: CityLayoutPublishedSnapshot[]) => void, onError: (message: string) => void): () => void {
+    requireLayoutEditorSession(editorUid)
+    return onSnapshot(
+      query(collection(db, 'cityLayoutVersions'), orderBy('publishedAt', 'desc'), limit(10)),
+      (snapshot) => listener(snapshot.docs.flatMap((item) => {
+        const version = parseCityLayoutPublishedSnapshot(item.data())
+        return version ? [version] : []
+      })),
+      onErrorMessage(onError),
+    )
+  }
+
+  async saveCityLayoutDraft(editorUid: string, records: readonly CityLayoutDraftRecord[]): Promise<void> {
+    requireLayoutEditorSession(editorUid)
+    const batch = writeBatch(db)
+    for (const record of records) {
+      if (isLabelCityLayoutDraftRecord(record)) {
+        if (!isSaneCityLayoutLabelPlacement(record)) throw new Error('ผู้ใช้:ค่าตำแหน่งป้าย Layout ไม่ถูกต้อง')
+        batch.set(doc(db, `cityLayoutDraft/${cityLayoutLabelDraftId(record.scene, record.building, record.level)}`), {
+          scene: record.scene,
+          building: record.building,
+          level: record.level,
+          labelX: record.labelX,
+          labelY: record.labelY,
+          updatedAt: serverTimestamp(),
+        })
+      } else {
+        if (!isSaneCityLayoutPlacement(record)) throw new Error('ผู้ใช้:ค่าตำแหน่ง Layout ไม่ถูกต้อง')
+        batch.set(doc(db, `cityLayoutDraft/${cityLayoutDraftId(record.scene, record.building, record.level)}`), {
+          scene: record.scene,
+          building: record.building,
+          level: record.level,
+          x: record.x,
+          y: record.y,
+          scaleX: record.scaleX,
+          scaleY: record.scaleY,
+          updatedAt: serverTimestamp(),
+        })
+      }
+    }
+    await batch.commit()
+  }
+
+  async deleteCityLayoutDraft(editorUid: string, draftIds: readonly string[]): Promise<void> {
+    requireLayoutEditorSession(editorUid)
+    const batch = writeBatch(db)
+    for (const draftId of draftIds) batch.delete(doc(db, `cityLayoutDraft/${draftId}`))
+    await batch.commit()
+  }
+
+  async publishCityLayout(editorUid: string, placements: CompleteCityLayoutPlacements): Promise<CityLayoutPublishedSnapshot> {
+    requireLayoutEditorSession(editorUid)
+    if (!isCompleteCityLayout(placements)) throw new Error('ผู้ใช้:Layout ต้องมีตำแหน่งที่ถูกต้องครบ 105 จุด')
+    const versionId = newCityLayoutVersionId()
+    const writeValue = { schemaVersion: CITY_LAYOUT_SCHEMA_VERSION, versionId, placements, publishedAt: serverTimestamp() }
+    const batch = writeBatch(db)
+    batch.set(doc(db, `cityLayoutVersions/${versionId}`), writeValue)
+    batch.set(doc(db, 'cityLayoutPublished/current'), writeValue)
+    await batch.commit()
+    return { schemaVersion: CITY_LAYOUT_SCHEMA_VERSION, versionId, placements, publishedAt: Date.now() }
+  }
+
+  async rollbackCityLayout(editorUid: string, versionId: string): Promise<void> {
+    requireLayoutEditorSession(editorUid)
+    const versionSnapshot = await getDoc(doc(db, `cityLayoutVersions/${versionId}`))
+    const storedVersion = versionSnapshot.exists() ? versionSnapshot.data() : null
+    const version = storedVersion ? parseCityLayoutPublishedSnapshot(storedVersion) : null
+    if (!version || version.versionId !== versionId) throw new Error('ผู้ใช้:ไม่พบเวอร์ชัน Layout ที่เลือก')
+    const storedSchemaVersion = storedVersion?.schemaVersion === 1 ? 1 : CITY_LAYOUT_SCHEMA_VERSION
+    await setDoc(doc(db, 'cityLayoutPublished/current'), {
+      schemaVersion: storedSchemaVersion,
+      versionId: version.versionId,
+      placements: storedSchemaVersion === 1 ? storedVersion?.placements : version.placements,
+      publishedAt: serverTimestamp(),
+    })
   }
 
   async createRoom(teacherSessionId: string, questionDurationSec: number): Promise<ClassroomRoom> {

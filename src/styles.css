@@ -294,6 +294,27 @@ option { font-family: "Chakra Petch", sans-serif; }
   animation: city-image-fade 500ms ease both;
 }
 
+.city-scene--layout-loading {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: .65rem;
+  min-height: clamp(12rem, 42vw, 30rem);
+  color: #d9edff;
+  background: linear-gradient(145deg, #061326, #0b2742);
+}
+
+.city-scene--layout-loading > span {
+  width: 2rem;
+  aspect-ratio: 1;
+  border: 3px solid rgb(217 237 255 / 24%);
+  border-top-color: #7bc7ff;
+  border-radius: 50%;
+  animation: city-layout-loading-spin .8s linear infinite;
+}
+
+@keyframes city-layout-loading-spin { to { transform: rotate(360deg); } }
+
 .city-scene__background,
 .city-scene__building,
 .city-scene g { pointer-events: none; }
@@ -4093,6 +4114,28 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   line-height: 1;
   cursor: pointer;
 }
+.city-layout-panel fieldset { display: grid; gap: .65rem; margin: 0; padding: 0; border: 0; }
+.city-layout-panel fieldset:disabled { opacity: .62; }
+.city-layout-panel__access,
+.city-layout-panel__legacy,
+.city-layout-panel__publish,
+.city-layout-panel__versions { display: grid; gap: .35rem; padding: .55rem; border: 1px solid #c9deed; border-radius: .65rem; background: rgb(255 255 255 / 78%); font-size: .55rem; }
+.city-layout-panel__access p,
+.city-layout-panel__legacy p,
+.city-layout-panel__publish p { display: grid; gap: .16rem; margin: 0; }
+.city-layout-panel__access code { overflow-wrap: anywhere; user-select: all; }
+.city-layout-panel__legacy div,
+.city-layout-panel__selector-group > div { display: flex; flex-wrap: wrap; gap: .3rem; }
+.city-layout-panel__selector-group { display: grid; gap: .28rem; color: #607b93; font-size: .52rem; font-weight: 700; }
+.city-layout-panel__selector-group button,
+.city-layout-panel__legacy button,
+.city-layout-panel__publish button,
+.city-layout-panel__versions button { min-height: 1.85rem; padding: .3rem .5rem; border: 1px solid #cbddeb; border-radius: .5rem; background: white; color: #315675; font: inherit; font-size: .55rem; font-weight: 700; cursor: pointer; }
+.city-layout-panel__selector-group button.is-selected { border-color: #198be4; background: #dff2ff; color: #0561aa; }
+.city-layout-source { display: inline-flex; padding: .08rem .32rem; border-radius: 999px; font-size: .48rem; font-weight: 800; letter-spacing: .05em; }
+.city-layout-source.is-draft { background: #d8f5e4; color: #267651; }
+.city-layout-source.is-published { background: #dcecff; color: #175f9e; }
+.city-layout-source.is-default { background: #ffedc8; color: #94600d; }
 .city-layout-panel__selectors,
 .city-layout-panel__values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
 .city-layout-panel label { display: grid; gap: .2rem; color: #607b93; font-size: .52rem; font-weight: 600; }
@@ -4130,8 +4173,14 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .city-layout-panel__hint { margin: 0; padding: .45rem .55rem; border-radius: .5rem; background: #eaf4fb; color: #58758c; font-size: .5rem; line-height: 1.5; }
 .city-layout-panel__nudge { display: grid; grid-template-columns: repeat(4, 1fr); gap: .3rem; }
 .city-layout-panel__nudge button { font-size: .85rem; }
-.city-layout-panel__actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: .3rem; }
+.city-layout-panel__actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .3rem; }
 .city-layout-panel__actions button.is-primary { border-color: #086cc9; background: linear-gradient(#168fee, #0870cf); color: white; }
+.city-layout-panel__actions button.is-danger { border-color: #e4b7b7; color: #a32d2d; }
+.city-layout-panel__publish button.is-primary { border-color: #086cc9; background: linear-gradient(#168fee, #0870cf); color: white; }
+.city-layout-panel__published { color: #267651; }
+.city-layout-panel__versions > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .35rem; }
+.city-layout-panel__versions > div > span { overflow: hidden; text-overflow: ellipsis; }
+.city-layout-panel button:disabled { cursor: not-allowed; opacity: .55; }
 .city-layout-panel__feedback { min-height: 1rem; color: #267651; font-size: .5rem; line-height: 1.4; }
 
 @media (max-width: 900px) {
@@ -4395,33 +4444,40 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   position: absolute;
   top: var(--building-label-y);
   left: var(--building-label-x);
-  display: flex;
-  min-height: clamp(1.65rem, 2.6vw, 2.25rem);
-  align-items: center;
-  gap: .38rem;
-  padding: .28rem .62rem;
+  display: grid;
+  min-width: clamp(4.7rem, 6.5vw, 6.5rem);
+  min-height: clamp(2.35rem, 3.4vw, 3rem);
+  place-items: center;
+  gap: .12rem;
+  padding: .34rem .62rem .3rem;
   transform: translate(-50%, -50%);
-  border: 1px solid rgb(255 255 255 / 75%);
-  border-radius: 999px;
-  background: linear-gradient(145deg, rgb(255 255 255 / 91%), rgb(223 240 251 / 85%));
-  box-shadow: 0 .3rem .9rem rgb(0 29 50 / 28%), inset 0 1px white;
-  color: #1e4d75;
-  font-size: clamp(.55rem, .72vw, .78rem);
+  border: 2px solid rgb(39 202 245 / 92%);
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgb(5 30 55 / 94%), rgb(2 16 34 / 93%));
+  box-shadow: 0 0 .65rem rgb(24 198 244 / 35%), 0 .28rem .6rem rgb(0 8 22 / 42%), inset 0 1px rgb(164 235 255 / 12%);
+  color: #fff;
+  font-size: clamp(.58rem, .78vw, .82rem);
   font-family: inherit;
-  font-weight: 1000;
-  line-height: 1;
+  font-weight: 800;
+  line-height: 1.08;
+  text-align: center;
   white-space: nowrap;
-  backdrop-filter: blur(.35rem);
-  -webkit-backdrop-filter: blur(.35rem);
+  backdrop-filter: blur(.28rem);
+  -webkit-backdrop-filter: blur(.28rem);
   cursor: pointer;
   pointer-events: auto;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 .city-stage__building-labels > button:hover,
 .city-stage__building-labels > button:focus-visible,
-.city-stage__building-labels > button.is-selected { z-index: 2; transform: translate(-50%, -50%) translateY(-2px) scale(1.04); border-color: #55b7ef; box-shadow: 0 .45rem 1.25rem rgb(0 45 82 / 34%), 0 0 0 3px rgb(76 177 234 / 22%), inset 0 1px white; outline: none; }
-.city-stage__building-labels small { margin-left: .15rem; color: #56809f; font-size: .48rem; font-weight: 500; }
-.city-stage__building-labels i { display: grid; width: 1.2rem; height: 1.2rem; place-items: center; border-radius: 50%; background: #d8effc; font-size: .8rem; font-style: normal; }
+.city-stage__building-labels > button.is-selected,
+.city-stage__building-labels > button.is-layout-selected { z-index: 2; transform: translate(-50%, -50%) translateY(-2px) scale(1.035); border-color: #76e0ff; box-shadow: 0 0 .9rem rgb(35 207 255 / 52%), 0 .38rem .8rem rgb(0 8 22 / 48%), 0 0 0 2px rgb(105 224 255 / 24%); outline: none; }
+.city-stage__building-labels > button.is-label-editing { cursor: move; }
+.city-stage__building-label-name { color: #fff; font-weight: 850; text-shadow: 0 1px 2px rgb(0 0 0 / 55%); }
+.city-stage__building-label-level { display: flex; align-items: center; justify-content: center; gap: .2rem; color: #d8f6ff; font-size: clamp(.49rem, .64vw, .68rem); font-weight: 700; }
+.city-stage__building-label-level b { color: #8ce8ff; font-size: .88em; font-weight: 800; }
+.city-stage__building-label-level .is-negative { color: #ffaaa8; }
+.city-stage__building-label-level .is-positive { color: #8fe6b5; }
 
 .city-stage__building-detail {
   position: absolute;
@@ -4534,9 +4590,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 @keyframes teacher-building-story-crisis-in { from { opacity: 0; transform: translateY(.5rem); } to { opacity: 1; transform: none; } }
 
 @media (min-width: 768px) and (max-width: 1366px) and (orientation: landscape) {
-  .city-stage__building-labels > button { min-height: 1.4rem; gap: .2rem; padding: .2rem .42rem; font-size: clamp(.43rem, .62vw, .58rem); }
-  .city-stage__building-labels i { width: .9rem; height: .9rem; font-size: .58rem; }
-  .city-stage__building-labels small { display: none; }
+  .city-stage__building-labels > button { min-width: 4.25rem; min-height: 2rem; gap: .08rem; padding: .25rem .45rem .22rem; font-size: clamp(.48rem, .62vw, .64rem); }
+  .city-stage__building-label-level { font-size: clamp(.42rem, .52vw, .55rem); }
   .city-stage__building-detail { width: min(19rem, calc(100% - .7rem)); max-height: calc(100% - .7rem); padding: .65rem; gap: .5rem; }
   .teacher-building-story { width: min(32rem, calc(100vw - 2rem)); gap: .65rem; padding: .75rem .85rem; border-radius: .9rem; }
   .teacher-building-story > span { width: 2.6rem; height: 2.6rem; font-size: 1.45rem; }

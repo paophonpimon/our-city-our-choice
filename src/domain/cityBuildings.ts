@@ -31,6 +31,13 @@ export interface CitySceneBuildingPlacement {
   scaleY: number
 }
 
+export interface CitySceneBuildingLabelPlacement {
+  labelX: number
+  labelY: number
+}
+
+export interface CitySceneFrozenPlacement extends CitySceneBuildingPlacement, Partial<CitySceneBuildingLabelPlacement> {}
+
 export interface CitySceneProfile {
   id: CitySceneProfileId
   backgroundAsset: string
@@ -131,182 +138,222 @@ export const resolveBuildingAssetPlacement = (
   ?? DEFAULT_BUILDING_ASSET_PLACEMENT
 
 /**
+ * Legacy label anchors inside each building's full-stage model canvas. These
+ * percentages are the exact values the teacher map used before labels became
+ * independently calibratable.
+ */
+export const BUILDING_LABEL_ANCHOR_PERCENTAGES: Record<BuildingId, { x: number; y: number }> = {
+  municipality: { x: 50, y: 89 },
+  hospital: { x: 31, y: 66 },
+  police: { x: 65, y: 61 },
+  construction: { x: 65, y: 19 },
+  market: { x: 83, y: 43 },
+  school: { x: 31, y: 29 },
+  newsAgency: { x: 81, y: 79 },
+}
+
+export const deriveLegacyBuildingLabelPlacement = (
+  buildingId: BuildingId,
+  placement: CitySceneBuildingPlacement,
+): CitySceneBuildingLabelPlacement => {
+  const anchor = BUILDING_LABEL_ANCHOR_PERCENTAGES[buildingId]
+  return {
+    labelX: placement.x + anchor.x / 100 * CITY_STAGE_WIDTH * placement.scaleX,
+    labelY: placement.y + anchor.y / 100 * CITY_STAGE_HEIGHT * placement.scaleY,
+  }
+}
+
+/**
  * Frozen production defaults for the scene-placement group transform (the
  * `translate(x y) scale(scaleX scaleY)` each building's <g> renders with),
- * one entry per scene x building x level (3 x 7 x 5 = 105). Generated
- * verbatim from `city-layout-effective-105.json` - the exact effective
- * placement the calibration tool's own renderer was already producing for
- * every combination, whether that came from an explicit manual override or
- * the old base-placement + slice/delta fallback formula. Do not recompute or
- * re-derive these numbers: they ARE the final result, so nothing here should
- * ever have a scene-delta, slice fallback, or BUILDING_ASSET_PLACEMENTS
- * offset applied to it again - that math has already happened once, by the
- * calibration tool, and is baked into these values.
+ * one entry per scene x building x level (3 x 7 x 5 = 105). These are the
+ * authoritative committed production placements. After staging calibration,
+ * `npm run layout:freeze-staging` validates the complete Published snapshot
+ * and deterministically replaces only the marked table below. Do not recompute
+ * or re-derive these numbers at runtime: scene/slice fallback math has already
+ * been baked into the frozen values.
  */
+// CITY LAYOUT FROZEN TABLE START
 export const CITY_SCENE_BUILDING_PLACEMENTS: Record<
   CitySceneProfileId,
-  Record<BuildingId, Record<BuildingLevel, CitySceneBuildingPlacement>>
+  Record<BuildingId, Record<BuildingLevel, CitySceneFrozenPlacement>>
 > = {
   degraded: {
     municipality: {
-      [-2]: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1 },
-      0: { x: 1.49, y: 3.8200000000000003, scaleX: 1, scaleY: 1 },
-      1: { x: 26.19, y: 29.7, scaleX: 1, scaleY: 1 },
-      2: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1, labelX: 585.97, labelY: 558.16 },
+      [-1]: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1, labelX: 596.4499500000001, labelY: 592.65749466 },
+      0: { x: 1.49, y: 3.8200000000000003, scaleX: 1, scaleY: 1, labelX: 589.71, labelY: 558.16 },
+      1: { x: 28.44, y: 28.74, scaleX: 1, scaleY: 1, labelX: 604.69, labelY: 562.96 },
+      2: { x: 1.49, y: -35.46, scaleX: 1, scaleY: 1, labelX: 592.7, labelY: 558.16 },
     },
     hospital: {
-      [-2]: { x: -20.82, y: -33.25, scaleX: 1.061, scaleY: 1.001 },
-      [-1]: { x: -20.82, y: -33.25, scaleX: 1.061, scaleY: 1.001 },
-      0: { x: -22.32, y: 6.030000000000001, scaleX: 1.061, scaleY: 1.001 },
-      1: { x: -6.6, y: 22.32, scaleX: 1.061, scaleY: 1.001 },
-      2: { x: -29.8, y: -34.21, scaleX: 1.061, scaleY: 1.001 },
+      [-2]: { x: -20.82, y: -33.25, scaleX: 1.061, scaleY: 1.001, labelX: 351.1, labelY: 425.35 },
+      [-1]: { x: -20.82, y: -33.25, scaleX: 1.061, scaleY: 1.001, labelX: 348.11, labelY: 433.97 },
+      0: { x: -22.32, y: 6.030000000000001, scaleX: 1.061, scaleY: 1.001, labelX: 370.55, labelY: 454.09 },
+      1: { x: -6.6, y: 22.32, scaleX: 1.061, scaleY: 1.001, labelX: 357.83, labelY: 428.21 },
+      2: { x: -29.8, y: -34.21, scaleX: 1.061, scaleY: 1.001, labelX: 339.12, labelY: 425.34 },
     },
     police: {
-      [-2]: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1 },
-      [-1]: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1 },
-      0: { x: -44, y: 5.07, scaleX: 1.0542244640605296, scaleY: 1 },
-      1: { x: -19.3, y: 13.7, scaleX: 1.0542244640605296, scaleY: 1 },
-      2: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1 },
+      [-2]: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1, labelX: 757.92, labelY: 400.13 },
+      [-1]: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1, labelX: 772.1377347540985, labelY: 396.29749634 },
+      0: { x: -44, y: 5.07, scaleX: 1.0542244640605296, scaleY: 1, labelX: 810.3, labelY: 434.62 },
+      1: { x: -14.81, y: 19.45, scaleX: 1.0542244640605296, scaleY: 1, labelX: 787.86, labelY: 419.3 },
+      2: { x: -43.25, y: -34.21, scaleX: 1.0542244640605296, scaleY: 1, labelX: 805.06, labelY: 419.29 },
     },
     construction: {
-      [-2]: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1 },
-      0: { x: 0.74, y: 2.8699999999999974, scaleX: 1, scaleY: 1 },
-      1: { x: 23.19, y: 7.66, scaleX: 1, scaleY: 1 },
-      2: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1 },
+      [-2]: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1, labelX: 783.16, labelY: 207.86 },
+      [-1]: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1, labelX: 777.18, labelY: 204.03 },
+      0: { x: 0.74, y: 2.8699999999999974, scaleX: 1, scaleY: 1, labelX: 790.65, labelY: 200.2 },
+      1: { x: 23.19, y: 7.66, scaleX: 1, scaleY: 1, labelX: 785.41, labelY: 204.99 },
+      2: { x: -0.76, y: -34.5, scaleX: 1, scaleY: 1, labelX: 789.16, labelY: 184.87 },
     },
     market: {
-      [-2]: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1 },
-      0: { x: -4.48, y: 2.8700000000000045, scaleX: 1, scaleY: 1 },
-      1: { x: 35.93, y: 15.33, scaleX: 1, scaleY: 1 },
-      2: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1 },
+      [-2]: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1, labelX: 989.13, labelY: 302.51 },
+      [-1]: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1, labelX: 996.62, labelY: 290.06 },
+      0: { x: -4.48, y: 2.8700000000000045, scaleX: 1, scaleY: 1, labelX: 999.62, labelY: 299.64 },
+      1: { x: 35.93, y: 15.33, scaleX: 1, scaleY: 1, labelX: 1023.5635169999999, labelY: 318.80249742 },
+      2: { x: -1.49, y: -32.58, scaleX: 1, scaleY: 1, labelX: 991.38, labelY: 285.26 },
     },
     school: {
-      [-2]: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1 },
-      [-1]: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1 },
-      0: { x: -14.08, y: 5.789999999999999, scaleX: 1.0542244640605296, scaleY: 1 },
-      1: { x: 0.89, y: 16.33, scaleX: 1.0542244640605296, scaleY: 1 },
-      2: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1 },
+      [-2]: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1, labelX: 374.05, labelY: 165.42 },
+      [-1]: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1, labelX: 378.54, labelY: 169.25 },
+      0: { x: -14.08, y: 5.789999999999999, scaleX: 1.0542244640605296, scaleY: 1, labelX: 379.29, labelY: 169.26 },
+      1: { x: 0.89, y: 16.33, scaleX: 1.0542244640605296, scaleY: 1, labelX: 376.3, labelY: 173.09 },
+      2: { x: -14.83, y: -32.54, scaleX: 1.0542244640605296, scaleY: 1, labelX: 384.53, labelY: 157.76 },
     },
     newsAgency: {
-      [-2]: { x: 0, y: -39.29, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -1.5, y: -32.58, scaleX: 1, scaleY: 1 },
-      0: { x: -0.75, y: 4.789999999999999, scaleX: 1, scaleY: 1 },
-      1: { x: 38.16, y: 25.87, scaleX: 1, scaleY: 1 },
-      2: { x: -1.5, y: -32.58, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 0, y: -39.29, scaleX: 1, scaleY: 1, labelX: 978.8, labelY: 554.66 },
+      [-1]: { x: -1.5, y: -32.58, scaleX: 1, scaleY: 1, labelX: 962.3351190000002, labelY: 524.96249526 },
+      0: { x: -0.75, y: 4.789999999999999, scaleX: 1, scaleY: 1, labelX: 972.81, labelY: 562.33 },
+      1: { x: 38.16, y: 25.87, scaleX: 1, scaleY: 1, labelX: 978.8, labelY: 546.04 },
+      2: { x: -1.5, y: -32.58, scaleX: 1, scaleY: 1, labelX: 981.04, labelY: 551.79 },
     },
   },
   normal: {
     municipality: {
-      [-2]: { x: 0, y: -39.28, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 0, y: -39.28, scaleX: 1, scaleY: 1 },
-      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
-      1: { x: 24.7, y: 27.79, scaleX: 1, scaleY: 1 },
-      2: { x: 0, y: -39.28, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 0, y: -39.28, scaleX: 1, scaleY: 1, labelX: 580.74, labelY: 541.89 },
+      [-1]: { x: 0, y: -39.28, scaleX: 1, scaleY: 1, labelX: 591.97, labelY: 546.68 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1, labelX: 573.25, labelY: 553.38 },
+      1: { x: 24.7, y: 27.79, scaleX: 1, scaleY: 1, labelX: 585.98, labelY: 553.38 },
+      2: { x: 0, y: -39.28, scaleX: 1, scaleY: 1, labelX: 594.96, labelY: 562.97 },
     },
     hospital: {
-      [-2]: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1 },
-      0: { x: 5.24, y: 1.92, scaleX: 1, scaleY: 1 },
-      1: { x: 16.47, y: 26.83, scaleX: 1, scaleY: 1 },
-      2: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1, labelX: 350.92, labelY: 424.6 },
+      [-1]: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1, labelX: 370.375169, labelY: 426.51499604 },
+      0: { x: 5.24, y: 1.92, scaleX: 1, scaleY: 1, labelX: 332.21, labelY: 421.72 },
+      1: { x: 16.47, y: 26.83, scaleX: 1, scaleY: 1, labelX: 358.4, labelY: 428.43 },
+      2: { x: 1.5, y: -39.28, scaleX: 1, scaleY: 1, labelX: 370.375169, labelY: 426.51499604 },
     },
     police: {
-      [-2]: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1 },
-      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
-      1: { x: 23.2, y: 18.21, scaleX: 1, scaleY: 1 },
-      2: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1, labelX: 774.1979350000001, labelY: 391.22749634 },
+      [-1]: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1, labelX: 774.1979350000001, labelY: 391.22749634 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1, labelX: 747.26, labelY: 403.67 },
+      1: { x: 23.2, y: 18.21, scaleX: 1, scaleY: 1, labelX: 745.76, labelY: 396.02 },
+      2: { x: 0.75, y: -39.28, scaleX: 1, scaleY: 1, labelX: 774.1979350000001, labelY: 391.22749634 },
     },
     construction: {
-      [-2]: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1 },
-      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
-      1: { x: 26.94, y: 8.62, scaleX: 1, scaleY: 1 },
-      2: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1 },
+      [-2]: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1, labelX: 790.66, labelY: 200.2 },
+      [-1]: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1, labelX: 771.9479350000001, labelY: 96.72249886 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1, labelX: 790.66, labelY: 200.21 },
+      1: { x: 26.94, y: 8.62, scaleX: 1, scaleY: 1, labelX: 794.4, labelY: 199.24 },
+      2: { x: -1.5, y: -37.37, scaleX: 1, scaleY: 1, labelX: 787.66, labelY: 207.87 },
     },
     market: {
-      [-2]: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1 },
-      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
-      1: { x: 32.93, y: 17.25, scaleX: 1, scaleY: 1 },
-      2: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1, labelX: 990.623517, labelY: 268.02249742000004 },
+      [-1]: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1, labelX: 990.623517, labelY: 268.02249742000004 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1, labelX: 998.86, labelY: 290.06 },
+      1: { x: 32.93, y: 17.25, scaleX: 1, scaleY: 1, labelX: 1000.36, labelY: 292.94 },
+      2: { x: 2.99, y: -35.45, scaleX: 1, scaleY: 1, labelX: 990.623517, labelY: 268.02249742000004 },
     },
     school: {
-      [-2]: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1 },
-      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
-      1: { x: 7.48, y: 11.49, scaleX: 1, scaleY: 1 },
-      2: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1 },
+      [-2]: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1, labelX: 368.125169, labelY: 166.33749826000002 },
+      [-1]: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1, labelX: 368.125169, labelY: 166.33749826000002 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1, labelX: 371.87, labelY: 162.51 },
+      1: { x: 7.48, y: 11.49, scaleX: 1, scaleY: 1, labelX: 368.87, labelY: 163.46 },
+      2: { x: -0.75, y: -38.33, scaleX: 1, scaleY: 1, labelX: 368.125169, labelY: 166.33749826000002 },
     },
     newsAgency: {
-      [-2]: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1 },
-      0: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
-      1: { x: 37.42, y: 23, scaleX: 1, scaleY: 1 },
-      2: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1 },
+      [-2]: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1, labelX: 963.0851190000002, labelY: 520.17249526 },
+      [-1]: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1, labelX: 976.56, labelY: 550.83 },
+      0: { x: 0, y: 0, scaleX: 1, scaleY: 1, labelX: 981.05, labelY: 553.71 },
+      1: { x: 37.42, y: 23, scaleX: 1, scaleY: 1, labelX: 954.11, labelY: 541.26 },
+      2: { x: -0.75, y: -37.37, scaleX: 1, scaleY: 1, labelX: 984.79, labelY: 554.67 },
     },
   },
   developed: {
     municipality: {
-      [-2]: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1 },
-      0: { x: 1.5, y: 2.8700000000000045, scaleX: 1, scaleY: 1 },
-      1: { x: 20.21, y: 27.79, scaleX: 1, scaleY: 1 },
-      2: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1, labelX: 586.73, labelY: 561.05 },
+      [-1]: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1, labelX: 581.49, labelY: 549.55 },
+      0: { x: 1.5, y: 2.8700000000000045, scaleX: 1, scaleY: 1, labelX: 593.47, labelY: 554.33 },
+      1: { x: 26.95, y: 26.83, scaleX: 1, scaleY: 1, labelX: 621.16, labelY: 560.09 },
+      2: { x: 1.5, y: -36.41, scaleX: 1, scaleY: 1, labelX: 598.71, labelY: 556.26 },
     },
     hospital: {
-      [-2]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
-      0: { x: -1.5, y: -0.9600000000000009, scaleX: 1, scaleY: 1 },
-      1: { x: 16.46, y: 21.08, scaleX: 1, scaleY: 1 },
-      2: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1, labelX: 367.38, labelY: 434.18 },
+      [-1]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1, labelX: 368.875169, labelY: 425.55499604000005 },
+      0: { x: -1.5, y: -0.9600000000000009, scaleX: 1, scaleY: 1, labelX: 359.14, labelY: 428.42 },
+      1: { x: 16.46, y: 21.08, scaleX: 1, scaleY: 1, labelX: 365.88, labelY: 429.38 },
+      2: { x: 0, y: -40.24, scaleX: 1, scaleY: 1, labelX: 368.875169, labelY: 425.55499604000005 },
     },
     police: {
-      [-2]: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1 },
-      0: { x: 0, y: 0.9600000000000009, scaleX: 1, scaleY: 1 },
-      1: { x: 26.94, y: 21.09, scaleX: 1, scaleY: 1 },
-      2: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1, labelX: 755.49, labelY: 397.94 },
+      [-1]: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1, labelX: 805.63, labelY: 414.23 },
+      0: { x: 0, y: 0.9600000000000009, scaleX: 1, scaleY: 1, labelX: 753.24, labelY: 397.93 },
+      1: { x: 26.94, y: 21.09, scaleX: 1, scaleY: 1, labelX: 787.67, labelY: 415.19 },
+      2: { x: 0.75, y: -38.32, scaleX: 1, scaleY: 1, labelX: 774.1979350000001, labelY: 392.18749634 },
     },
     construction: {
-      [-2]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
-      0: { x: 1.5, y: -2.8700000000000045, scaleX: 1, scaleY: 1 },
-      1: { x: 24.7, y: 7.67, scaleX: 1, scaleY: 1 },
-      2: { x: 0, y: -40.24, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1, labelX: 786.92, labelY: 200.21 },
+      [-1]: { x: 0, y: -40.24, scaleX: 1, scaleY: 1, labelX: 787.67, labelY: 194.46 },
+      0: { x: 1.5, y: -2.8700000000000045, scaleX: 1, scaleY: 1, labelX: 786.92, labelY: 202.13 },
+      1: { x: 24.7, y: 7.67, scaleX: 1, scaleY: 1, labelX: 787.67, labelY: 200.21 },
+      2: { x: 0, y: -40.24, scaleX: 1, scaleY: 1, labelX: 781.68, labelY: 201.17 },
     },
     market: {
-      [-2]: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1 },
-      0: { x: -5.98, y: 0.9600000000000009, scaleX: 1, scaleY: 1 },
-      1: { x: 36.67, y: 16.29, scaleX: 1, scaleY: 1 },
-      2: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1 },
+      [-2]: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1, labelX: 995.12, labelY: 276.65 },
+      [-1]: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1, labelX: 984.643517, labelY: 268.98249742 },
+      0: { x: -5.98, y: 0.9600000000000009, scaleX: 1, scaleY: 1, labelX: 981.653517, labelY: 304.43249742 },
+      1: { x: 36.67, y: 16.29, scaleX: 1, scaleY: 1, labelX: 1004.85, labelY: 288.14 },
+      2: { x: -2.99, y: -34.49, scaleX: 1, scaleY: 1, labelX: 984.643517, labelY: 268.98249742 },
     },
     school: {
-      [-2]: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1 },
-      [-1]: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1 },
-      0: { x: -2.24, y: 0, scaleX: 1, scaleY: 1 },
-      1: { x: 16.47, y: 12.45, scaleX: 1, scaleY: 1 },
-      2: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1 },
+      [-2]: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1, labelX: 378.61, labelY: 166.34 },
+      [-1]: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1, labelX: 373.37, labelY: 160.59 },
+      0: { x: -2.24, y: 0, scaleX: 1, scaleY: 1, labelX: 370.38, labelY: 158.68 },
+      1: { x: 16.47, y: 12.45, scaleX: 1, scaleY: 1, labelX: 374.87, labelY: 163.46 },
+      2: { x: -2.99, y: -38.33, scaleX: 1, scaleY: 1, labelX: 375.61, labelY: 162.5 },
     },
     newsAgency: {
-      [-2]: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1 },
-      [-1]: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1 },
-      0: { x: 1.5, y: 2.8799999999999955, scaleX: 1, scaleY: 1 },
-      1: { x: 38.92, y: 25.87, scaleX: 1, scaleY: 1 },
-      2: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1 },
+      [-2]: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1, labelX: 974.31, labelY: 549.88 },
+      [-1]: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1, labelX: 972.82, labelY: 543.17 },
+      0: { x: 1.5, y: 2.8799999999999955, scaleX: 1, scaleY: 1, labelX: 953.36, labelY: 537.43 },
+      1: { x: 32.18, y: 24.91, scaleX: 1, scaleY: 1, labelX: 961.59, labelY: 540.29 },
+      2: { x: 0.75, y: -34.49, scaleX: 1, scaleY: 1, labelX: 964.5851190000002, labelY: 523.05249526 },
     },
   },
 }
+// CITY LAYOUT FROZEN TABLE END
 
 export const resolveFrozenBuildingPlacement = (
   sceneId: CitySceneProfileId,
   buildingId: BuildingId,
   level: BuildingLevel,
-): CitySceneBuildingPlacement => CITY_SCENE_BUILDING_PLACEMENTS[sceneId][buildingId][level]
+): CitySceneBuildingPlacement => {
+  const { x, y, scaleX, scaleY } = CITY_SCENE_BUILDING_PLACEMENTS[sceneId][buildingId][level]
+  return { x, y, scaleX, scaleY }
+}
+
+export const resolveFrozenBuildingLabelPlacement = (
+  sceneId: CitySceneProfileId,
+  buildingId: BuildingId,
+  level: BuildingLevel,
+): CitySceneBuildingLabelPlacement => {
+  const placement = CITY_SCENE_BUILDING_PLACEMENTS[sceneId][buildingId][level]
+  return typeof placement.labelX === 'number' && Number.isFinite(placement.labelX)
+    && typeof placement.labelY === 'number' && Number.isFinite(placement.labelY)
+    ? { labelX: placement.labelX, labelY: placement.labelY }
+    : deriveLegacyBuildingLabelPlacement(buildingId, placement)
+}
 
 /**
  * Ground/contact depth anchor for isometric front-to-back sorting - the

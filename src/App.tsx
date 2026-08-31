@@ -5,6 +5,7 @@ import { ClosedPage } from './pages/ClosedPage'
 import { GamePage } from './pages/GamePage'
 import { HomePage } from './pages/HomePage'
 import { JoinPage } from './pages/JoinPage'
+import { LayoutEditorPage } from './pages/LayoutEditorPage'
 import { LobbyPage } from './pages/LobbyPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PostAssessmentPage } from './pages/PostAssessmentPage'
@@ -28,6 +29,7 @@ const App = () => {
           <Route path="/teacher" element={<TeacherPage />} />
           <Route path="/teacher/evidence/:roomCode" element={<TeacherEvidencePage />} />
           <Route path="/join" element={<JoinPage />} />
+          <Route path="/layout-editor" element={<LayoutEditorPage />} />
           <Route path="/assessment/pre/:roomCode" element={<PreAssessmentPage />} />
           <Route path="/assessment/post/:roomCode" element={<PostAssessmentPage />} />
           <Route path="/lobby/:roomCode" element={<LobbyPage />} />

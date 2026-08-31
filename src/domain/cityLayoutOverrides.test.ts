@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest'
 import {
   BUILDING_IDS,
   CITY_SCENE_PROFILES,
+  deriveLegacyBuildingLabelPlacement,
   resolveBuildingAsset,
   resolveFrozenBuildingPlacement,
+  resolveFrozenBuildingLabelPlacement,
   type BuildingId,
   type BuildingLevel,
   type CitySceneProfileId,
 } from './cityBuildings'
 import {
+  ALL_BUILDING_LEVELS,
+  CITY_LAYOUT_COMBINATION_COUNT,
+  CITY_LAYOUT_SCHEMA_VERSION,
   CITY_LAYOUT_STORAGE_KEY,
   CITY_LAYOUT_STORAGE_KEY_V1,
   clearLayoutPlacement,
@@ -18,8 +23,13 @@ import {
   getLayoutPlacement,
   migrateCityLayoutOverridesV1,
   parseCityLayoutOverridesV2,
+  parseCityLayoutPublishedSnapshot,
   readCityLayoutOverrides,
+  resolveCompleteCityLayout,
   resolveEffectivePlacement,
+  resolveLayoutEditorPlacement,
+  resolveProductionPlacement,
+  setLabelLayoutPlacement,
   setLayoutPlacement,
   writeCityLayoutOverrides,
   type CityLayoutOverrides,
@@ -349,44 +359,200 @@ interface SnapshotRecord {
 const SNAPSHOT_PATH = new URL('../../city-layout-effective-105.json', import.meta.url)
 const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8')) as SnapshotRecord[]
 
-describe('city-layout-effective-105.json is frozen into the production defaults exactly', () => {
-  it('the snapshot itself contains exactly 105 records with unique scene/building/level keys', () => {
+describe('frozen production defaults and the historical recovery snapshot', () => {
+  it('keeps the historical recovery artifact complete and uniquely keyed', () => {
     expect(snapshot).toHaveLength(105)
     const keys = new Set(snapshot.map((record) => `${record.scene}::${record.building}::${record.level}`))
     expect(keys.size).toBe(105)
+    expect(snapshot.every((record) => [record.x, record.y, record.scaleX, record.scaleY].every(Number.isFinite))).toBe(true)
   })
 
-  it('the production resolver returns the exact x/y/scaleX/scaleY snapshot value for every one of the 105 records, with no local override present', () => {
-    for (const record of snapshot) {
-      const resolved = resolveEffectivePlacement(undefined, record.scene, record.building, record.level)
-      expect(resolved.x).toBe(record.x)
-      expect(resolved.y).toBe(record.y)
-      expect(resolved.scaleX).toBe(record.scaleX)
-      expect(resolved.scaleY).toBe(record.scaleY)
-      expect(resolved.source).toBe('fallback')
+  it('exposes all 105 current frozen model placements without leaking independently calibrated label fields', () => {
+    for (const scene of Object.keys(CITY_SCENE_PROFILES) as CitySceneProfileId[]) {
+      for (const building of BUILDING_IDS) {
+        for (const level of ALL_BUILDING_LEVELS) {
+          const frozen = resolveFrozenBuildingPlacement(scene, building, level)
+          expect(Object.keys(frozen).sort()).toEqual(['scaleX', 'scaleY', 'x', 'y'])
+          expect(resolveEffectivePlacement(undefined, scene, building, level)).toEqual({
+            scene,
+            building,
+            level,
+            ...frozen,
+            source: 'fallback',
+          })
+        }
+      }
     }
   })
 
-  it('resolveFrozenBuildingPlacement (the production default table itself) also matches every snapshot record exactly', () => {
-    for (const record of snapshot) {
-      expect(resolveFrozenBuildingPlacement(record.scene, record.building, record.level)).toEqual({
-        x: record.x, y: record.y, scaleX: record.scaleX, scaleY: record.scaleY,
-      })
-    }
-  })
-
-  it('a calibration override wins over the frozen default only for its own exact scene/building/level - every other one of the 105 combinations is unaffected', () => {
+  it('a calibration override wins only for its exact scene/building/level', () => {
     const sample = snapshot[42]
     const customPlacement = { x: 12345, y: 6789, scaleX: 2, scaleY: 3 }
     const overrides = setLayoutPlacement({}, sample.scene, sample.building, sample.level, customPlacement)
 
     expect(getLayoutPlacement(overrides, sample.scene, sample.building, sample.level)).toEqual(customPlacement)
 
-    for (const record of snapshot) {
-      if (record.scene === sample.scene && record.building === sample.building && record.level === sample.level) continue
-      expect(getLayoutPlacement(overrides, record.scene, record.building, record.level)).toEqual({
-        x: record.x, y: record.y, scaleX: record.scaleX, scaleY: record.scaleY,
-      })
+    for (const scene of Object.keys(CITY_SCENE_PROFILES) as CitySceneProfileId[]) {
+      for (const building of BUILDING_IDS) {
+        for (const level of ALL_BUILDING_LEVELS) {
+          if (scene === sample.scene && building === sample.building && level === sample.level) continue
+          expect(getLayoutPlacement(overrides, scene, building, level))
+            .toEqual(resolveFrozenBuildingPlacement(scene, building, level))
+        }
+      }
     }
+  })
+})
+
+describe('central versioned production layout resolver', () => {
+  const frozenComplete = resolveCompleteCityLayout({}, null)
+  const published = {
+    schemaVersion: CITY_LAYOUT_SCHEMA_VERSION,
+    versionId: 'version-one',
+    placements: frozenComplete,
+    publishedAt: 1_700_000_000_000,
+  } as const
+
+  it('resolves a complete 3 x 7 x 5 = 105 snapshot', () => {
+    const records = (Object.keys(CITY_SCENE_PROFILES) as CitySceneProfileId[]).flatMap((scene) =>
+      BUILDING_IDS.flatMap((building) =>
+        ALL_BUILDING_LEVELS.map((level) => frozenComplete[scene][building][level]),
+      ),
+    )
+    expect(CITY_LAYOUT_COMBINATION_COUNT).toBe(105)
+    expect(records).toHaveLength(105)
+    expect(records.every((placement) => Number.isFinite(placement.x)
+      && Number.isFinite(placement.y)
+      && Number.isFinite(placement.scaleX)
+      && Number.isFinite(placement.scaleY)
+      && Number.isFinite(placement.labelX)
+      && Number.isFinite(placement.labelY))).toBe(true)
+  })
+
+  it('uses Published in normal gameplay and never lets Draft affect it', () => {
+    const changedPlacement = { x: 321, y: -123, scaleX: 1.2, scaleY: .8 }
+    const changedPublished = {
+      ...published,
+      placements: resolveCompleteCityLayout(
+        setLayoutPlacement({}, 'normal', 'hospital', 2, changedPlacement),
+        published,
+      ),
+    }
+    const unrelatedDraft = setLayoutPlacement({}, 'normal', 'hospital', 2, HOSPITAL_LV1)
+
+    expect(resolveProductionPlacement(changedPublished, 'normal', 'hospital', 2))
+      .toMatchObject({ ...changedPlacement, source: 'PUBLISHED', labelSource: 'PUBLISHED' })
+    expect(resolveProductionPlacement(changedPublished, 'normal', 'hospital', 2))
+      .not.toEqual(resolveLayoutEditorPlacement(unrelatedDraft, changedPublished, 'normal', 'hospital', 2))
+  })
+
+  it('uses Draft > Published > Default in layout mode, with an explicit source badge', () => {
+    const customPublished = {
+      ...published,
+      placements: resolveCompleteCityLayout(
+        setLayoutPlacement({}, 'normal', 'hospital', 2, HOSPITAL_LV2),
+        published,
+      ),
+    }
+    expect(resolveLayoutEditorPlacement(setLayoutPlacement({}, 'normal', 'hospital', 2, HOSPITAL_LV1), customPublished, 'normal', 'hospital', 2))
+      .toMatchObject({ ...HOSPITAL_LV1, source: 'DRAFT', labelSource: 'PUBLISHED' })
+    expect(resolveLayoutEditorPlacement({}, customPublished, 'normal', 'hospital', 2))
+      .toMatchObject({ ...HOSPITAL_LV2, source: 'PUBLISHED', labelSource: 'PUBLISHED' })
+    expect(resolveLayoutEditorPlacement({}, null, 'normal', 'hospital', 2))
+      .toMatchObject({ ...resolveFrozenBuildingPlacement('normal', 'hospital', 2), source: 'DEFAULT', labelSource: 'DEFAULT' })
+  })
+
+  it('gives three browsers identical normal results despite absent, stale, or malicious localStorage', () => {
+    const browserA = new MemoryStorage()
+    const browserB = new MemoryStorage()
+    const browserC = new MemoryStorage()
+    browserB.setItem(CITY_LAYOUT_STORAGE_KEY, JSON.stringify({
+      normal: { hospital: { 2: { x: 999, y: 999, scaleX: 9, scaleY: 9 } } },
+    }))
+    browserC.setItem(CITY_LAYOUT_STORAGE_KEY_V1, JSON.stringify({
+      developed: { school: { x: -777, y: 444, scaleX: .5, scaleY: 2 } },
+    }))
+
+    const browserStorages = [browserA, browserB, browserC]
+    const results = browserStorages.map(() =>
+      (Object.keys(CITY_SCENE_PROFILES) as CitySceneProfileId[]).flatMap((scene) =>
+        BUILDING_IDS.flatMap((building) =>
+          ALL_BUILDING_LEVELS.map((level) => resolveProductionPlacement(published, scene, building, level)),
+        ),
+      ),
+    )
+    expect(results[0]).toHaveLength(105)
+    expect(results[1]).toEqual(results[0])
+    expect(results[2]).toEqual(results[0])
+  })
+
+  it('falls back as one deterministic complete set when Published is absent or malformed', () => {
+    expect(parseCityLayoutPublishedSnapshot({
+      schemaVersion: CITY_LAYOUT_SCHEMA_VERSION,
+      versionId: 'incomplete',
+      publishedAt: 123,
+      placements: { normal: {} },
+    })).toBeNull()
+    const unsafePlacements = structuredClone(frozenComplete)
+    unsafePlacements.normal.hospital[2].scaleX = 99
+    expect(parseCityLayoutPublishedSnapshot({
+      schemaVersion: CITY_LAYOUT_SCHEMA_VERSION,
+      versionId: 'unsafe',
+      publishedAt: 123,
+      placements: unsafePlacements,
+    })).toBeNull()
+
+    for (const scene of Object.keys(CITY_SCENE_PROFILES) as CitySceneProfileId[]) {
+      for (const building of BUILDING_IDS) {
+        for (const level of ALL_BUILDING_LEVELS) {
+          expect(resolveProductionPlacement(null, scene, building, level)).toEqual({
+            ...resolveFrozenBuildingPlacement(scene, building, level),
+            ...resolveFrozenBuildingLabelPlacement(scene, building, level),
+            source: 'DEFAULT',
+            labelSource: 'DEFAULT',
+          })
+        }
+      }
+    }
+  })
+
+  it('calibrates a label independently without changing the building transform', () => {
+    const labelDraft = setLabelLayoutPlacement({}, 'normal', 'hospital', 2, { labelX: 444, labelY: 222 })
+    const before = resolveLayoutEditorPlacement({}, published, 'normal', 'hospital', 2)
+    const after = resolveLayoutEditorPlacement({}, published, 'normal', 'hospital', 2, labelDraft)
+
+    expect(after).toMatchObject({
+      x: before.x,
+      y: before.y,
+      scaleX: before.scaleX,
+      scaleY: before.scaleY,
+      labelX: 444,
+      labelY: 222,
+      source: before.source,
+      labelSource: 'DRAFT',
+    })
+  })
+
+  it('hydrates a legacy schema-v1 Published snapshot with the exact existing label fallback', () => {
+    const legacyPlacements = Object.fromEntries(
+      (Object.keys(CITY_SCENE_PROFILES) as CitySceneProfileId[]).map((scene) => [scene, Object.fromEntries(
+        BUILDING_IDS.map((building) => [building, Object.fromEntries(
+          ALL_BUILDING_LEVELS.map((level) => [level, resolveFrozenBuildingPlacement(scene, building, level)]),
+        )]),
+      )]),
+    )
+    const parsed = parseCityLayoutPublishedSnapshot({
+      schemaVersion: 1,
+      versionId: 'legacy-v1',
+      placements: legacyPlacements,
+      publishedAt: 123,
+    })
+
+    expect(parsed?.schemaVersion).toBe(CITY_LAYOUT_SCHEMA_VERSION)
+    const frozenModel = resolveFrozenBuildingPlacement('normal', 'hospital', 0)
+    expect(parsed?.placements.normal.hospital[0]).toMatchObject({
+      ...frozenModel,
+      ...deriveLegacyBuildingLabelPlacement('hospital', frozenModel),
+    })
   })
 })

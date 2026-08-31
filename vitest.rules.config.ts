@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config'
 // to already be up.
 export default defineConfig({
   test: {
-    include: ['firestore-tests/**/*.test.ts'],
+    include: ['firestore-tests/rules.test.ts'],
     testTimeout: 20_000,
     hookTimeout: 20_000,
   },

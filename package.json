@@ -5,12 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:staging": "node scripts/validate-staging-env.mjs && vite --mode staging --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "build:staging": "node scripts/validate-staging-env.mjs && tsc -b && vite build --mode staging",
+    "deploy:staging": "node scripts/generate-staging-firestore-rules.mjs && npm run build:staging && firebase deploy --config firebase.staging.json --project staging --only firestore:rules,hosting",
+    "layout:freeze-staging": "node scripts/freeze-staging-layout.mjs",
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.rules.config.ts\"",
+    "test:rules:staging": "node scripts/generate-staging-firestore-rules.mjs && firebase emulators:exec --only firestore --config firebase.staging.json \"vitest run --config vitest.staging-rules.config.ts\"",
     "loadtest:40": "node scripts/load-test-40.mjs"
   },
   "dependencies": {

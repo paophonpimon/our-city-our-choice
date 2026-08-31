@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { createClassroomJoinUrl, LOCATION_POSITIONS } from '../components/classroomUi'
 import { FullscreenToggle } from '../components/FullscreenToggle'
 import { JoinQrCode } from '../components/JoinQrCode'
+import { LayoutEditorPage } from './LayoutEditorPage'
 import { LiveAnswerImpacts } from '../components/LiveAnswerImpacts'
 import { TeacherSoundtrack, type TeacherSoundtrackHandle, type TeacherSoundtrackMode } from '../components/TeacherSoundtrack'
 import { TeacherEmergencyEndControl } from '../components/TeacherEmergencyEndControl'
@@ -18,7 +19,7 @@ import type { LocationId } from '../domain/cityScoring'
 import { deriveBuildingLevelTransitions, getCrisisPresentationTiming, getNormalPresentationTiming, LIVE_ANSWER_IMPACT_DURATION_MS, resolvePostPresentationAction, resolveTeacherRoundProgressionAction, type BuildingTransitionDirection } from '../domain/cityPresentation'
 import { resolveLiveAnswerImpact, type LiveAnswerImpact } from '../domain/liveAnswerImpact'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
-import { BUILDING_IDS, BUILDING_LOCATION, INITIAL_BUILDING_LEVELS, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
+import { BUILDING_IDS, BUILDING_LOCATION, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
 import { useAnswers, useCrisisResults, usePlayers, usePreAssessments, useRoom, useRounds } from '../hooks/useGameData'
 import { useCountdown } from '../hooks/useCountdown'
 import { enterFullscreenSafely } from '../hooks/useFullscreen'
@@ -135,37 +136,6 @@ const ROLE_ICONS: Record<RoleId, string> = {
   contractor: '👷',
   student: '🎒',
   journalist: '🎙️',
-}
-
-/*
- * Developer-only city layout calibration mode (?layout=1). CityStage already
- * overrides scene/building visuals from local layout state when this mode is
- * active, so this placeholder room only needs to satisfy CityStage's prop
- * type without touching any real room, service, or Firestore state.
- */
-const STANDALONE_LAYOUT_ROOM: ClassroomRoom = {
-  roomId: 'LAYOUT-CALIBRATION',
-  teacherSessionId: 'layout-calibration',
-  status: 'playing',
-  gameCycle: 0,
-  completedGameCount: 0,
-  currentQuestionNumber: 1,
-  currentCrisisEventIndex: 0,
-  currentCrisisEventId: null,
-  questionDurationSec: 30,
-  questionStartedAt: null,
-  questionDeadlineAt: null,
-  lockedPlayerCount: 0,
-  cityScore: 500,
-  cityLevel: 'neutral',
-  buildingLevels: INITIAL_BUILDING_LEVELS,
-  integrityTotal: 0,
-  corruptionTotal: 0,
-  timeoutTotal: 0,
-  roleRotation: [],
-  preAssessmentOpened: false,
-  createdAt: 0,
-  updatedAt: 0,
 }
 
 const LOBBY_GAME_RULES = [
@@ -948,20 +918,7 @@ export const TeacherPage = () => {
   }
 
   if (isStandaloneLayoutMode) {
-    return (
-      <>
-        <TeacherSoundtrack mode="off" ref={teacherSoundtrackRef} />
-        <CityStage
-          answerCount={0}
-          remainingSeconds={0}
-          room={STANDALONE_LAYOUT_ROOM}
-          visualCityLevel={STANDALONE_LAYOUT_ROOM.cityLevel}
-          visualBuildingLevels={STANDALONE_LAYOUT_ROOM.buildingLevels}
-          roundImpact={null}
-          locationImpacts={null}
-        />
-      </>
-    )
+    return <LayoutEditorPage />
   }
 
   if (restoringStoredRoom) {

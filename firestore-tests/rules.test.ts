@@ -842,3 +842,19 @@ describe('personalResults production query privacy', () => {
     await assertFails(getDocs(productionQuery(teacherDb, STUDENT_UID, STUDENT_UID)))
   })
 })
+
+describe('production city layout is frozen-source only', () => {
+  it.each([
+    'system/cityLayoutAccess',
+    'cityLayoutDraft/normal__hospital__2',
+    'cityLayoutVersions/version-1',
+    'cityLayoutPublished/current',
+  ])('denies signed-in reads and writes at %s', async (path) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), path), { seeded: true })
+    })
+    const signedInDb = testEnv.authenticatedContext('any-production-user').firestore()
+    await assertFails(getDoc(doc(signedInDb, path)))
+    await assertFails(setDoc(doc(signedInDb, path), { attempted: true }))
+  })
+})
