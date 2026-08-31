@@ -37,4 +37,14 @@ describe('ResultPage finished learning evidence publication lifecycle', () => {
     expect(resultPage).toContain('ภาพเมืองล่าสุด')
     expect(resultPage).toContain('<CityScene buildingLevels={buildingLevels} cityLevel={room.cityLevel} />')
   })
+
+  it('shows the latest city scene in the public summary tab as well as the city-details tab', () => {
+    const publicStart = resultPage.indexOf('if (isPublicFinishedResult)')
+    const publicEnd = resultPage.indexOf('if (!isTeacher && !hasStudentSession)', publicStart)
+    const publicBranch = resultPage.slice(publicStart, publicEnd)
+
+    expect(publicBranch).toContain('public-result-summary-city')
+    expect(publicBranch).toContain('public-result-summary-city-title">ภาพเมืองล่าสุด')
+    expect(publicBranch).toContain('<CityScene buildingLevels={publicBuildingLevels} cityLevel={room.cityLevel} />')
+  })
 })
