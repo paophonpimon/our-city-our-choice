@@ -73,6 +73,15 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
     expect(markup).toContain('Lv.-2')
   })
 
+  it('omits report-derived curriculum, creativity, and improvement filler from the live evidence dashboard', () => {
+    const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
+
+    expect(markup).not.toContain('ความสอดคล้องกับหลักสูตรต้านทุจริตศึกษา')
+    expect(markup).not.toContain('องค์ประกอบความคิดสร้างสรรค์')
+    expect(markup).not.toContain('ปัญหาและแนวทางปรับปรุงจากรายงาน')
+    expect(markup).not.toContain('REPORT-DERIVED IMPLEMENTATION LEARNING')
+  })
+
   it('renders complete matched evidence, five-point gain, all change groups, and calculation trace', () => {
     const markup = renderToStaticMarkup(<TeacherCompetitionEvidenceDashboard records={records} room={room} />)
     expect(markup).toContain('ผลการประเมิน PRE–POST')

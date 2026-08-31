@@ -50,33 +50,6 @@ const CRITERIA = [
   ['5', 'รายงานและการนำเสนอ', '15', 'ใช้ร่วมกับรายงานและการนำเสนอของทีม'],
 ] as const
 
-const CURRICULUM_OUTCOMES = [
-  'แยกประโยชน์ส่วนตนกับประโยชน์ส่วนรวม',
-  'ตระหนักถึงผลกระทบจากการตัดสินใจ',
-  'ใช้เหตุผลและรับผิดชอบต่อผลที่เกิดขึ้น',
-  'คำนึงถึงความเป็นธรรม ความโปร่งใส และการปฏิเสธการทุจริต',
-  'มีส่วนร่วมและเชื่อมโยงบทเรียนกับสถานการณ์จริง',
-] as const
-
-const IMPLEMENTATION_ISSUES = [
-  'ความพร้อมของอุปกรณ์และอินเทอร์เน็ต',
-  'ความแตกต่างด้านการอ่านและการวิเคราะห์',
-  'ความเข้าใจบทบาทและบริบทของสถานการณ์',
-  'ความซับซ้อนของเนื้อหาให้เหมาะกับวัย',
-  'ความยาวสถานการณ์เทียบกับเวลาตอบ',
-  'การหลีกเลี่ยงคำตอบที่ชี้นำผู้เรียน',
-  'สมดุลระหว่างกลไกเกมกับเป้าหมายการเรียนรู้',
-] as const
-
-const IMPROVEMENT_DIRECTIONS = [
-  'เตรียมอุปกรณ์และเครือข่ายก่อนเริ่มกิจกรรม',
-  'ปรับความซับซ้อนของสถานการณ์ให้เหมาะกับวัย',
-  'ทบทวนข้อมูลจากการใช้งานจริง',
-  'ปรับเวลาให้สัมพันธ์กับความซับซ้อนของสถานการณ์',
-  'ใช้ผลเมืองเป็นจุดเริ่มต้นของการอภิปรายและ Reflection',
-  'ปรับปรุงระบบจากข้อเสนอแนะของนักเรียนและครู',
-] as const
-
 const formatNumber = (value: number): string => value.toLocaleString('th-TH')
 const formatFixed = (value: number): string => value.toFixed(2)
 const formatSigned = (value: number): string => `${value > 0 ? '+' : ''}${formatFixed(value)}`
@@ -244,22 +217,6 @@ export const TeacherCompetitionEvidenceDashboard = ({
         <p className="competition-separation-note">ข้อมูลส่วนนี้เป็นผลจากกลไกสถานการณ์จำลอง ใช้เป็นหลักฐานการเข้าร่วมและการตัดสินใจระหว่างกิจกรรม ไม่ใช้แทนคะแนนประเมินก่อน–หลัง และไม่ใช้สรุประดับคุณธรรมหรือความซื่อสัตย์รายบุคคล</p>
       </section>
 
-      <div className="competition-context-columns">
-        <section className="competition-curriculum" aria-labelledby="competition-curriculum-title">
-          <div className="competition-section-heading"><p>CRITERION 2</p><h2 id="competition-curriculum-title">ความสอดคล้องกับหลักสูตรต้านทุจริตศึกษา</h2><span>ประเด็นผลลัพธ์ที่รายงานส่วน 4.2 รองรับ</span></div>
-          <ul>{CURRICULUM_OUTCOMES.map((outcome) => <li key={outcome}>{outcome}</li>)}</ul>
-          <p>ยังไม่มี mapping รายข้อกับคุณลักษณะโรงเรียนสุจริตทั้ง 5 ด้านที่ได้รับการยืนยัน จึงไม่แสดงการจับคู่ที่อนุมานขึ้นเอง</p>
-        </section>
-        <section className="competition-innovation" aria-labelledby="competition-innovation-title">
-          <div className="competition-section-heading"><p>CRITERION 4</p><h2 id="competition-innovation-title">องค์ประกอบความคิดสร้างสรรค์</h2><span>คุณลักษณะที่มีอยู่จริงในระบบ</span></div>
-          <ul><li>8 บทบาทอาชีพในสังคม</li><li>การตัดสินใจรายบุคคล</li><li>ผลร่วมต่อเมืองเดียวกัน</li><li>อาคารสาธารณะ 7 แห่ง</li><li>Crisis events</li><li>การเปลี่ยนแปลงเมืองและอาคารที่มองเห็นได้</li></ul>
-        </section>
-      </div>
-
-      <section className="competition-improvements" aria-labelledby="competition-improvements-title">
-        <div className="competition-section-heading"><p>REPORT-DERIVED IMPLEMENTATION LEARNING</p><h2 id="competition-improvements-title">ปัญหาและแนวทางปรับปรุงจากรายงาน</h2><span>เป็นหลักฐานจากรายงาน ไม่ใช่ตัวชี้วัดที่ระบบวัดอัตโนมัติ</span></div>
-        <div><article><h3>ประเด็นที่พบ/ต้องเตรียมรับมือ</h3><ul>{IMPLEMENTATION_ISSUES.map((issue) => <li key={issue}>{issue}</li>)}</ul></article><article><h3>แนวทางพัฒนา</h3><ul>{IMPROVEMENT_DIRECTIONS.map((direction) => <li key={direction}>{direction}</li>)}</ul></article></div>
-      </section>
     </div>
   )
 }

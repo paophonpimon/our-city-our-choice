@@ -6780,8 +6780,7 @@ img.game-home-cast {
 .competition-evidence-dashboard { display: grid; width: min(1500px, 100%); margin: auto; gap: 18px; }
 .competition-evidence-dashboard > section,
 .competition-evidence-hero,
-.competition-evidence-columns > section,
-.competition-context-columns > section { border: 1px solid #c6ddea; border-radius: 22px; background: rgb(255 255 255 / 96%); box-shadow: 0 12px 34px rgb(35 79 112 / 10%); }
+.competition-evidence-columns > section { border: 1px solid #c6ddea; border-radius: 22px; background: rgb(255 255 255 / 96%); box-shadow: 0 12px 34px rgb(35 79 112 / 10%); }
 .competition-criteria { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 10px; }
 .competition-criteria article { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 9px; border: 1px solid #d4e4ef; border-radius: 14px; background: #f7fbfe; }
 .competition-criteria article > span { display: grid; flex: 0 0 31px; width: 31px; height: 31px; place-items: center; border-radius: 50%; background: #d9eefa; color: #145d96; font-weight: 800; }
@@ -6874,10 +6873,8 @@ img.game-home-cast {
 .competition-calculation-trace dl div { display: grid; grid-template-columns: minmax(220px, .75fr) 1.5fr; gap: 12px; padding: 9px 11px; border-radius: 9px; background: white; }
 .competition-calculation-trace dt { color: #234f6f; font-weight: 800; }
 .competition-calculation-trace dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
-.competition-evidence-columns,
-.competition-context-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.competition-evidence-columns > section,
-.competition-context-columns > section { padding: clamp(18px, 2.4vw, 28px); }
+.competition-evidence-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.competition-evidence-columns > section { padding: clamp(18px, 2.4vw, 28px); }
 .competition-observation-grid { display: grid; gap: 8px; }
 .competition-observation-grid article { display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid #d3e2eb; border-radius: 12px; background: #f9fcfe; }
 .competition-observation-grid article > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 10px; background: #dceef9; color: #176196; font-weight: 800; }
@@ -6915,13 +6912,6 @@ img.game-home-cast {
 .competition-building-grid article strong { overflow: hidden; color: #254f6c; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .competition-building-grid article small { color: #738a9b; font-size: 10px; }
 .competition-building-grid article b { color: #176496; }
-.competition-curriculum ul,
-.competition-innovation ul,
-.competition-improvements ul { display: grid; gap: 7px; margin: 0; padding-left: 21px; color: #3d6179; line-height: 1.45; }
-.competition-curriculum > p { margin: 14px 0 0; padding: 11px; border-radius: 11px; background: #fff8e8; color: #72551b; font-size: 12px; line-height: 1.5; }
-.competition-improvements > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.competition-improvements article { padding: 14px; border: 1px solid #d1e1eb; border-radius: 14px; background: #f8fcff; }
-.competition-improvements h3 { margin: 0 0 10px; color: #174d70; }
 .teacher-evidence-dashboard-link { display: inline-flex; flex: 1.2; min-width: 230px; min-height: 52px; align-items: center; justify-content: center; padding: 0 16px; border: 1px solid #c7982c; border-radius: 14px; background: linear-gradient(180deg, #fff7d7, #f1d480); color: #5c420b; font-weight: 800; text-align: center; text-decoration: none; }
 .teacher-evidence-dashboard-link:hover { border-color: #9f7414; background: #f7dfa0; }
 .teacher-evidence-dashboard-link:focus-visible { outline: 3px solid rgb(196 146 28 / 32%); outline-offset: 2px; }
@@ -6945,10 +6935,8 @@ img.game-home-cast {
   .competition-criteria,
   .competition-evidence-hero,
   .competition-evidence-columns,
-  .competition-context-columns,
   .competition-primary-metrics,
-  .competition-change-grid,
-  .competition-improvements > div { grid-template-columns: 1fr; }
+  .competition-change-grid { grid-template-columns: 1fr; }
   .competition-evidence-hero dl,
   .competition-completeness-grid,
   .competition-simulation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -6964,8 +6952,7 @@ img.game-home-cast {
   .competition-evidence-dashboard { gap: 10px; }
   .competition-evidence-dashboard > section,
   .competition-evidence-hero,
-  .competition-evidence-columns > section,
-  .competition-context-columns > section { break-inside: avoid; box-shadow: none; }
+  .competition-evidence-columns > section { break-inside: avoid; box-shadow: none; }
   .competition-latest-city__scene { max-height: 360px; }
   .competition-calculation-trace > div { display: block; }
 }
