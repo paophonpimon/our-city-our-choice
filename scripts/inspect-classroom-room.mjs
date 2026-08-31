@@ -12,6 +12,7 @@ const argumentValue = (name, fallback) => {
 
 const roomId = String(argumentValue('--room', '')).trim().toUpperCase()
 const envFile = String(argumentValue('--env-file', '.env.local')).trim()
+const includePlayers = process.argv.includes('--players')
 if (!/^[A-HJ-NP-Z2-9]{4}$/.test(roomId)) throw new Error('ใช้ --room ตามด้วยรหัสห้อง 4 ตัว')
 
 const envText = await readFile(resolve(process.cwd(), envFile), 'utf8')
@@ -61,6 +62,11 @@ try {
     corruptionTotal: room.corruptionTotal,
     timeoutTotal: room.timeoutTotal,
     playerCount: playersSnapshot.size,
+    ...(includePlayers ? { players: playersSnapshot.docs.map((snapshot) => ({
+      playerId: snapshot.id,
+      nickname: snapshot.data().nickname,
+      nicknameKey: snapshot.data().nicknameKey,
+    })) } : {}),
   }, null, 2))
 } finally {
   await deleteApp(app)

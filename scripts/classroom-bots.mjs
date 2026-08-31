@@ -35,6 +35,7 @@ const earlyCorruptThrough = Number(argumentValue('--early-corrupt-through', 0))
 const lateCorruptFrom = Number(argumentValue('--late-corrupt-from', 0))
 const cycleFlip = process.argv.includes('--cycle-flip')
 const buildingSpreadWorstCity = process.argv.includes('--building-spread-worst-city')
+const postOnly = process.argv.includes('--post-only')
 const envFile = String(argumentValue('--env-file', '.env.local')).trim()
 const target = String(argumentValue('--target', 'firebase')).trim().toLowerCase()
 const useEmulator = target === 'emulator'
@@ -103,6 +104,48 @@ const shouldChooseIntegrityForSpreadCrisis = (roleId, eventIndex, clientIndex, g
   // Lv.0/+1/+2 each need one integrity and one corruption crisis. Alternate
   // which crisis is positive per player to keep both events visibly mixed.
   return eventIndex === (clientIndex % 2) + 1
+}
+
+const POST_IMPROVED_RESPONSES = Object.freeze([3, 4, 4, 5, 4, 3, 4, 5, 4, 4])
+const POST_DECREASED_RESPONSES = Object.freeze([1, 2, 2, 3, 2, 1, 2, 3, 2, 2])
+const REFLECTION_VARIANTS = Object.freeze([
+  {
+    r1: 'ตอนต้องเลือกระหว่างประโยชน์ของตัวเองกับประโยชน์ของเมือง เพราะทั้งสองทางเลือกมีผลต่างกัน',
+    r2: 'เห็นว่าเรื่องเล็ก ๆ จากทุกคนรวมกันแล้วทำให้อาคารและเมืองเปลี่ยนได้จริง',
+    r3: 'นึกถึงการใช้ของส่วนรวมในโรงเรียนที่ทุกคนควรช่วยกันดูแลอย่างซื่อสัตย์',
+  },
+  {
+    r1: 'สถานการณ์วิกฤตตัดสินใจยากที่สุด เพราะต้องคิดถึงคนหลายกลุ่มในเวลาเดียวกัน',
+    r2: 'เข้าใจว่าผลประโยชน์ส่วนรวมคือสิ่งที่ช่วยคนส่วนมาก ไม่ใช่แค่คนใดคนหนึ่ง',
+    r3: 'นึกถึงการเลือกหัวหน้าห้องและการบอกข้อมูลตามจริงโดยไม่ช่วยเฉพาะเพื่อนตัวเอง',
+  },
+  {
+    r1: 'ตอนที่ทางเลือกดูเหมือนช่วยได้เร็วแต่ไม่โปร่งใส เพราะต้องคิดถึงผลระยะยาวของเมือง',
+    r2: 'พอเห็นตึกทรุดลงจึงเข้าใจว่าการตัดสินใจของแต่ละคนส่งผลต่อส่วนรวม',
+    r3: 'นึกถึงการคืนของที่เก็บได้และการไม่เอาของโรงเรียนไปใช้เป็นของส่วนตัว',
+  },
+  {
+    r1: 'การเลือกเมื่ออาชีพของตัวเองได้ประโยชน์แต่เมืองเสียประโยชน์เป็นข้อที่ยากที่สุด',
+    r2: 'ผลประโยชน์ส่วนรวมต้องคิดถึงความเป็นธรรมและผลที่เกิดกับทุกคนในเมือง',
+    r3: 'นึกถึงการแบ่งหน้าที่ทำความสะอาดและการรับผิดชอบงานของตัวเองตามจริง',
+  },
+  {
+    r1: 'ข้อที่มีเวลาจำกัดตัดสินใจยาก เพราะต้องอ่านเหตุผลและคิดถึงผลกระทบให้รอบด้าน',
+    r2: 'ภาพเมืองทำให้เห็นชัดว่าความซื่อสัตย์ช่วยรักษาสิ่งที่ทุกคนใช้ร่วมกัน',
+    r3: 'นึกถึงการใช้เงินห้องอย่างเปิดเผยและให้ทุกคนตรวจสอบรายการได้',
+  },
+])
+
+const rotateResponses = (responses, offset) => responses.map((_, index) => responses[(index + offset) % responses.length])
+
+const postResponsesFor = (clientIndex) => {
+  const improvedEnd = Math.round(botCount * 2 / 3)
+  const unchangedEnd = improvedEnd + Math.round(botCount / 6)
+  if (clientIndex < improvedEnd) return rotateResponses(POST_IMPROVED_RESPONSES, clientIndex)
+  if (clientIndex < unchangedEnd) {
+    return Array.from({ length: 10 }, (_, questionIndex) => 1 + ((clientIndex + questionIndex * 2) % 5))
+  }
+  return rotateResponses(POST_DECREASED_RESPONSES, clientIndex)
 }
 
 const integrityRateForQuestion = (questionNumber, gameCycle) =>
@@ -218,6 +261,8 @@ const integrityChoiceIds = await loadIntegrityChoiceIds()
 let answerInProgress = null
 let preAssessmentInProgress = false
 let preAssessmentSubmitted = false
+let postActivityAssessmentPromise = null
+let postActivityAssessmentSubmitted = false
 let stopRoomSubscription = () => undefined
 let shuttingDown = false
 let keepAliveTimer = null
@@ -243,7 +288,6 @@ const joinClient = async (client) => {
   const roomReference = doc(client.db, 'rooms', roomId)
   const roomSnapshot = await getDoc(roomReference)
   if (!roomSnapshot.exists()) throw new Error(`ไม่พบห้อง ${roomId}`)
-  if (roomSnapshot.data().status !== 'lobby') throw new Error(`ห้อง ${roomId} เริ่มเกมแล้ว จึงเพิ่มบอตไม่ได้`)
 
   const playerReference = doc(client.db, 'rooms', roomId, 'players', client.playerId)
   const existing = await getDoc(playerReference)
@@ -259,6 +303,9 @@ const joinClient = async (client) => {
     return
   }
 
+  if (postOnly) throw new Error(`ไม่พบบอตเดิม ${client.nickname} สำหรับส่งแบบประเมินหลังจบ`)
+  if (roomSnapshot.data().status !== 'lobby') throw new Error(`ห้อง ${roomId} เริ่มเกมแล้ว จึงเพิ่มบอตไม่ได้`)
+
   await setDoc(playerReference, {
     playerId: client.playerId,
     nickname: client.nickname,
@@ -272,6 +319,17 @@ const joinClient = async (client) => {
     joinedAt: serverTimestamp(),
     lastSeenAt: serverTimestamp(),
   })
+}
+
+const createAssessmentOnce = async (client, assessmentId, payload) => {
+  const assessmentReference = doc(client.db, 'rooms', roomId, 'assessments', assessmentId)
+  try {
+    await setDoc(assessmentReference, payload)
+  } catch (error) {
+    const existing = await getDoc(assessmentReference).catch(() => null)
+    if (existing?.exists() && existing.data().ownerUid === client.uid) return
+    throw error
+  }
 }
 
 const submitPreAssessments = async () => {
@@ -305,6 +363,47 @@ const submitPreAssessments = async () => {
   } finally {
     preAssessmentInProgress = false
   }
+}
+
+const submitPostActivityAssessments = () => {
+  if (postActivityAssessmentSubmitted) return Promise.resolve()
+  if (postActivityAssessmentPromise) return postActivityAssessmentPromise
+  postActivityAssessmentPromise = (async () => {
+    const results = await Promise.all(clients.map(async (client) => {
+      const reflection = REFLECTION_VARIANTS[client.index % REFLECTION_VARIANTS.length]
+      try {
+        await createAssessmentOnce(client, `post::${client.playerId}`, {
+          schemaVersion: 1,
+          recordType: 'post',
+          roomId,
+          playerId: client.playerId,
+          ownerUid: client.uid,
+          responses: postResponsesFor(client.index),
+          submittedAt: serverTimestamp(),
+        })
+        await createAssessmentOnce(client, `reflection::${client.playerId}`, {
+          schemaVersion: 1,
+          recordType: 'reflection',
+          roomId,
+          playerId: client.playerId,
+          ownerUid: client.uid,
+          ...reflection,
+          submittedAt: serverTimestamp(),
+        })
+        return { status: 'fulfilled' }
+      } catch (reason) {
+        return { status: 'rejected', reason }
+      }
+    }))
+    const failures = results.filter((result) => result.status === 'rejected')
+    if (failures.length > 0) {
+      const firstError = failures[0].reason instanceof Error ? failures[0].reason.message : String(failures[0].reason)
+      throw new Error(`POST/Reflection สำเร็จ ${botCount - failures.length}/${botCount}; ล้มเหลว ${failures.length}: ${firstError}`)
+    }
+    postActivityAssessmentSubmitted = true
+    console.log(`[bots] แบบประเมินหลังจบ: POST ${botCount}/${botCount}; Reflection ${botCount}/${botCount}`)
+  })().finally(() => { postActivityAssessmentPromise = null })
+  return postActivityAssessmentPromise
 }
 
 const answerCurrentQuestion = async (room) => {
@@ -457,7 +556,7 @@ const profileDescription = buildingSpreadWorstCity
       : lateCorruptFrom > 0
         ? `สุจริตทั้งหมดถึงข้อ ${lateCorruptFrom - 1} แล้วทุจริตทั้งหมด`
         : `สุจริต ${Math.round(integrityRate * 100)}%`
-console.log(`[bots] กำลังสร้าง ${botCount} เซสชันสำหรับห้อง ${roomId} บน ${firebaseConfig.projectId}; ${profileDescription}; เว้นคำตอบ ${staggerMs}ms; ถึงข้อ ${maxQuestion}`)
+console.log(`[bots] กำลังสร้าง ${botCount} เซสชันสำหรับห้อง ${roomId} บน ${firebaseConfig.projectId}; ${postOnly ? 'ส่ง POST/Reflection ให้บอตเดิมหลังจบเท่านั้น' : profileDescription}; เว้นคำตอบ ${staggerMs}ms; ถึงข้อ ${maxQuestion}`)
 for (let start = 0; start < botCount; start += 8) {
   const batch = await Promise.all(
     Array.from({ length: Math.min(8, botCount - start) }, (_, offset) => createClient(start + offset)),
@@ -473,27 +572,34 @@ for (let start = 0; start < clients.length; start += 8) {
 const monitorDb = clients[0].db
 const rosterSnapshot = await getDocs(collection(monitorDb, 'rooms', roomId, 'players'))
 console.log(`[bots] เข้าห้องสำเร็จ ${botCount} คน; roster ปัจจุบัน ${rosterSnapshot.size} คน`)
-console.log('[bots] พร้อมตอบอัตโนมัติเมื่อครูเริ่มคำถาม กด Ctrl+C เพื่อหยุดบอต')
+console.log(postOnly ? '[bots] พร้อมส่ง POST/Reflection ให้ผู้เล่นเดิม' : '[bots] พร้อมตอบอัตโนมัติเมื่อครูเริ่มคำถาม กด Ctrl+C เพื่อหยุดบอต')
 
 stopRoomSubscription = onSnapshot(doc(monitorDb, 'rooms', roomId), (snapshot) => {
   if (!snapshot.exists()) return
   const room = snapshot.data()
-  if (room.preAssessmentOpened) {
+  if (room.preAssessmentOpened && !postOnly && room.status !== 'finished') {
     void submitPreAssessments().catch((error) => {
       console.error(`[bots] ส่งแบบประเมินก่อนกิจกรรมไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
     })
   }
-  if (room.status === 'playing' && Number.isInteger(room.currentQuestionNumber) && room.currentQuestionNumber > 0) {
+  if (!postOnly && room.status === 'playing' && Number.isInteger(room.currentQuestionNumber) && room.currentQuestionNumber > 0) {
     void answerCurrentQuestion(room).catch((error) => {
       console.error(`[bots] ตอบคำถามไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
     })
   }
-  if (room.status === 'crisis-playing') {
+  if (!postOnly && room.status === 'crisis-playing') {
     void answerCurrentCrisis(room).catch((error) => {
       console.error(`[bots] ตอบเหตุการณ์วิกฤตไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
     })
   }
-  if (room.status === 'finished' || room.status === 'closed') void shutdown(`room ${room.status}`)
+  if (room.status === 'finished') {
+    void submitPostActivityAssessments()
+      .then(() => shutdown('room finished; POST/Reflection complete'))
+      .catch((error) => {
+        console.error(`[bots] ส่งแบบประเมินหลังจบไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
+      })
+  }
+  if (room.status === 'closed') void shutdown('room closed')
 }, (error) => {
   console.error(`[bots] realtime error: ${error.message}`)
 })

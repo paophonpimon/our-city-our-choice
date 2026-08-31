@@ -2,7 +2,8 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { CityLoader } from '../components/CityLoader'
 import { BrandHeader, ErrorPanel, ScenePage } from '../components/Layout'
 import { TeacherCompetitionEvidenceDashboard } from '../components/TeacherCompetitionEvidenceDashboard'
-import { useAssessmentEvidence, useRoom } from '../hooks/useGameData'
+import { useRoom } from '../hooks/useGameData'
+import { useTeacherLearningEvidencePublisher } from '../hooks/useTeacherLearningEvidencePublisher'
 import {
   getClassroomStudentSession,
   getClassroomTeacherSession,
@@ -17,10 +18,11 @@ export const TeacherEvidencePage = () => {
   const isTeacher = teacherSession?.roomId === roomId
     && (viewerRole === 'teacher' || (viewerRole === null && studentSession?.roomId !== roomId))
   const roomState = useRoom(roomId)
-  const evidenceState = useAssessmentEvidence(
-    roomId,
+  const evidencePublisher = useTeacherLearningEvidencePublisher(
+    roomState.data,
     isTeacher && roomState.data?.status === 'finished',
   )
+  const evidenceState = evidencePublisher.evidenceState
 
   if (!roomId) return <Navigate replace to="/teacher" />
   if (roomState.loading) return <CityLoader variant="full" message="กำลังเตรียมหลักฐานสำหรับนำเสนอ…" />
@@ -61,7 +63,7 @@ export const TeacherEvidencePage = () => {
         <span>ห้อง {roomId}</span>
       </nav>
       <TeacherCompetitionEvidenceDashboard
-        error={evidenceState.error || roomState.error}
+        error={evidenceState.error || evidencePublisher.publicationError || roomState.error}
         loading={evidenceState.loading}
         records={evidenceState.data}
         room={roomState.data}
