@@ -9,14 +9,13 @@ import { createClassroomJoinUrl, LOCATION_POSITIONS } from '../components/classr
 import { FullscreenToggle } from '../components/FullscreenToggle'
 import { JoinQrCode } from '../components/JoinQrCode'
 import { LayoutEditorPage } from './LayoutEditorPage'
-import { LiveAnswerImpacts } from '../components/LiveAnswerImpacts'
 import { TeacherSoundtrack, type TeacherSoundtrackHandle, type TeacherSoundtrackMode } from '../components/TeacherSoundtrack'
 import { TeacherEmergencyEndControl } from '../components/TeacherEmergencyEndControl'
 import { useGame } from '../context/GameContext'
 import { countAnswersForQuestion, countCompletedPreAssessments, countCrisisAnswersForEvent, getLiveCityScore, shouldAutoCloseCrisis, shouldCloseQuestion } from '../domain/classroomGameLoop'
 import { createRoomQuestionSnapshot, type ParsedQuestionSheet, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
 import type { LocationId } from '../domain/cityScoring'
-import { deriveBuildingLevelTransitions, getCrisisPresentationTiming, getNormalPresentationTiming, LIVE_ANSWER_IMPACT_DURATION_MS, resolvePostPresentationAction, resolveTeacherRoundProgressionAction, type BuildingTransitionDirection } from '../domain/cityPresentation'
+import { deriveBuildingLevelTransitions, getCrisisPresentationTiming, getNormalPresentationTiming, LIVE_ANSWER_IMPACT_DURATION_MS, resolveBuildingLevelDisplayTransitions, resolvePostPresentationAction, resolveTeacherRoundProgressionAction, type BuildingLevelDisplayTransition, type BuildingTransitionDirection } from '../domain/cityPresentation'
 import { resolveLiveAnswerImpact, type LiveAnswerImpact } from '../domain/liveAnswerImpact'
 import { ROLE_CIVIC_GUIDANCE, ROLES, type RoleId } from '../domain/ourCity'
 import { BUILDING_IDS, BUILDING_LOCATION, normalizeBuildingLevels, type BuildingId, type BuildingLevels } from '../domain/cityBuildings'
@@ -96,12 +95,6 @@ const toBuildingChangeStories = (
   label: BUILDING_STORY_LABELS[transition.buildingId],
 }))
 
-const toBuildingTransitionMap = (
-  stories: readonly BuildingChangeStory[],
-): Partial<Record<BuildingId, BuildingTransitionDirection>> => Object.fromEntries(
-  stories.map((story) => [story.buildingId, story.direction]),
-) as Partial<Record<BuildingId, BuildingTransitionDirection>>
-
 const BuildingChangeSummary = ({
   stories,
   crisis = false,
@@ -166,7 +159,7 @@ export const TeacherPage = () => {
   const [yearCutscene, setYearCutscene] = useState<YearCutsceneState | null>(null)
   const [visualCityLevel, setVisualCityLevel] = useState<ClassroomRoom['cityLevel'] | null>(null)
   const [visualBuildingLevels, setVisualBuildingLevels] = useState<BuildingLevels | null>(null)
-  const [buildingTransitions, setBuildingTransitions] = useState<Partial<Record<BuildingId, BuildingTransitionDirection>>>({})
+  const [buildingLevelDisplayTransitions, setBuildingLevelDisplayTransitions] = useState<Record<BuildingId, BuildingLevelDisplayTransition> | null>(null)
   const [buildingChangeStories, setBuildingChangeStories] = useState<BuildingChangeStory[]>([])
   const [crisisRevealPhase, setCrisisRevealPhase] = useState<CrisisRevealPhase | null>(null)
   const [liveAnswerImpacts, setLiveAnswerImpacts] = useState<LiveAnswerImpact[]>([])
@@ -214,7 +207,7 @@ export const TeacherPage = () => {
     setVisualCityLevel(null)
     setVisualBuildingLevels(null)
     setYearCutscene(null)
-    setBuildingTransitions({})
+    setBuildingLevelDisplayTransitions(null)
     setBuildingChangeStories([])
     setCrisisRevealPhase(null)
     setLiveAnswerImpacts([])
@@ -627,7 +620,6 @@ export const TeacherPage = () => {
     const isCrisisResult = room?.status === 'crisis-result' && currentCrisisResult !== null
     if (!isCrisisResult) {
       setCrisisRevealPhase(null)
-      setBuildingTransitions({})
       setBuildingChangeStories([])
       return
     }
@@ -646,7 +638,6 @@ export const TeacherPage = () => {
       && roomRef.current.status === 'crisis-result'
 
     setCrisisRevealPhase('holding')
-    setBuildingTransitions({})
     setBuildingChangeStories([])
 
     void (async () => {
@@ -660,13 +651,12 @@ export const TeacherPage = () => {
       visualBuildingLevelsRef.current = nextLevels
       setVisualCityLevel(room.cityLevel)
       setVisualBuildingLevels(nextLevels)
-      setBuildingTransitions(toBuildingTransitionMap(stories))
+      setBuildingLevelDisplayTransitions(resolveBuildingLevelDisplayTransitions(previousLevels, nextLevels))
       setBuildingChangeStories(stories)
       setCrisisRevealPhase('revealing')
 
       await waitForPresentation(timing.settle)
       if (!presentationIsCurrent()) return
-      setBuildingTransitions({})
       setCrisisRevealPhase('revealed')
     })()
 
@@ -850,7 +840,7 @@ export const TeacherPage = () => {
       visualBuildingLevelsRef.current = nextLevels
       setVisualCityLevel(finalizedRoom.cityLevel)
       setVisualBuildingLevels(nextLevels)
-      setBuildingTransitions(toBuildingTransitionMap(stories))
+      setBuildingLevelDisplayTransitions(resolveBuildingLevelDisplayTransitions(previousLevels, nextLevels))
       setYearCutscene({ ...cutscene, phase: 'text-leaving' })
       await waitForPresentation(timing.textFade)
       if (!boundaryIsCurrent()) return
@@ -866,7 +856,6 @@ export const TeacherPage = () => {
 
       if (timing.settle > 0) await waitForPresentation(timing.settle)
       if (!boundaryIsCurrent()) return
-      setBuildingTransitions({})
       setBuildingChangeStories([])
 
       if (resolvePostPresentationAction(questionAtStart) === 'open-next-question') {
@@ -942,7 +931,7 @@ export const TeacherPage = () => {
         <div className="teacher-crisis-city" aria-hidden="true">
           <CityScene
             buildingLevels={visualBuildingLevels ?? room.buildingLevels}
-            buildingTransitions={buildingTransitions}
+            buildingLevelTransitions={buildingLevelDisplayTransitions ?? undefined}
             cityLevel={visualCityLevel ?? room.cityLevel}
           />
         </div>
@@ -1019,7 +1008,8 @@ export const TeacherPage = () => {
         previewCityScore={liveCityScore}
         visualCityLevel={visualCityLevel ?? room.cityLevel}
         visualBuildingLevels={visualBuildingLevels ?? normalizeBuildingLevels(room.buildingLevels)}
-        buildingTransitions={buildingTransitions}
+        buildingLevelDisplayTransitions={buildingLevelDisplayTransitions ?? undefined}
+        liveAnswerImpacts={liveAnswerImpacts}
         roundImpact={currentRound?.roundAverage ?? null}
         locationImpacts={room.status === 'round-result' ? currentRound?.locationSummaries ?? null : null}
         roundHistory={roundsState.data}
@@ -1062,7 +1052,6 @@ export const TeacherPage = () => {
             ไม่สามารถเปิดห้องนี้ต่อจากเครื่องนี้ได้ กรุณากลับไปใช้เครื่องที่สร้างห้อง หรือเริ่มห้องใหม่
           </div>
         ) : null}
-        {liveAnswerImpacts.length > 0 ? <LiveAnswerImpacts impacts={liveAnswerImpacts} /> : null}
         {actionError ? <p className="mx-auto mt-3 max-w-xl rounded-xl bg-red-950/85 px-4 py-3 text-center">{actionError}</p> : null}
         </CityStage>
         {yearCutscene ? (

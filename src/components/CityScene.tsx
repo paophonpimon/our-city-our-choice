@@ -1,5 +1,6 @@
 import {
   BUILDING_IDS,
+  BUILDING_LOCATION,
   CITY_SCENE_PROFILES,
   CITY_STAGE_HEIGHT,
   CITY_STAGE_WIDTH,
@@ -15,17 +16,15 @@ import {
   type CitySceneBuildingPlacement,
   type CitySceneProfileId,
 } from '../domain/cityBuildings'
+import { LOCATION_POSITIONS } from './classroomUi'
 import { resolveEffectivePlacement, resolveProductionPlacement, type SceneLayoutOverrides } from '../domain/cityLayoutOverrides'
-import type { BuildingTransitionDirection } from '../domain/cityPresentation'
+import { resolveBuildingVisualEffect, type BuildingLevelDisplayTransition } from '../domain/cityPresentation'
 import type { CityLevel } from '../domain/ourCity'
 import { usePublishedCityLayout } from '../context/CityLayoutContext'
 
-export type BuildingEffectTone = 'integrity' | 'corruption'
-
 interface CitySceneProps {
   buildingLevels?: BuildingLevels
-  buildingEffects?: Partial<Record<BuildingId, BuildingEffectTone>>
-  buildingTransitions?: Partial<Record<BuildingId, BuildingTransitionDirection>>
+  buildingLevelTransitions?: Partial<Record<BuildingId, BuildingLevelDisplayTransition>>
   buildingPlacementOverrides?: SceneLayoutOverrides
   cityLevel?: CityLevel
   sceneProfileId?: CitySceneProfileId
@@ -33,8 +32,7 @@ interface CitySceneProps {
 
 export const CityScene = ({
   buildingLevels,
-  buildingEffects,
-  buildingTransitions,
+  buildingLevelTransitions,
   buildingPlacementOverrides,
   cityLevel = 'neutral',
   sceneProfileId,
@@ -113,8 +111,16 @@ export const CityScene = ({
           const requestedLevel = levels[buildingId]
           const asset = buildingAssets[buildingId]
           const placement = asset ? assetPlacements[buildingId] : null
-          const effectTone = buildingEffects?.[buildingId]
-          const transitionDirection = buildingTransitions?.[buildingId]
+          const levelTransition = buildingLevelTransitions?.[buildingId] ?? {
+            previousLevel: requestedLevel,
+            currentLevel: requestedLevel,
+            changeDirection: 'same' as const,
+          }
+          const visualEffect = resolveBuildingVisualEffect(levelTransition)
+          const hasActiveEffect = visualEffect.state !== 'neutral'
+          const environmentPosition = LOCATION_POSITIONS[BUILDING_LOCATION[buildingId]]
+          const environmentX = environmentPosition.x / 100 * CITY_STAGE_WIDTH + (placement?.x ?? 0)
+          const environmentY = environmentPosition.y / 100 * CITY_STAGE_HEIGHT + (placement?.y ?? 0)
           // The single source of truth for "what does this scene/building/level
           // actually render at" - also used by the calibration recovery export
           // and the depth sort above, so all three are guaranteed to agree.
@@ -124,37 +130,46 @@ export const CityScene = ({
               data-building-id={buildingId}
               data-building-level={requestedLevel}
               data-asset-level={asset?.level ?? 0}
+              data-building-visual-state={visualEffect.state}
+              data-building-effect-intensity={visualEffect.intensity}
               data-scene-profile={sceneProfile.id}
               key={buildingId}
               transform={`translate(${scenePlacement.x} ${scenePlacement.y}) scale(${scenePlacement.scaleX} ${scenePlacement.scaleY})`}
             >
-              {asset && effectTone ? (
-                <image
+              {asset && hasActiveEffect ? (
+                <g
                   aria-hidden="true"
-                  className={`city-scene__building-aura is-${effectTone}`}
-                  href={asset.src}
-                  x={placement?.x ?? 0}
-                  y={placement?.y ?? 0}
-                  width={CITY_STAGE_WIDTH}
-                  height={CITY_STAGE_HEIGHT}
-                  preserveAspectRatio={`xMidYMid ${asset.fit ?? 'meet'}`}
-                />
-              ) : null}
-              {asset && transitionDirection ? (
-                <image
-                  aria-hidden="true"
-                  className={`city-scene__building-transition-aura is-${transitionDirection}`}
-                  href={asset.src}
-                  x={placement?.x ?? 0}
-                  y={placement?.y ?? 0}
-                  width={CITY_STAGE_WIDTH}
-                  height={CITY_STAGE_HEIGHT}
-                  preserveAspectRatio={`xMidYMid ${asset.fit ?? 'meet'}`}
-                />
+                  className={`city-scene__building-environment is-${visualEffect.state} is-intensity-${visualEffect.intensity}`}
+                  data-environment-tone={visualEffect.state}
+                >
+                  <ellipse
+                    className="city-scene__building-ambient-glow"
+                    cx={environmentX}
+                    cy={environmentY + CITY_STAGE_HEIGHT * .025}
+                    rx={CITY_STAGE_WIDTH * .115}
+                    ry={CITY_STAGE_HEIGHT * .13}
+                  />
+                  <ellipse
+                    className="city-scene__building-ground-halo"
+                    cx={environmentX}
+                    cy={environmentY + CITY_STAGE_HEIGHT * .075}
+                    rx={CITY_STAGE_WIDTH * .105}
+                    ry={CITY_STAGE_HEIGHT * .028}
+                  />
+                  {visualEffect.state === 'downgrade' ? (
+                    <ellipse
+                      className="city-scene__building-warning-ring"
+                      cx={environmentX}
+                      cy={environmentY + CITY_STAGE_HEIGHT * .075}
+                      rx={CITY_STAGE_WIDTH * .09}
+                      ry={CITY_STAGE_HEIGHT * .021}
+                    />
+                  ) : null}
+                </g>
               ) : null}
               {asset ? (
                 <image
-                  className={`city-scene__building${effectTone ? ` has-${effectTone}-effect` : ''}${transitionDirection ? ` is-transition-${transitionDirection}` : ''}`}
+                  className={`city-scene__building is-effect-${visualEffect.state} is-intensity-${visualEffect.intensity}`}
                   href={asset.src}
                   x={placement?.x ?? 0}
                   y={placement?.y ?? 0}

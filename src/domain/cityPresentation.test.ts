@@ -5,6 +5,9 @@ import {
   getCrisisPresentationTiming,
   getNormalPresentationTiming,
   LIVE_ANSWER_IMPACT_DURATION_MS,
+  resolveBuildingLevelDisplayTransitions,
+  resolveBuildingLabelTone,
+  resolveBuildingVisualEffect,
   resolvePostPresentationAction,
   resolveTeacherRoundProgressionAction,
 } from './cityPresentation'
@@ -12,6 +15,62 @@ import {
 const levels = (overrides: Partial<BuildingLevels> = {}): BuildingLevels => ({
   ...INITIAL_BUILDING_LEVELS,
   ...overrides,
+})
+
+describe('resolveBuildingLevelDisplayTransitions', () => {
+  it('returns previous/current levels and up, down, or same for every building', () => {
+    const transitions = resolveBuildingLevelDisplayTransitions(
+      levels({ school: 0, hospital: 0, market: 0 }),
+      levels({ school: 1, hospital: -1, market: 0 }),
+    )
+
+    expect(transitions.school).toEqual({ previousLevel: 0, currentLevel: 1, changeDirection: 'up' })
+    expect(transitions.hospital).toEqual({ previousLevel: 0, currentLevel: -1, changeDirection: 'down' })
+    expect(transitions.market).toEqual({ previousLevel: 0, currentLevel: 0, changeDirection: 'same' })
+    expect(Object.keys(transitions)).toHaveLength(7)
+  })
+
+  it('supports a multi-step latest transition without creating a history chain', () => {
+    const transitions = resolveBuildingLevelDisplayTransitions(
+      levels({ construction: -2 }),
+      levels({ construction: 2 }),
+    )
+
+    expect(transitions.construction).toEqual({ previousLevel: -2, currentLevel: 2, changeDirection: 'up' })
+  })
+})
+
+describe('resolveBuildingLabelTone', () => {
+  it.each([
+    [-2, 'critical'],
+    [-1, 'degraded'],
+    [0, 'neutral'],
+    [1, 'improved'],
+    [2, 'thriving'],
+  ] as const)('maps Lv.%s to the %s label theme', (level, expected) => {
+    expect(resolveBuildingLabelTone(level)).toBe(expected)
+  })
+})
+
+describe('resolveBuildingVisualEffect', () => {
+  it.each([
+    [{ previousLevel: 0, currentLevel: 0, changeDirection: 'same' }, { state: 'neutral', intensity: 'none' }],
+    [{ previousLevel: -1, currentLevel: -1, changeDirection: 'same' }, { state: 'downgrade', intensity: 'medium' }],
+    [{ previousLevel: -2, currentLevel: -2, changeDirection: 'same' }, { state: 'downgrade', intensity: 'strong' }],
+    [{ previousLevel: 0, currentLevel: 1, changeDirection: 'up' }, { state: 'upgrade', intensity: 'light' }],
+    [{ previousLevel: 1, currentLevel: 2, changeDirection: 'up' }, { state: 'upgrade', intensity: 'strong' }],
+    [{ previousLevel: 0, currentLevel: -1, changeDirection: 'down' }, { state: 'downgrade', intensity: 'medium' }],
+    [{ previousLevel: -1, currentLevel: -2, changeDirection: 'down' }, { state: 'downgrade', intensity: 'strong' }],
+  ] as const)('maps the resolved transition %o to the shared effect %o', (transition, expected) => {
+    expect(resolveBuildingVisualEffect(transition)).toEqual(expected)
+  })
+
+  it('keeps damaged levels in warning state while still using direction for non-negative levels', () => {
+    expect(resolveBuildingVisualEffect({ previousLevel: -2, currentLevel: -1, changeDirection: 'up' }))
+      .toEqual({ state: 'downgrade', intensity: 'medium' })
+    expect(resolveBuildingVisualEffect({ previousLevel: 2, currentLevel: 1, changeDirection: 'down' }))
+      .toEqual({ state: 'downgrade', intensity: 'medium' })
+  })
 })
 
 describe('deriveBuildingLevelTransitions', () => {

@@ -1,19 +1,20 @@
-# Simple Classroom Google Sheets Question Sync
+# Google Sheets Question Sync — Current Architecture
 
 ## Architecture
 
-Phase 4A uses the Teacher Client as the classroom game controller. It does not require Firebase Functions, a service
+The current application uses the Teacher Client as the classroom game controller. It does not require Firebase Functions, a service
 account, custom claims, Cloud Tasks, Google Cloud IAM, Java, Firebase Emulator, server-only trusted collections, or a
 Blaze plan.
 
-When the teacher creates or starts a room, the Teacher Client:
+Before the teacher creates or starts a room, the Teacher Client:
 
 1. Downloads the `QUESTIONS` CSV from Google Sheets.
 2. Parses and validates every non-blank row, including source row numbers.
 3. Requires at least 10 active questions for each canonical role.
-4. Selects 10 questions per role and locks a room snapshot.
+4. Selects 10 questions per role (80 trusted questions total) and locks a room snapshot.
 5. Keeps the trusted snapshot, including `integrity_choice`, in React state and teacher `localStorage`.
-6. Writes only public questions to Firestore.
+6. Precomputes deterministic 5/5-balanced choice order for every player across all supported role-rotation cycles.
+7. Writes only public questions and non-semantic positional choice-order bits to Firestore.
 
 Students read public questions from Firestore and submit only stable `questionId`/`choiceId` values. They never load
 the Sheet and never send score, impact, outcome, or `integrity_choice`.
@@ -72,10 +73,9 @@ stable choice ID against the local trusted snapshot, calculates the round result
 
 All players use the room's shared `currentQuestionNumber`, `questionStartedAt`, and `questionDeadlineAt`. The Teacher
 Client closes the question when all locked players have answered or the deadline is reached, applies timeout `-20`
-to missing answers, and writes the round/city aggregate.
-
-Whether the next question opens automatically or waits for the teacher to press Next remains an open product
-decision. Phase 4A does not decide or implement that transition.
+to missing answers, and writes the round/city/building aggregates. After the visual result presentation settles, the
+teacher explicitly opens the next question, enters a crisis after questions 4 and 8, or finishes the cycle after
+question 10.
 
 ## Restore limitation
 
@@ -94,4 +94,5 @@ npm.cmd run test
 npm.cmd run build
 ```
 
-No deployment or commit is authorized by Phase 4A.
+Deployment, bot execution, layout publication, commit, and push remain separate explicit actions; none is implied by
+editing or validating the question sync.

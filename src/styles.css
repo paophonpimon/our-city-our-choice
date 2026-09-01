@@ -3889,6 +3889,13 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   gap: clamp(.25rem, .55vh, .42rem);
   padding-left: 1.35rem;
 }
+.city-stage__workspace .city-stage__scene-overlays .live-answer-impacts {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+}
 .city-stage__impact-trunk {
   position: absolute;
   z-index: 0;
@@ -4103,7 +4110,6 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 /* Prototype building nameplates travel with the zoomed and panned city. */
 .city-stage__scene-overlays { position: absolute; z-index: 3; overflow: visible; pointer-events: none; }
-.city-stage__building-effects { position: absolute; z-index: 0; inset: 0; overflow: visible; pointer-events: none; }
 .city-stage__canvas.is-layout-calibrating .city-stage__building-labels { opacity: .35; pointer-events: none; }
 
 .city-layout-handles { position: absolute; z-index: 24; inset: 0; pointer-events: none; }
@@ -4252,274 +4258,134 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .city-layout-panel { top: 4.3rem; right: calc(var(--city-inspector-width, clamp(10.5rem, 17vw, 13.5rem)) + .45rem); width: 17rem; max-height: calc(100dvh - 4.75rem); padding: .6rem; }
   .city-layout-handles button { min-width: 3.2rem; min-height: 2.3rem; }
 }
-.city-scene__building-aura,
-.city-scene__building.has-integrity-effect,
-.city-scene__building.has-corruption-effect {
+.city-scene__building-environment,
+.city-scene__building.is-effect-upgrade,
+.city-scene__building.is-effect-downgrade {
   transform-box: fill-box;
   transform-origin: center;
   pointer-events: none;
 }
-.city-scene__building-aura { mix-blend-mode: screen; }
-.city-scene__building-aura.is-integrity {
-  opacity: .55;
-  filter: brightness(1.35) saturate(1.45) sepia(.22) blur(5px) drop-shadow(0 0 12px rgb(255 221 103 / 95%));
-  animation: city-model-integrity-aura 3.4s ease-in-out infinite;
+.city-scene__building-environment {
+  --effect-opacity-low: .28;
+  --effect-opacity-high: .42;
+  --effect-scale-low: .97;
+  --effect-scale-high: 1.03;
+  animation: city-building-shared-effect-pulse 4.8s ease-in-out infinite;
+  color-interpolation-filters: sRGB;
 }
-.city-scene__building.has-integrity-effect {
-  filter: drop-shadow(0 0 5px rgb(255 248 191 / 85%)) drop-shadow(0 0 13px rgb(255 204 73 / 68%));
+.city-scene__building-environment.is-upgrade { mix-blend-mode: screen; }
+.city-scene__building-environment.is-downgrade {
+  --effect-opacity-low: .46;
+  --effect-opacity-high: .7;
+  --effect-scale-low: .97;
+  --effect-scale-high: 1.035;
+  mix-blend-mode: normal;
+  animation-duration: 2.2s;
 }
-.city-scene__building-aura.is-corruption {
-  opacity: .68;
-  mix-blend-mode: multiply;
-  filter: brightness(.38) saturate(.48) blur(5px) drop-shadow(0 7px 15px rgb(28 25 42 / 92%));
-  animation: city-model-corruption-aura 4.2s ease-in-out infinite;
+.city-scene__building-environment.is-intensity-medium {
+  --effect-opacity-low: .36;
+  --effect-opacity-high: .54;
+  --effect-scale-low: .96;
+  --effect-scale-high: 1.045;
 }
-.city-scene__building.has-corruption-effect {
-  filter: brightness(.82) saturate(.78) drop-shadow(0 5px 9px rgb(30 27 43 / 74%));
+.city-scene__building-environment.is-intensity-strong {
+  --effect-opacity-low: .46;
+  --effect-opacity-high: .7;
+  --effect-scale-low: .95;
+  --effect-scale-high: 1.065;
+  animation-duration: 1.7s;
+}
+.city-scene__building-ambient-glow { opacity: .34; filter: blur(28px); }
+.city-scene__building-ground-halo { opacity: .58; filter: blur(11px); }
+.city-scene__building-environment.is-upgrade .city-scene__building-ambient-glow { fill: #8fe5a1; }
+.city-scene__building-environment.is-upgrade .city-scene__building-ground-halo { fill: #efd06b; }
+.city-scene__building-environment.is-downgrade .city-scene__building-ambient-glow {
+  fill: #e72f2f;
+  opacity: .38;
+  filter: blur(34px);
+}
+.city-scene__building-environment.is-downgrade .city-scene__building-ground-halo {
+  fill: #ff3428;
+  opacity: .76;
+  filter: blur(13px);
+}
+.city-scene__building-warning-ring {
+  fill: none;
+  stroke: #ff5148;
+  stroke-width: 4;
+  opacity: .82;
+  filter: blur(1.4px);
+  vector-effect: non-scaling-stroke;
+}
+.city-scene__building-environment.is-intensity-strong .city-scene__building-warning-ring {
+  stroke: #ff2d25;
+  stroke-width: 6;
+  opacity: 1;
 }
 
-/* A healthy building can survive in a degraded city, but it must inherit the
-   scene's dirty air and low light instead of looking pasted on top. */
+.city-scene__building.is-effect-upgrade.is-intensity-light {
+  filter: brightness(1.035) saturate(1.055) contrast(1.01);
+}
+.city-scene__building.is-effect-upgrade.is-intensity-strong {
+  filter: brightness(1.075) saturate(1.1) contrast(1.015);
+}
+.city-scene__building.is-effect-downgrade.is-intensity-medium {
+  filter: brightness(.9) saturate(.78) contrast(1.025);
+}
+.city-scene__building.is-effect-downgrade.is-intensity-strong {
+  filter: brightness(.78) saturate(.56) contrast(1.055);
+}
+
+/* Scene atmosphere is shared too: the same state/intensity rules apply to all
+   seven models, with no selector based on building identity. */
 .city-scene.is-scene-degraded .city-scene__building {
   filter: brightness(.76) saturate(.72) contrast(1.04) sepia(.1);
 }
-.city-scene.is-scene-degraded .city-scene__building-aura.is-integrity {
-  opacity: .62;
-  mix-blend-mode: screen;
-  filter: brightness(1.55) saturate(1.55) sepia(.2) blur(5px) drop-shadow(0 0 14px rgb(255 214 82 / 98%));
-  animation: city-model-integrity-aura 3.4s ease-in-out infinite;
+.city-scene.is-scene-degraded .city-scene__building.is-effect-upgrade.is-intensity-light {
+  filter: brightness(.84) saturate(.84) contrast(1.04) sepia(.07);
 }
-.city-scene.is-scene-degraded .city-scene__building.has-integrity-effect {
-  filter: brightness(1.08) saturate(1.18) contrast(1.02) sepia(.08)
-    drop-shadow(0 0 6px rgb(255 246 180 / 92%))
-    drop-shadow(0 0 15px rgb(255 193 52 / 78%));
+.city-scene.is-scene-degraded .city-scene__building.is-effect-upgrade.is-intensity-strong {
+  filter: brightness(.92) saturate(.96) contrast(1.035) sepia(.04);
 }
-.city-scene.is-scene-degraded .city-scene__building-aura.is-corruption {
-  opacity: .44;
-  filter: brightness(.3) saturate(.4) blur(4px) drop-shadow(0 7px 12px rgb(21 20 31 / 82%));
+.city-scene.is-scene-degraded .city-scene__building.is-effect-downgrade.is-intensity-medium {
+  filter: brightness(.66) saturate(.58) contrast(1.06) sepia(.08);
 }
-.city-scene.is-scene-degraded .city-scene__building.has-corruption-effect {
-  filter: brightness(.65) saturate(.58) contrast(1.06) sepia(.08) drop-shadow(0 5px 8px rgb(20 19 28 / 72%));
-}
-.city-stage__canvas.is-scene-degraded.is-zoomed .city-scene__building-aura.is-integrity {
-  opacity: .55;
-  animation: city-model-integrity-aura 3.4s ease-in-out infinite;
-}
-.city-stage__canvas.is-scene-degraded.is-zoomed .city-scene__building.has-integrity-effect {
-  filter: brightness(1.05) saturate(1.15) drop-shadow(0 0 6px rgb(255 241 168 / 88%)) drop-shadow(0 0 13px rgb(255 190 43 / 72%));
-}
-.city-scene__building-transition-aura,
-.city-scene__building.is-transition-improved,
-.city-scene__building.is-transition-declined {
-  transform-box: fill-box;
-  transform-origin: center;
-  pointer-events: none;
-}
-.city-scene__building-transition-aura { mix-blend-mode: screen; }
-.city-scene__building-transition-aura.is-improved {
-  opacity: 0;
-  filter: brightness(1.65) saturate(1.4) sepia(.3) blur(6px) drop-shadow(0 0 16px rgb(255 210 82 / 92%));
-  animation: city-building-improvement-aura 2.6s ease-out both;
-}
-.city-scene .city-scene__building.is-transition-improved {
-  animation: city-building-improvement-reveal 2.2s cubic-bezier(.2, .72, .24, 1) both;
-}
-.city-scene__building-transition-aura.is-declined {
-  opacity: 0;
-  mix-blend-mode: multiply;
-  filter: brightness(.42) saturate(.5) sepia(.18) blur(7px) drop-shadow(0 8px 14px rgb(45 38 43 / 72%));
-  animation: city-building-decline-pulse 2.4s ease-out both;
-}
-.city-scene .city-scene__building.is-transition-declined {
-  animation: city-building-decline-settle 1.8s ease-out both;
-}
-@keyframes city-building-improvement-aura {
-  0% { opacity: 0; transform: translateX(-4%) scale(.94); }
-  22% { opacity: .78; }
-  58% { opacity: .48; transform: translateX(3%) scale(1.025); }
-  100% { opacity: 0; transform: translateX(6%) scale(1.045); }
-}
-@keyframes city-building-improvement-reveal {
-  0% { opacity: .35; filter: brightness(1.55) saturate(1.15) drop-shadow(0 0 16px rgb(255 214 92 / 88%)); transform: scale(.965); }
-  35% { opacity: 1; transform: scale(1.018); }
-  100% { filter: none; transform: none; }
-}
-@keyframes city-building-decline-pulse {
-  0% { opacity: 0; transform: scale(.97); }
-  24% { opacity: .7; }
-  68% { opacity: .38; transform: translateY(1.5%) scale(1.018); }
-  100% { opacity: 0; transform: translateY(2.5%) scale(1.035); }
-}
-@keyframes city-building-decline-settle {
-  0% { opacity: .45; filter: brightness(.52) saturate(.42) blur(1.5px); transform: translateX(0) scale(.985); }
-  10% { transform: translateX(-.35%) scale(.99); }
-  18% { transform: translateX(.3%) scale(.995); }
-  27% { transform: translateX(-.2%) scale(1); }
-  38% { opacity: 1; transform: translateX(.1%) scale(1); }
-  100% { filter: none; transform: none; }
-}
-@keyframes city-model-integrity-aura {
-  0%, 100% { opacity: .38; transform: scale(1.002); }
-  50% { opacity: .68; transform: scale(1.012); }
-}
-@keyframes city-model-degraded-integrity-aura {
-  0%, 100% { opacity: .08; transform: scale(1.001); }
-  50% { opacity: .17; transform: scale(1.004); }
-}
-@keyframes city-model-corruption-aura {
-  0%, 100% { opacity: .48; transform: translateY(1px) scale(1.003); }
-  50% { opacity: .74; transform: translateY(3px) scale(1.01); }
-}
-.city-stage__building-effect {
-  position: absolute;
-  top: var(--building-effect-y);
-  left: var(--building-effect-x);
-  width: var(--building-effect-size);
-  aspect-ratio: 1.35;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-.city-stage__building-effect::before,
-.city-stage__building-effect::after,
-.city-stage__building-effect > i {
-  position: absolute;
-  content: '';
-  pointer-events: none;
+.city-scene.is-scene-degraded .city-scene__building.is-effect-downgrade.is-intensity-strong {
+  filter: brightness(.55) saturate(.4) contrast(1.09) sepia(.08);
 }
 
-.city-stage__building-effect.is-integrity {
-  background: none;
-  box-shadow: none;
-  animation: city-building-integrity-aura 3.4s ease-in-out infinite;
-  mix-blend-mode: screen;
+@keyframes city-building-shared-effect-pulse {
+  0%, 100% { opacity: var(--effect-opacity-low); transform: scale(var(--effect-scale-low)); }
+  50% { opacity: var(--effect-opacity-high); transform: scale(var(--effect-scale-high)); }
 }
-.city-stage__building-effect.is-integrity::before {
-  inset: -12%;
-  background:
-    radial-gradient(ellipse at 28% 58%, rgb(255 245 164 / 48%) 0 8%, rgb(255 220 91 / 19%) 25%, transparent 48%),
-    radial-gradient(ellipse at 56% 38%, rgb(255 255 219 / 52%) 0 7%, rgb(255 224 112 / 18%) 27%, transparent 50%),
-    radial-gradient(ellipse at 76% 64%, rgb(138 246 169 / 34%) 0 9%, rgb(89 218 135 / 13%) 26%, transparent 48%),
-    linear-gradient(112deg, transparent 18%, rgb(255 234 138 / 18%) 43%, transparent 70%);
-  clip-path: polygon(4% 38%, 20% 8%, 48% 16%, 66% 2%, 94% 28%, 86% 58%, 98% 80%, 64% 94%, 40% 84%, 12% 98%, 18% 67%);
-  filter: blur(1rem);
-  animation: city-building-integrity-haze 4.6s ease-in-out infinite;
-}
-.city-stage__building-effect.is-integrity::after {
-  top: 6%;
-  left: 18%;
-  width: .38rem;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: #fff9bf;
-  box-shadow: 2.2rem -.7rem #fff1a1, 4.4rem .4rem #e6ffcb, 1.2rem 2.7rem #fff8c5, 4rem 2.4rem #aef1bd, 5.2rem 1.6rem #fff0a1;
-  animation: city-building-integrity-sparkles 2.8s ease-in-out infinite alternate;
-  filter: drop-shadow(0 0 .25rem #fff2a3);
-}
-.city-stage__building-effect.is-integrity > i {
-  right: 13%;
-  bottom: 12%;
-  width: 28%;
-  height: 40%;
-  background: linear-gradient(125deg, transparent, rgb(154 255 185 / 34%), transparent);
-  clip-path: polygon(0 25%, 34% 4%, 100% 22%, 74% 68%, 92% 100%, 24% 88%);
-  filter: blur(.7rem);
-  animation: city-building-integrity-glint 3.1s ease-in-out infinite alternate;
-}
-
-.city-stage__canvas.is-scene-degraded .city-stage__building-effect.is-integrity {
-  mix-blend-mode: screen;
-  filter: brightness(1.25) saturate(1.35) sepia(.08);
-  animation: city-building-integrity-aura 3.4s ease-in-out infinite;
-}
-.city-stage__canvas.is-scene-degraded.is-zoomed .city-stage__building-effect.is-integrity {
-  opacity: .72;
-  animation: city-building-integrity-aura 3.4s ease-in-out infinite;
-}
-
-.city-stage__building-effect.is-corruption {
-  background: none;
-  box-shadow: none;
-  animation: city-building-corruption-aura 4s ease-in-out infinite;
-  mix-blend-mode: multiply;
-}
-.city-stage__building-effect.is-corruption::before {
-  right: -4%;
-  bottom: 2%;
-  left: -4%;
-  height: 46%;
-  background:
-    radial-gradient(ellipse at 18% 58%, rgb(93 87 111 / 42%) 0 15%, transparent 39%),
-    radial-gradient(ellipse at 50% 43%, rgb(59 54 76 / 50%) 0 18%, transparent 44%),
-    radial-gradient(ellipse at 80% 60%, rgb(82 77 98 / 38%) 0 14%, transparent 40%);
-  clip-path: polygon(0 36%, 16% 10%, 39% 26%, 58% 4%, 78% 24%, 100% 17%, 91% 68%, 66% 90%, 42% 72%, 14% 96%);
-  filter: blur(.85rem);
-  animation: city-building-corruption-fog 5.2s ease-in-out infinite alternate;
-}
-.city-stage__building-effect.is-corruption::after {
-  top: -2%;
-  left: 30%;
-  width: 40%;
-  height: 76%;
-  background: linear-gradient(100deg, transparent, rgb(74 67 91 / 25%), transparent);
-  clip-path: polygon(20% 0, 82% 9%, 63% 34%, 94% 62%, 45% 100%, 8% 72%, 31% 47%, 0 22%);
-  filter: blur(.6rem);
-  animation: city-building-corruption-smoke 4.8s ease-in-out infinite;
-}
-.city-stage__building-effect.is-corruption > i {
-  inset: 12%;
-  background:
-    linear-gradient(130deg, transparent 8%, rgb(69 61 86 / 22%) 37%, transparent 67%),
-    linear-gradient(25deg, transparent 22%, rgb(31 29 47 / 17%) 54%, transparent 81%);
-  clip-path: polygon(6% 31%, 32% 2%, 59% 18%, 88% 5%, 100% 48%, 77% 87%, 42% 72%, 15% 100%, 21% 59%);
-  filter: blur(.9rem);
-  animation: city-building-corruption-shadow 5.6s ease-in-out infinite alternate;
-}
-
-@keyframes city-building-integrity-aura {
-  0%, 100% { opacity: .68; transform: translate(-50%, -50%) scale(.92); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
-}
-@keyframes city-building-degraded-integrity-aura {
-  0%, 100% { opacity: .18; transform: translate(-50%, -50%) scale(.96); }
-  50% { opacity: .32; transform: translate(-50%, -50%) scale(1.02); }
-}
-@keyframes city-building-integrity-haze {
-  0%, 100% { opacity: .3; transform: scale(.88); }
-  50% { opacity: .75; transform: scale(1.12); }
-}
-@keyframes city-building-integrity-sparkles {
-  from { opacity: .35; transform: translateY(.35rem) scale(.8); }
-  to { opacity: 1; transform: translateY(-.35rem) scale(1.15); }
-}
-@keyframes city-building-integrity-glint { from { opacity: .2; transform: translate(-.2rem, .3rem); } to { opacity: .9; transform: translate(.25rem, -.3rem); } }
-@keyframes city-building-corruption-aura {
-  0%, 100% { opacity: .58; transform: translate(-50%, -50%) scale(.95); }
-  50% { opacity: .88; transform: translate(-50%, -50%) scale(1.06); }
-}
-@keyframes city-building-corruption-fog { from { transform: translateX(-8%) scale(.92); } to { transform: translateX(8%) scale(1.08); } }
-@keyframes city-building-corruption-smoke {
-  0% { opacity: .2; transform: translate(-30%, 18%) rotate(-8deg); }
-  50% { opacity: .62; transform: translate(22%, -9%) rotate(8deg); }
-  100% { opacity: .18; transform: translate(-8%, -24%) rotate(-3deg); }
-}
-@keyframes city-building-corruption-shadow { from { opacity: .25; transform: scale(.88); } to { opacity: .7; transform: scale(1.12); } }
 
 .city-stage__building-labels { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
+@property --building-label-flow-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
 .city-stage__building-labels > button {
+  --building-label-accent: #27caf5;
+  --building-label-accent-rgb: 39 202 245;
+  --building-label-level-color: #d8f6ff;
+  --building-label-bg-top: rgb(5 30 55 / 94%);
+  --building-label-bg-bottom: rgb(2 16 34 / 93%);
+  --building-label-flow-duration: 4.2s;
   position: absolute;
   top: var(--building-label-y);
   left: var(--building-label-x);
   display: grid;
-  min-width: clamp(4.7rem, 6.5vw, 6.5rem);
+  min-width: clamp(5.8rem, 7.6vw, 7.5rem);
   min-height: clamp(2.35rem, 3.4vw, 3rem);
   place-items: center;
   gap: .12rem;
   padding: .34rem .62rem .3rem;
   transform: translate(-50%, -50%);
-  border: 2px solid rgb(39 202 245 / 92%);
+  border: 2px solid rgb(var(--building-label-accent-rgb) / 92%);
   border-radius: 11px;
-  background: linear-gradient(180deg, rgb(5 30 55 / 94%), rgb(2 16 34 / 93%));
-  box-shadow: 0 0 .65rem rgb(24 198 244 / 35%), 0 .28rem .6rem rgb(0 8 22 / 42%), inset 0 1px rgb(164 235 255 / 12%);
+  background: linear-gradient(180deg, var(--building-label-bg-top), var(--building-label-bg-bottom));
+  box-shadow: 0 0 .65rem rgb(var(--building-label-accent-rgb) / 35%), 0 .28rem .6rem rgb(0 8 22 / 42%), inset 0 1px rgb(255 255 255 / 12%);
   color: #fff;
   font-size: clamp(.58rem, .78vw, .82rem);
   font-family: inherit;
@@ -4533,16 +4399,82 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   pointer-events: auto;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
+.city-stage__building-labels > button::before {
+  position: absolute;
+  z-index: 0;
+  inset: -2px;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--building-label-flow-angle),
+    transparent 0 66%,
+    rgb(var(--building-label-accent-rgb) / 18%) 72%,
+    var(--building-label-accent) 80%,
+    #fff 84%,
+    var(--building-label-accent) 88%,
+    transparent 96% 100%
+  );
+  content: '';
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: city-building-label-border-flow var(--building-label-flow-duration) linear infinite;
+}
+.city-stage__building-labels > button.is-level-critical {
+  --building-label-accent: #ff4b43;
+  --building-label-accent-rgb: 255 75 67;
+  --building-label-level-color: #ffaaa4;
+  --building-label-bg-top: rgb(70 17 23 / 96%);
+  --building-label-bg-bottom: rgb(32 7 14 / 96%);
+  --building-label-flow-duration: 1.9s;
+}
+.city-stage__building-labels > button.is-level-degraded {
+  --building-label-accent: #ff9d3d;
+  --building-label-accent-rgb: 255 157 61;
+  --building-label-level-color: #ffc27b;
+  --building-label-bg-top: rgb(75 35 12 / 96%);
+  --building-label-bg-bottom: rgb(35 15 7 / 95%);
+  --building-label-flow-duration: 2.5s;
+}
+.city-stage__building-labels > button.is-level-improved {
+  --building-label-accent: #4dde98;
+  --building-label-accent-rgb: 77 222 152;
+  --building-label-level-color: #9ff3c8;
+  --building-label-bg-top: rgb(8 56 47 / 95%);
+  --building-label-bg-bottom: rgb(3 27 28 / 95%);
+  --building-label-flow-duration: 3.4s;
+}
+.city-stage__building-labels > button.is-level-thriving {
+  --building-label-accent: #b9e95f;
+  --building-label-accent-rgb: 185 233 95;
+  --building-label-level-color: #e7ffae;
+  --building-label-bg-top: rgb(36 66 26 / 95%);
+  --building-label-bg-bottom: rgb(11 34 23 / 95%);
+  --building-label-flow-duration: 2.8s;
+}
 .city-stage__building-labels > button:hover,
 .city-stage__building-labels > button:focus-visible,
 .city-stage__building-labels > button.is-selected,
-.city-stage__building-labels > button.is-layout-selected { z-index: 2; transform: translate(-50%, -50%) translateY(-2px) scale(1.035); border-color: #76e0ff; box-shadow: 0 0 .9rem rgb(35 207 255 / 52%), 0 .38rem .8rem rgb(0 8 22 / 48%), 0 0 0 2px rgb(105 224 255 / 24%); outline: none; }
+.city-stage__building-labels > button.is-layout-selected { z-index: 2; transform: translate(-50%, -50%) translateY(-2px) scale(1.035); border-color: rgb(var(--building-label-accent-rgb) / 100%); box-shadow: 0 0 .95rem rgb(var(--building-label-accent-rgb) / 58%), 0 .38rem .8rem rgb(0 8 22 / 48%), 0 0 0 2px rgb(var(--building-label-accent-rgb) / 24%); outline: none; }
 .city-stage__building-labels > button.is-label-editing { cursor: move; }
-.city-stage__building-label-name { color: #fff; font-weight: 850; text-shadow: 0 1px 2px rgb(0 0 0 / 55%); }
-.city-stage__building-label-level { display: flex; align-items: center; justify-content: center; gap: .2rem; color: #d8f6ff; font-size: clamp(.49rem, .64vw, .68rem); font-weight: 700; }
-.city-stage__building-label-level b { color: #8ce8ff; font-size: .88em; font-weight: 800; }
-.city-stage__building-label-level .is-negative { color: #ffaaa8; }
-.city-stage__building-label-level .is-positive { color: #8fe6b5; }
+.city-stage__building-label-name { position: relative; z-index: 1; color: #fff; font-weight: 850; text-shadow: 0 1px 2px rgb(0 0 0 / 55%); }
+.city-stage__building-label-level { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: .2rem; color: var(--building-label-level-color); font-size: clamp(.49rem, .64vw, .68rem); font-weight: 700; }
+.city-stage__building-label-level .is-previous { color: rgb(220 234 241 / 72%); }
+.city-stage__building-label-level .is-current { text-shadow: 0 0 .28rem rgb(var(--building-label-accent-rgb) / 32%); }
+.city-stage__building-label-level b { min-width: 1em; font-size: .88em; font-weight: 900; }
+.city-stage__building-label-level b.is-up { color: #65efa5; text-shadow: 0 0 .38rem rgb(63 232 148 / 62%); animation: city-building-label-arrow-up 1.15s ease-in-out infinite; }
+.city-stage__building-label-level b.is-down { color: #ff655f; text-shadow: 0 0 .38rem rgb(255 64 58 / 62%); animation: city-building-label-arrow-down 1.05s ease-in-out infinite; }
+@keyframes city-building-label-border-flow { to { --building-label-flow-angle: 360deg; } }
+@keyframes city-building-label-arrow-up {
+  0%, 100% { opacity: .74; transform: translateY(1px) scale(.94); }
+  50% { opacity: 1; transform: translateY(-2px) scale(1.08); }
+}
+@keyframes city-building-label-arrow-down {
+  0%, 100% { opacity: .74; transform: translateY(-1px) scale(.94); }
+  50% { opacity: 1; transform: translateY(2px) scale(1.08); }
+}
 
 .city-stage__building-detail {
   position: absolute;
@@ -4655,7 +4587,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 @keyframes teacher-building-story-crisis-in { from { opacity: 0; transform: translateY(.5rem); } to { opacity: 1; transform: none; } }
 
 @media (min-width: 768px) and (max-width: 1366px) and (orientation: landscape) {
-  .city-stage__building-labels > button { min-width: 4.25rem; min-height: 2rem; gap: .08rem; padding: .25rem .45rem .22rem; font-size: clamp(.48rem, .62vw, .64rem); }
+  .city-stage__building-labels > button { min-width: 5.15rem; min-height: 2rem; gap: .08rem; padding: .25rem .4rem .22rem; font-size: clamp(.48rem, .62vw, .64rem); }
   .city-stage__building-label-level { font-size: clamp(.42rem, .52vw, .55rem); }
   .city-stage__building-detail { width: min(19rem, calc(100% - .7rem)); max-height: calc(100% - .7rem); padding: .65rem; gap: .5rem; }
   .teacher-building-story { width: min(32rem, calc(100vw - 2rem)); gap: .65rem; padding: .75rem .85rem; border-radius: .9rem; }
@@ -4670,15 +4602,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .city-stage__building-effect,
-  .city-stage__building-effect::before,
-  .city-stage__building-effect::after,
-  .city-stage__building-effect > i { animation: none !important; }
-  .city-scene__building-transition-aura,
-  .city-scene__building.is-transition-improved,
-  .city-scene__building.is-transition-declined,
+  .city-scene__building-environment,
+  .city-stage__building-labels > button::before,
+  .city-stage__building-label-level b,
   .teacher-building-story { animation: none !important; }
-  .city-scene__building-transition-aura { opacity: .28; }
+  .city-scene__building-environment { opacity: var(--effect-opacity-low); }
 }
 
 /* Birds and clouds are the top atmosphere layer inside the city image. */

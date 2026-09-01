@@ -1,131 +1,232 @@
-# มัทนาต้องรอด
+# Our City, Our Choice — เมืองนี้อยู่ที่เรา
 
-เว็บแอปเกมการศึกษาภาษาไทยสำหรับนักเรียนชั้นมัธยมศึกษาปีที่ 5 เล่นเป็นกลุ่ม กลุ่มละประมาณ 4–5 คน ทุกกลุ่มได้รับคำถาม 10 ข้อชุดเดียวกัน ลำดับเดียวกัน และใช้เวลาต่อข้อเท่ากันตามที่ครูกำหนด นักเรียนเปลี่ยนคำตอบได้จนหมดเวลา โดยระบบใช้คำตอบล่าสุดและล็อกทันทีเมื่อ deadline ถึง จากนั้นจะแสดงถูก/ผิดพร้อมคะแนนสะสม 4 วินาทีก่อนเปลี่ยนข้อ หน้าครูเปิดคะแนนและจัดอันดับใหม่แบบ realtime พร้อมกับช่วงเฉลยโดยไม่เปิดคะแนนก่อนเวลา ระหว่างเล่นจะเข้าสู่โหมดกระดานเต็มพื้นที่สำหรับสะท้อนจากแท็บเล็ตขึ้นจอใหญ่ พร้อมปุ่มหยุดเกมฉุกเฉินที่คืนทุกกลุ่มสู่ห้องรอโดยไม่ลบรายชื่อ เมื่อจบรอบจอครูแสดงอันดับ 1–3 พร้อมเวทีและพลุฉลอง ส่วนนักเรียนเห็นเฉพาะคะแนนของกลุ่มตนเอง ไม่มีการตัดสินจากความเร็ว
+เกมจำลองสถานการณ์พลเมืองและการตัดสินใจเชิงจริยธรรมสำหรับกิจกรรมในชั้นเรียน ผู้เรียนรับบทเป็น 1 ใน 8 อาชีพ ตอบสถานการณ์ปกติ 10 ข้อและเหตุการณ์วิกฤต 2 ครั้ง การตัดสินใจของทุกคนถูกรวมเป็นคะแนนเมืองและคะแนนสะสมของอาคาร 7 แห่ง ภาพเมือง โมเดลอาคาร ป้ายระดับ และผลสรุปจะเปลี่ยนตามผลที่คำนวณจริง
 
-โปรเจกต์เปิดใน **Demo Mode** เป็นค่าเริ่มต้น จึงทดลองหน้าจอและลำดับการเล่นได้ทันทีโดยยังไม่ต้องมี Firebase
+โปรเจกต์นี้ไม่ใช่เกมตอบถูก/ผิดและไม่ให้คะแนนจากความเร็ว เป้าหมายคือทำให้ผู้เรียนเห็นความเชื่อมโยงระหว่างการตัดสินใจส่วนบุคคล ผลประโยชน์ส่วนรวม ความโปร่งใส และผลกระทบต่อเมือง
+
+เอกสารสำหรับ AI และผู้พัฒนาที่ต้องเข้าใจสัญญาทางเทคนิคก่อนแก้โค้ดอยู่ที่ [AGENTS.md](./AGENTS.md)
+
+## ภาพรวมกิจกรรม
+
+หนึ่งรอบการเล่นมีลำดับดังนี้:
+
+1. ครูสร้างห้องและแชร์รหัส/QR ให้ผู้เรียน
+2. ผู้เรียนกรอกชื่อ ห้องเรียน และเลขที่ แล้วรอใน Lobby
+3. ครูเปิดแบบประเมินก่อนกิจกรรม (PRE) 10 ข้อ มาตราส่วน 1–5
+4. เมื่อผู้เรียนทำ PRE ครบ ครูเริ่มเกมและระบบแจกบทบาทอย่างสมดุล
+5. ผู้เรียนดูบทบาทและเข้าสู่สถานการณ์ปกติข้อ 1–10
+6. หลังข้อ 4 และข้อ 8 มีเหตุการณ์วิกฤต คะแนนสุจริต/ทุจริตแรงขึ้น 2 เท่า
+7. ครูเป็นผู้ปิดรับ สรุปผล และเปิดขั้นถัดไป หน้าครูแสดงผลเมืองแบบ realtime
+8. หลังข้อ 10 ครูเลือกเล่นรอบต่อไปโดยหมุนบทบาท หรือจบกิจกรรม
+9. เมื่อจบกิจกรรม ผู้เรียนทำ POST 10 ข้อและ Reflection 3 ข้อ
+10. ครูบันทึก Teacher Observation O1–O4 และเปิดแดชบอร์ดหลักฐานสำหรับกรรมการ
+
+เกมรองรับสูงสุด 8 รอบ (`MAX_GAME_CYCLES = 8`) เพื่อให้ผู้เรียนหมุนผ่านบทบาททั้ง 8 บทบาทโดยไม่ซ้ำในประวัติของตนเอง
+
+## บทบาทและอาคาร
+
+| บทบาท | สถานที่/อาคารที่ได้รับผลกระทบ |
+| --- | --- |
+| หมอ | โรงพยาบาล |
+| เจ้าหน้าที่เทศบาล | สำนักงานเทศบาล |
+| ตำรวจ | สถานีตำรวจ |
+| ครู | โรงเรียน |
+| พ่อค้าแม่ค้า | ตลาด |
+| ผู้รับเหมา | ไซต์ก่อสร้าง |
+| นักเรียน | โรงเรียน |
+| นักข่าว | สำนักข่าว |
+
+ครูและนักเรียนใช้โรงเรียนร่วมกัน จึงมี 8 บทบาทแต่มี 7 อาคาร
+
+## กติกาคะแนน
+
+สถานการณ์ปกติ:
+
+- สุจริต: `+50`
+- ทุจริต: `-100`
+- ไม่ตอบ/หมดเวลา: `-20`
+
+เหตุการณ์วิกฤต:
+
+- สุจริต: `+100`
+- ทุจริต: `-200`
+- ไม่ตอบ/หมดเวลา: `-20`
+
+คะแนนเมืองเริ่มที่ `500` และถูกอัปเดตด้วยค่าเฉลี่ยของผู้เล่นที่ถูกล็อกไว้ในรอบนั้น จากนั้นจำกัดอยู่ในช่วง `0–1000`
+
+| คะแนนเมือง | สถานะเมือง |
+| ---: | --- |
+| 0–199 | ระดับ -2 แย่มาก |
+| 200–299 | ระดับ -1 แย่ |
+| 300–599 | ระดับ 0 เมืองปกติ |
+| 600–799 | ระดับ +1 กำลังพัฒนา |
+| 800–1000 | ระดับ +2 พัฒนา |
+
+แต่ละอาคารมีคะแนนสะสมแยกของตนเอง เริ่มที่ `500` และรับเฉพาะค่าเฉลี่ยของบทบาทที่ผูกกับสถานที่นั้น:
+
+| คะแนนอาคาร | ระดับโมเดล |
+| ---: | ---: |
+| 0–199 | Lv.-2 |
+| 200–399 | Lv.-1 |
+| 400–599 | Lv.0 |
+| 600–799 | Lv.1 |
+| 800–1000 | Lv.2 |
+
+`cityScore` และ `buildingScores` เป็นข้อมูลคนละชุด ห้ามคำนวณระดับอาคารจากคะแนนเมืองหรือคำนวณป้ายจากคะแนนดิบใน component
+
+## สิ่งที่หน้าครูแสดง
+
+- เมือง 3 ฉาก: โทรม ปกติ และพัฒนา
+- อาคาร 7 แห่ง อาคารละ 5 ระดับ `-2..+2`
+- ป้ายอาคารแสดงชื่อและ transition ล่าสุด เช่น `Lv.0 ▲ Lv.1`; ถ้าไม่เปลี่ยนแสดงเพียง `Lv.0`
+- เอฟเฟกต์อาคารใช้ระบบกลางเดียวกันทุกอาคาร: upgrade, neutral, downgrade และ critical negative
+- กล่องคะแนนสด `+50/-100` ยึดพิกัดเดียวกับป้ายอาคารและตาม zoom/pan ของเมือง
+- แผง “ผลกระทบอาคารสะสม” เป็นเครือข่ายเส้นหลักและกิ่งเชื่อมครบ 7 อาคาร
+- เพลง Lobby/Gameplay, เสียง UI, เสียงบรรยากาศ และเสียงวิกฤต โดยระดับ BGM ปกติตรงกับค่าที่ผู้ใช้ตั้ง
+
+## แบบประเมินและหลักฐาน
+
+- PRE และ POST: ข้อละ 1–5 จำนวน 10 ข้อ เก็บคำตอบดิบและจับคู่ด้วย `playerId`
+- Reflection: R1–R3 เป็นข้อความเดิมของผู้เรียน ไม่มีการให้คะแนนหรือสรุปแท็กอัตโนมัติ
+- Teacher Observation: O1–O4 มาตราส่วน 1–4 พร้อมบันทึกเพิ่มเติม
+- แดชบอร์ดครูคำนวณเฉพาะผู้เรียนที่มี PRE และ POST ครบคู่ แสดงค่าเฉลี่ย การเปลี่ยนแปลง Improved/Unchanged/Decreased และอัตราการทำ Reflection
+- เมื่อห้อง `finished` ครูเผยแพร่เฉพาะ aggregate ที่ whitelist แล้วไว้ใน `room.publicLearningEvidence` เพื่อให้หน้าผลสาธารณะอ่านได้ โดยไม่เปิดคำตอบรายบุคคล
 
 ## เทคโนโลยี
 
-- React + TypeScript + Vite
-- Tailwind CSS
+- React 19 + TypeScript + Vite
 - React Router
-- Firebase Authentication แบบ Anonymous
-- Cloud Firestore, realtime listener และ transaction
-- Vitest
-- ESLint
+- Firebase Anonymous Authentication
+- Cloud Firestore realtime listeners, transactions และ security rules
+- Vitest + ESLint
+- CSS/SVG สำหรับฉากเมือง โมเดล เอฟเฟกต์ และ responsive UI
 
-## โครงสร้างโฟลเดอร์
+## โครงสร้างโค้ด
 
 ```text
 src/
-├─ components/       ส่วนประกอบ UI ที่ใช้ร่วมกัน
-├─ context/          การเตรียม session และแหล่งข้อมูล
-├─ data/             คลังคำถามตัวอย่าง
-├─ hooks/            realtime hooks สำหรับห้องและกลุ่ม
-├─ lib/              สุ่มคำถาม คะแนน validation และ route resolver
-├─ pages/            หน้าจอครบทุก route
-├─ services/         Demo Mode, Firebase Mode และ localStorage session
-└─ types/            data model ของเกม
-public/images/       ภาพ PNG ของเกม
-firestore.rules      กฎความปลอดภัย Firestore สำหรับ MVP
-firebase.json        การตั้งค่า rules และ Firebase Hosting
-vercel.json          SPA fallback สำหรับ Vercel
+├─ components/   UI ที่ใช้ร่วมกัน ฉากเมือง ป้าย ผลกระทบ เสียง และ evidence
+├─ context/      เลือก backend, session bootstrap และ city-layout provider
+├─ debug/        flight recorder แบบ opt-in (?debug=2)
+├─ domain/       กติกา pure functions: คะแนน บทบาท วิกฤต อาคาร การประเมิน
+├─ hooks/        realtime subscriptions, countdown, fullscreen และ publisher
+├─ lib/          flow helpers และ sound pack
+├─ pages/        route ของครู ผู้เรียน แบบประเมิน ผลลัพธ์ และ layout editor
+├─ services/     Firebase backend, Demo backend, Google Sheets และ session
+└─ types/        Firestore/application data contracts
+
+scripts/         bots, staging guards, layout freeze และ load test
+e2e/             end-to-end classroom flows
+public/audio/    BGM, SFX และ ambience
+public/images/   ฉากเมืองและโมเดลอาคาร
 ```
 
-## ติดตั้งและรันในเครื่อง
+ไฟล์สำคัญ:
 
-ต้องมี Node.js รุ่น 20.19 ขึ้นไป (หรือ 22.12 ขึ้นไป) และ npm
+- `src/types/classroomGame.ts` — room/player/answer/assessment contracts
+- `src/services/classroomGameService.ts` — interface ที่ทั้ง Firebase และ Demo ต้องทำตาม
+- `src/services/firebaseClassroomService.ts` — backend จริงและ transaction flow
+- `src/domain/classroomGameLoop.ts` — routing, timer และ live-score helpers
+- `src/domain/cityScoring.ts` — คะแนนสถานการณ์ปกติและระดับเมือง
+- `src/domain/cityCrisisEvents.ts` — วิกฤต 2 เหตุการณ์และคะแนน ×2
+- `src/domain/cityBuildings.ts` — อาคาร 7 แห่ง คะแนน ระดับ asset และ frozen layout
+- `src/domain/cityPresentation.ts` — transition/effect ที่เป็น presentation-only
+- `src/pages/TeacherPage.tsx` — orchestration หลักของหน้าครู
+- `src/pages/GamePage.tsx` — การเล่นฝั่งผู้เรียน
+- `src/pages/ResultPage.tsx` — ผลรายรอบ ผลสุดท้าย และภาพเมืองล่าสุด
 
-```bash
+## Routes
+
+| Route | ผู้ใช้/หน้าที่ |
+| --- | --- |
+| `/` | หน้าแรก |
+| `/teacher` | สร้างและควบคุมห้อง |
+| `/join?room=ABCD` | เข้าร่วมห้องด้วยรหัส 4 ตัว |
+| `/assessment/pre/:roomCode` | แบบประเมินก่อนกิจกรรม |
+| `/lobby/:roomCode` | ห้องรอ |
+| `/role-draw/:roomCode` | เปิดเผยบทบาท |
+| `/game/:roomCode` | สถานการณ์ปกติ/วิกฤตของผู้เรียน |
+| `/result/:roomCode` | ผลรายรอบ/ผลสาธารณะ/ผลส่วนตัว |
+| `/assessment/post/:roomCode` | POST ต่อด้วย Reflection |
+| `/teacher/evidence/:roomCode` | หลักฐานฉบับครูหลังห้อง finished |
+| `/layout-editor` | ปรับโมเดล/ป้ายบน staging |
+
+## ติดตั้งและรัน
+
+ต้องใช้ Node.js ที่ Vite รองรับ (แนะนำ Node 22 LTS) และ npm
+
+```powershell
 npm install
-copy .env.example .env.local
+Copy-Item .env.example .env.local
 npm run dev
 ```
 
-บน macOS/Linux ใช้ `cp .env.example .env.local` แทน `copy` แล้วเปิด URL ที่ Vite แสดง
+โหมดปกติของ `.env.example` ใช้ Firebase (`VITE_DEMO_MODE=false`) ถ้าต้องการ backend จำลองในเครื่องให้ตั้ง `VITE_DEMO_MODE=true`
 
-คำสั่งที่มีให้:
+คำสั่งหลัก:
 
-```bash
-npm run dev        # เปิด development server
-npm run lint       # ตรวจรูปแบบและข้อผิดพลาดของโค้ด
-npm run typecheck  # ตรวจ TypeScript
-npm run test       # รัน unit tests
-npm run build      # สร้าง production build ใน dist/
+```powershell
+npm run dev
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:rules
 ```
 
-## วิธีรัน Demo Mode
+## Google Sheets Question Bank
 
-ตั้งค่าใน `.env.local`:
+ครูโหลด CSV จากชีต `QUESTIONS` ก่อนสร้าง/เริ่มห้อง ต้องมีคำถาม active อย่างน้อย 10 ข้อต่อบทบาท และคอลัมน์:
 
-```env
-VITE_DEMO_MODE=true
+```text
+active, role_id, question_id, sort_order, question,
+choice_1, choice_2, integrity_choice, image_url
 ```
 
-Demo Mode มีห้องตัวอย่างรหัส `MATANA` พร้อมกลุ่มตัวอย่าง 3 กลุ่ม
+ระบบสร้าง trusted snapshot 80 รายการ (8 บทบาท × 10 ข้อ) ไว้เฉพาะเครื่องครูและเผยแพร่ Firestore เฉพาะคำถาม/ตัวเลือกที่ปลอดภัย รายละเอียดอยู่ใน [GOOGLE_SHEETS_QUESTION_SYNC.md](./GOOGLE_SHEETS_QUESTION_SYNC.md)
 
-1. เปิด `/teacher` แล้วกด “เปิดห้องสาธิต MATANA” หรือสร้างห้องใหม่
-2. เปิด `/join` ในอีกหน้าต่าง กดแถบโหมดสาธิตเพื่อใส่รหัส `MATANA`
-3. กรอกชื่อกลุ่มและชื่อผู้พิทักษ์
-4. กลับหน้าครูแล้วเริ่มภารกิจ
+## Firebase และข้อมูล
 
-หากต้องการทดสอบตั้งแต่ห้องว่าง ให้กด **“สร้างห้องทดสอบใหม่”** ในแผงควบคุมครู แล้วนำรหัส 6 ตัวที่ได้ไปกรอกใน `/join` จากอีกแท็บ หน้าต่าง หรือเบราว์เซอร์ที่เปิดผ่าน Vite server ตัวเดียวกัน ห้องนี้จะไม่มี 3 กลุ่มตัวอย่างของ `MATANA`
+โครงสร้างหลัก:
 
-ระหว่าง `npm run dev` และ `npm run preview` ข้อมูล Demo Mode จะแชร์ผ่าน Vite server และสำรองใน localStorage ทำให้หน้าต่างหรือเบราว์เซอร์คนละ storage context เข้าห้องเดียวกันได้ หากเป็น static hosting ที่ไม่มี endpoint นี้ ระบบจะ fallback เป็น localStorage; การใช้งานหลายอุปกรณ์จริงควรใช้ Firebase Mode หากต้องการเริ่ม Demo ใหม่ให้รีสตาร์ต server และลบ key `matana_demo_state_v2` ใน DevTools > Application > Local Storage
-
-## ตั้งค่า Firebase Project
-
-1. ไปที่ Firebase Console แล้วสร้างโปรเจกต์
-2. เปิดเมนู **Build > Firestore Database**
-3. กดสร้างฐานข้อมูล เลือก Region ใกล้ผู้ใช้ เช่น `asia-southeast1` และเลือก Production mode
-4. ไปที่ **Build > Authentication > Sign-in method**
-5. เปิดผู้ให้บริการ **Anonymous**
-6. ไปที่ **Project settings > Your apps** แล้วสร้าง **Web App**
-7. คัดลอกค่า Firebase config มาใส่ `.env.local`
-
-ตัวอย่าง `.env.local`:
-
-```env
-VITE_DEMO_MODE=false
-VITE_FIREBASE_API_KEY=ค่าจาก_Firebase
-VITE_FIREBASE_AUTH_DOMAIN=ชื่อโปรเจกต์.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=ชื่อโปรเจกต์
-VITE_FIREBASE_STORAGE_BUCKET=ชื่อโปรเจกต์.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=ตัวเลขจาก_Firebase
-VITE_FIREBASE_APP_ID=ค่าจาก_Firebase
+```text
+rooms/{roomId}
+  players/{playerId}
+  questions/{questionId}
+  answers/{answerId}
+  rounds/{gameCycle}::{questionNumber}
+  crisisResults/{gameCycle}::{eventIndex}
+  personalResults/{decisionId}
+  assessments/{assessmentId}
 ```
 
-ค่า Firebase Web config ไม่ใช่ server secret แต่ควรจำกัด API key ตามโดเมนที่ใช้ และห้ามใส่ service-account key ในเว็บหรือใน repository
+ครูเป็นผู้เขียน room/questions/round results และคำนวณ trusted scoring ผู้เรียนอ่าน public question ของบทบาทตนเองและสร้างคำตอบของตนเองเท่านั้น คำตอบแรกที่ Firestore ยอมรับเป็น immutable และใช้ stable document ID เพื่อให้ retry แบบ idempotent
 
-## Deploy Firestore Rules
+Firebase project ที่อนุญาต:
 
-ติดตั้ง Firebase CLI และ login ก่อน:
+- Production: `our-city-our-choice`
+- Staging: `our-city-our-choice-staging`
 
-```bash
-npm install -g firebase-tools
-firebase login
-firebase use --add
-firebase deploy --only firestore:rules
-```
+ห้ามใส่ service-account, token หรือไฟล์ `.env*.local` ลง Git
 
-ตรวจ `firestore.rules` และทดสอบด้วย Firebase Emulator ก่อนใช้กับคะแนนจริงทุกครั้ง
+## Staging, Layout Editor และ Deploy
 
-## ปรับผังเมืองบน Staging
+สร้าง `.env.staging.local` ด้วย config ของ staging ครบทั้ง 6 ค่า แล้วใช้:
 
-ระบบปรับผังเมืองใช้ Firebase project `our-city-our-choice-staging` แยกจาก production โดยเด็ดขาด ให้สร้าง `.env.staging.local` จาก `.env.example` แล้วกรอกค่า `VITE_FIREBASE_*` ของ staging ให้ครบทั้ง 6 ค่า คำสั่ง staging จะหยุดทันทีหากไฟล์ไม่ครบหรือชี้ไป production
-
-```bash
+```powershell
 npm run dev:staging
 npm run build:staging
 npm run test:rules:staging
 npm run deploy:staging
 ```
 
-ระหว่างทดสอบบน staging ให้เปิด `/layout-editor` เพื่อเข้าสู่หน้าเฉพาะสำหรับปรับตำแหน่งโมเดลและป้ายอาคาร (`/teacher?layout=1` ยังใช้ได้เพื่อรองรับลิงก์เดิม) การแก้ไขจะบันทึกเป็น Draft กลางอัตโนมัติและยังไม่กระทบหน้าผู้เล่นจนกด Publish ทุกครั้งที่ Publish ระบบจะตรวจว่าครบ 3 ฉาก × 7 อาคาร × 5 ระดับ รวม 105 ตำแหน่ง และสร้าง version สำหรับ rollback
+Staging URL: <https://our-city-our-choice-staging.web.app/>
 
-เมื่อยืนยันผังบน staging แล้ว ให้ดึง Published version ล่าสุดมา freeze ลง source ก่อนนำขึ้น production:
+`npm run deploy:staging` จะ validate environment, สร้าง staging rules, build และ deploy `firestore:rules,hosting` ไปยัง alias `staging`
 
-```bash
+หน้า `/layout-editor` บันทึก Draft กลางและ Publish layout ครบ `3 ฉาก × 7 อาคาร × 5 ระดับ = 105` ชุด Production ไม่อ่าน layout จาก Firestore; ต้อง freeze published staging layout ลง source ก่อน:
+
+```powershell
 npm run layout:freeze-staging
 npm run lint
 npm run typecheck
@@ -133,146 +234,48 @@ npm test
 npm run build
 ```
 
-`layout:freeze-staging` แก้เฉพาะตารางที่มี marker ใน `src/domain/cityBuildings.ts` และไม่ deploy, commit หรือ push ให้อัตโนมัติ ต้องตรวจ `git diff` ก่อน commit เสมอ ส่วน Firestore rules ของ production ปิดการอ่านและเขียน collection สำหรับปรับผังทั้งหมด และใช้เฉพาะค่าที่ freeze อยู่ใน source
+## Classroom Bots
 
-## Production build
+บอต Firebase รองรับ 1–40 คน, PRE, คำถาม 10 ข้อ, วิกฤต 2 ครั้ง, POST และ Reflection และปฏิเสธ production project เสมอ
 
-```bash
-npm run lint
+ตัวอย่างส่งบอต 30 คนไปยัง staging:
+
+```powershell
+node scripts/classroom-bots.mjs `
+  --room ABCD `
+  --count 30 `
+  --env-file .env.staging.local `
+  --target firebase `
+  --integrity-rate 0.75
+```
+
+โปรไฟล์ที่ใช้ได้ครั้งละหนึ่งแบบ:
+
+- `--early-corrupt-through N`
+- `--late-corrupt-from N`
+- `--cycle-flip`
+- `--building-spread-worst-city`
+- `--building-spread-best-city` (alias `--building-spread-prosperous-city`)
+- `--post-only` ใช้เติม POST/Reflection ให้บอตเดิมหลังจบห้อง
+
+ห้ามรันบอตหรือ load test กับ production รายงาน load test เดิมอยู่ใน [LOAD_TEST_REPORT.md](./LOAD_TEST_REPORT.md)
+
+## ข้อจำกัดและขอบเขตความเชื่อถือ
+
+- ใช้ Anonymous Authentication; สิทธิ์ครูผูกกับ anonymous UID และ browser profile ที่สร้างห้อง
+- trusted question snapshot/answer key อยู่ใน localStorage ของเครื่องครูเดียว การล้าง site data หรือเปลี่ยนเครื่องทำให้ครูไม่สามารถสรุปคำถามต่อได้
+- ครู client เป็น trusted controller ของกิจกรรม ไม่ใช่ backend server สำหรับการสอบเดิมพันสูง
+- Firestore rules ปกป้องขอบเขตการเขียนและข้อมูลส่วนตัว แต่ผู้ใช้ที่รู้รหัสห้องยังเข้าถึงข้อมูลสาธารณะที่ rules อนุญาต
+- ต้องทดสอบบนอุปกรณ์และ Wi‑Fi จริงก่อนใช้ในชั้นเรียนขนาดใหญ่
+
+## Checklist ก่อน merge/deploy
+
+```powershell
+npm test
 npm run typecheck
-npm run test
+npm run lint
 npm run build
+git diff --check
 ```
 
-ไฟล์พร้อม deploy จะอยู่ใน `dist/` และทุกแพลตฟอร์มต้อง rewrite route ที่ไม่พบกลับไป `index.html`
-
-## Deploy Firebase Hosting
-
-```bash
-firebase init hosting
-```
-
-เลือกโปรเจกต์เดิม, public directory เป็น `dist`, ตอบ Yes สำหรับ single-page app และอย่าเขียนทับ `index.html` จากนั้น:
-
-```bash
-npm run build
-firebase deploy --only hosting
-```
-
-ไฟล์ `firebase.json` ในโปรเจกต์ตั้งค่า SPA rewrite ไว้แล้ว
-
-## Deploy Vercel
-
-1. นำ repository เข้า Vercel
-2. Framework Preset: Vite
-3. Build Command: `npm run build`
-4. Output Directory: `dist`
-5. เพิ่ม environment variables ชุดเดียวกับ `.env.local`
-6. Deploy แล้วทดสอบการ refresh ทุก route
-
-ไฟล์ `vercel.json` มี SPA rewrite ให้แล้ว
-
-## วิธีใส่ข้อสอบจริง
-
-แก้ไฟล์ `src/data/questions.ts` โดยคงโครงสร้าง `Question` และ ID ไม่ซ้ำกัน แต่ละข้อมีตัวเลือก 4 ตัวและ `correctChoiceId` ตรงกับตัวเลือกหนึ่งตัว
-
-คลังต้องมีคำถามเพียงพอต่อสัดส่วนหนึ่งรอบ:
-
-- `basic` 2 ข้อ
-- `characters` 2 ข้อ
-- `plot` 3 ข้อ
-- `poetry` 2 ข้อ
-- `theme` 1 ข้อ
-
-ควรมีมากกว่าขั้นต่ำในทุกหมวดเพื่อให้รอบใหม่เปลี่ยนชุดคำถาม ปัจจุบันมีข้อสอบตัวอย่าง 25 ข้อและมี TODO ชัดเจน ควรให้ครูภาษาไทยตรวจเนื้อหาและความถูกต้องก่อนใช้ประเมินผลจริง
-
-ระบบสุ่มเพียงครั้งเดียวเมื่อเตรียมรอบ แล้วบันทึก `questionIds` ที่ห้อง ทุกกลุ่มจึงได้รับลำดับคำถามและลำดับตัวเลือกเดียวกัน
-
-## ไฟล์ภาพ PNG
-
-เว็บอ้างอิงไฟล์ต่อไปนี้โดยตรงและไม่ใช้ URL ภายนอก:
-
-- `public/images/hero-curse.png`
-- `public/images/ending-fail.png`
-- `public/images/ending-almost.png`
-- `public/images/ending-win.png`
-
-เปลี่ยนภาพได้โดยใช้ชื่อและนามสกุล `.png` เดิม แนะนำอัตราส่วนกว้างประมาณ 16:9 และวางตัวละครหลักใกล้กึ่งกลางเพื่อไม่ถูกตัดบนมือถือ UI มี gradient fallback, overlay และ `object-fit: cover` อยู่แล้ว
-
-ภาพปัจจุบันไฟล์ละประมาณ 2–3 MB หากต้องการลดขนาดโดยไม่เสียคุณภาพ ให้สำรองไฟล์ก่อนแล้วใช้ `oxipng -o 4 public/images/*.png` ซึ่งเป็น lossless optimization จากนั้นเปิดตรวจทั้ง 4 ภาพและเปรียบเทียบ checksum/ขนาดตามกระบวนการของโรงเรียน และคงรูปแบบไฟล์ PNG ไว้ทุกจุด
-
-## Data model ย่อ
-
-```text
-rooms/{roomCode}
-  status, currentRound, questionIds, previousQuestionIds,
-  startedAt, completedAt, currentQuestionIndex,
-  questionDurationSeconds, questionStartedAt, teacherSessionId
-
-rooms/{roomCode}/teams/{teamId}
-  teamName, guardianName, ownerUid, currentRound,
-  currentQuestionIndex, score, answers, submitted,
-  finishedAt, elapsedMs, status
-```
-
-คะแนน คำตอบ สถานะห้อง คำถามปัจจุบัน และเวลาเริ่มคำถามอ่านจาก Firestore เป็นหลัก localStorage เก็บเฉพาะตัวระบุ session และชื่อที่ใช้พากลับสู่ route ที่ถูกต้อง
-
-## ความปลอดภัยและข้อจำกัดของ MVP
-
-- ใช้ Anonymous Authentication จึงไม่มีบัญชีครูที่ยืนยันตัวตนถาวร `teacherSessionId` ผูกกับ anonymous uid ของเบราว์เซอร์นั้น ไม่ใช่ระบบ authorization ระดับ production
-- คลังคำถามและการตรวจคำตอบอยู่ฝั่ง client ผู้ที่เปิด DevTools สามารถดูข้อมูลหรือแก้ client ได้ จึงเหมาะกับกิจกรรมในชั้นเรียนที่ครูดูแล ไม่เหมาะกับการสอบเดิมพันสูง
-- transaction และ rules จำกัดให้นักเรียนแก้ได้เฉพาะคำตอบและคะแนนของทีมตนเอง โดยครูเป็นผู้เดินคำถามกลางเมื่อหมดเวลา แต่ยังไม่สามารถยืนยันความถูกต้องของคำตอบจาก trusted backend ได้เต็มรูปแบบ
-- ผู้ใช้ anonymous ที่ทราบรหัสห้องอ่าน room document ได้ Rules อนุญาตเช่นนี้เพื่อให้เข้าร่วมด้วยรหัส 6 ตัวได้ ส่วนข้อมูลทีมอ่านได้เฉพาะเจ้าของทีมหรือครูของห้อง
-- ชื่อกลุ่มถูกแปลงเป็น team ID แบบคงที่เพื่อกันชื่อซ้ำใน transaction แต่ไม่ใช่ระบบระบุตัวบุคคล
-- หากใช้เพื่อการสอบจริง ควรย้ายคลังข้อสอบ การตรวจคำตอบ และการควบคุมเวลาไป Cloud Functions หรือ backend ที่เชื่อถือได้ และเพิ่มบัญชีครูพร้อม custom claims
-
-## การกู้สถานะและข้อผิดพลาด
-
-- Refresh ระหว่าง lobby/game/result: ระบบอ่าน room, คำถามปัจจุบัน, deadline และ team จาก Firestore แล้วพาไป route ตามสถานะ
-- อินเทอร์เน็ตหลุด: หน้าแสดงข้อความภาษาไทย ไม่แสดง stack trace และ Firestore จะเชื่อมใหม่เมื่อเครือข่ายกลับมา
-- ชื่อกลุ่มซ้ำ: เลือกชื่อใหม่ในห้องเดิม
-- เข้าไม่ได้หลังเริ่มเกม: ครูต้องเตรียมรอบใหม่ หรือผู้เรียนรอรอบถัดไป
-- Anonymous Auth ล้มเหลว: ตรวจว่าเปิด provider แล้ว ตรวจโดเมนที่อนุญาต และกดลองเชื่อมต่ออีกครั้ง
-- Firebase permission denied: deploy `firestore.rules`, ตรวจ Project ID และตรวจว่า Anonymous Authentication เปิดอยู่
-- Route 404 หลัง deploy: ตั้ง SPA rewrite ไป `/index.html` ตาม `firebase.json` หรือ `vercel.json`
-- ภาพไม่ขึ้น: ตรวจตัวพิมพ์เล็ก-ใหญ่และนามสกุล `.png` ทั้ง 4 ไฟล์
-- ห้องเรียน Wi‑Fi ช้า: เปิดทุกเครื่องและเข้าห้องล่วงหน้า ทดสอบกับเครือข่ายจริง และหลีกเลี่ยงการ refresh พร้อมกันจำนวนมาก
-
-## Checklist ก่อนใช้จริงในห้องเรียน
-
-- [ ] 1. เปิดหน้าครูบนคอม 1 เครื่อง
-- [ ] 2. สร้างห้อง
-- [ ] 3. เปิดหน้าผู้เรียนอย่างน้อย 3 เครื่องหรือ 3 หน้าต่าง
-- [ ] 4. เข้าห้องเดียวกัน
-- [ ] 5. ตรวจว่ารายชื่อกลุ่มปรากฏบนหน้าครู
-- [ ] 6. กำหนดเวลาต่อข้อแล้วกดเริ่มเกม
-- [ ] 7. ตรวจว่าทุกกลุ่มได้คำถามข้อแรกเหมือนกัน
-- [ ] 8. ตรวจว่าทุกกลุ่มได้ลำดับคำถามเหมือนกัน
-- [ ] 9. ตอบหนึ่งกลุ่มทันทีและอีกกลุ่มช่วงท้าย ยืนยันทั้งสองยังเปลี่ยนข้อพร้อมกัน
-- [ ] 10. ปล่อยหนึ่งกลุ่มไม่ตอบบางข้อ ยืนยันระบบข้ามข้อเมื่อหมดเวลา
-- [ ] 11. ตรวจว่าหลังหมดเวลาแต่ละข้อ จอนักเรียนแสดงถูก/ผิดและคะแนนสะสม 4 วินาทีก่อนเปลี่ยนข้อ
-- [ ] 12. ระหว่างเล่น ตรวจว่าหน้าครูยังไม่เพิ่มคะแนนของข้อปัจจุบันก่อนหมดเวลา จากนั้นเปิดคะแนนและเรียงอันดับใหม่พร้อมช่วงเฉลยของนักเรียน
-- [ ] 13. ตรวจว่าจอนักเรียนแต่ละเครื่องเห็นเฉพาะคะแนนกลุ่มตนเอง
-- [ ] 14. ตรวจว่าไม่มีข้อมูลคะแนนกลุ่มอื่นบนจอนักเรียน
-- [ ] 15. ตรวจเวลาต่อข้อทั้งหน่วยวินาทีและนาที
-- [ ] 16. Refresh ระหว่างจับเวลาและยืนยันกลับมาที่ข้อ/เวลาปัจจุบัน
-- [ ] 17. กดหยุดเกมฉุกเฉินระหว่างเล่นและยืนยันทุกจอกลับ lobby รายชื่อเดิมยังอยู่ คะแนน/คำตอบถูก reset
-- [ ] 18. เปลี่ยนคำตอบจากผิดเป็นถูกและจากถูกเป็นผิดก่อนหมดเวลา ยืนยันมีคำตอบเดียวและคะแนนใช้ตัวเลือกล่าสุด จากนั้นยืนยันเปลี่ยนไม่ได้หลังหมดเวลา
-- [ ] 17. กดเตรียมรอบใหม่
-- [ ] 18. ตรวจว่ารายชื่อกลุ่มยังอยู่
-- [ ] 19. กดเริ่มรอบใหม่
-- [ ] 20. ตรวจว่าคำถามเปลี่ยนจากรอบก่อน
-- [ ] 21. ทดสอบ refresh ระหว่าง lobby
-- [ ] 22. ทดสอบ refresh ระหว่าง game
-- [ ] 23. ทดสอบ refresh หน้า result
-- [ ] 24. ทดสอบ refresh หลังจบรอบและดูคะแนน
-- [ ] 25. ทดสอบอินเทอร์เน็ตหลุดชั่วคราว
-- [ ] 26. ทดสอบบนมือถือจริง
-- [ ] 27. ทดสอบบน Wi‑Fi ที่จะใช้จริง
-- [ ] 28. ตรวจว่าไฟล์ PNG โหลดครบทั้ง 4 ภาพ
-- [ ] 29. ตรวจ fallback โดยทดลองเปลี่ยนชื่อภาพชั่วคราว แล้วเปลี่ยนกลับก่อน build
-- [ ] 30. ตรวจ production build ก่อน deploy
-
-## ข้อแนะนำก่อนเปิดห้อง
-
-ให้ครูสร้างและควบคุมห้องจากเบราว์เซอร์เดิมตลอดกิจกรรม เพราะ anonymous uid และ `teacherSessionId` อยู่กับ browser profile นั้น เตรียมอุปกรณ์สำรอง 1 เครื่อง ตรวจไฟและ Wi‑Fi และเก็บรหัสห้องไว้บนกระดานจนทุกกลุ่มเข้าร่วมครบ
+ก่อนเปลี่ยนกติกา ให้เพิ่ม/แก้ pure-function tests ใน `src/domain`. ก่อนเปลี่ยน Firestore ให้รัน rules tests. ก่อนเปลี่ยนฉากเมือง ให้ตรวจทั้ง 3 scene, ทั้ง 5 ระดับอาคาร, zoom/pan, tablet และ portrait

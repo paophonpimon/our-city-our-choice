@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import type { ClassroomRoom, ClassroomRoundResult } from '../types/classroomGame'
 import { formatCityLevel } from '../domain/ourCity'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
-import { CityScene, type BuildingEffectTone } from './CityScene'
-import type { BuildingTransitionDirection } from '../domain/cityPresentation'
+import { CityScene } from './CityScene'
+import { resolveBuildingLabelTone, type BuildingLevelDisplayTransition } from '../domain/cityPresentation'
 import {
   BUILDING_IDS,
   CITY_SCENE_PROFILES,
@@ -12,8 +12,6 @@ import {
   CITY_STAGE_WIDTH,
   LOCATION_BUILDING,
   normalizeBuildingLevels,
-  resolveBuildingAsset,
-  resolveBuildingAssetPlacement,
   resolveCitySceneProfile,
   type BuildingId,
   type BuildingLevels,
@@ -40,6 +38,8 @@ import {
 } from '../domain/cityLayoutOverrides'
 import { useCityLayoutManager } from '../hooks/useCityLayoutManager'
 import { calculateCumulativeBuildingImpact } from './buildingImpactDisplay'
+import { LiveAnswerImpacts } from './LiveAnswerImpacts'
+import type { LiveAnswerImpact } from '../domain/liveAnswerImpact'
 
 const CITY_LEVEL_MESSAGES: Record<ClassroomRoom['cityLevel'], string> = {
   critical: 'เมืองอยู่ในระดับแย่มาก ต้องร่วมกันแก้ไขอย่างเร่งด่วน',
@@ -75,14 +75,14 @@ const BUILDING_IMPACT_ITEMS: readonly { id: LocationId; label: string; icon: str
   { id: 'news-office', label: 'สำนักข่าว', icon: '📡' },
 ]
 
-const BUILDING_EFFECT_POSITIONS: Record<LocationId, { x: number; y: number; size: number }> = {
-  school: { x: 31, y: 24, size: 19 },
-  construction: { x: 61, y: 22, size: 20 },
-  market: { x: 86, y: 35, size: 16 },
-  hospital: { x: 31, y: 54, size: 18 },
-  'police-station': { x: 68, y: 54, size: 18 },
-  'municipal-office': { x: 54, y: 74, size: 19 },
-  'news-office': { x: 82, y: 75, size: 16 },
+const BUILDING_MODEL_FOCUS_POSITIONS: Record<LocationId, { x: number; y: number }> = {
+  school: { x: 31, y: 24 },
+  construction: { x: 61, y: 22 },
+  market: { x: 86, y: 35 },
+  hospital: { x: 31, y: 54 },
+  'police-station': { x: 68, y: 54 },
+  'municipal-office': { x: 54, y: 74 },
+  'news-office': { x: 82, y: 75 },
 }
 
 interface CityStageProps {
@@ -91,7 +91,8 @@ interface CityStageProps {
   onExitLayoutMode?: () => void
   visualCityLevel?: ClassroomRoom['cityLevel']
   visualBuildingLevels?: BuildingLevels
-  buildingTransitions?: Partial<Record<BuildingId, BuildingTransitionDirection>>
+  buildingLevelDisplayTransitions?: Partial<Record<BuildingId, BuildingLevelDisplayTransition>>
+  liveAnswerImpacts?: readonly LiveAnswerImpact[]
   remainingSeconds: number
   answerCount: number
   previewCityScore?: number | null
@@ -170,7 +171,7 @@ const readStoredCityZoom = (): number => {
   }
 }
 
-export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel, visualBuildingLevels, buildingTransitions, remainingSeconds, answerCount, previewCityScore, roundImpact, locationImpacts, roundHistory = [], controls, utilityControls, children }: CityStageProps) => {
+export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel, visualBuildingLevels, buildingLevelDisplayTransitions, liveAnswerImpacts = [], remainingSeconds, answerCount, previewCityScore, roundImpact, locationImpacts, roundHistory = [], controls, utilityControls, children }: CityStageProps) => {
   const scoreTarget = previewCityScore ?? room.cityScore
   const previousScore = useRef(scoreTarget)
   const cityCanvasRef = useRef<HTMLElement | null>(null)
@@ -216,21 +217,6 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
   const displayedBuildingLevels = isLayoutMode
     ? Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, layoutModelLevel])) as BuildingLevels
     : normalizeBuildingLevels(visualBuildingLevels ?? room.buildingLevels)
-  const previousDisplayedBuildingLevelsRef = useRef<BuildingLevels>(displayedBuildingLevels)
-  const activeLabelTransitionsRef = useRef<Partial<Record<BuildingId, { from: BuildingLevel; to: BuildingLevel }>>>({})
-  for (const buildingId of BUILDING_IDS) {
-    if (buildingTransitions?.[buildingId]) {
-      activeLabelTransitionsRef.current[buildingId] ??= {
-        from: previousDisplayedBuildingLevelsRef.current[buildingId],
-        to: displayedBuildingLevels[buildingId],
-      }
-    } else {
-      delete activeLabelTransitionsRef.current[buildingId]
-    }
-  }
-  useEffect(() => {
-    previousDisplayedBuildingLevelsRef.current = displayedBuildingLevels
-  }, [displayedBuildingLevels])
   const alignPointToDisplayedScene = (locationId: LocationId, point: { x: number; y: number }) => {
     const buildingId = LOCATION_BUILDING[locationId]
     const placement = isLayoutMode
@@ -256,16 +242,9 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
       y: resolved.labelY / CITY_STAGE_HEIGHT * 100,
     }
   }
-  const displayedBuildingEffects = Object.fromEntries(
-    BUILDING_IMPACT_ITEMS.flatMap((building) => {
-      const summary = locationImpacts?.[building.id]
-      if (!summary || summary.participantCount === 0 || summary.scoreAverage === 0) return []
-      return [[
-        LOCATION_BUILDING[building.id],
-        summary.scoreAverage > 0 ? 'integrity' : 'corruption',
-      ]]
-    }),
-  ) as Partial<Record<(typeof LOCATION_BUILDING)[LocationId], BuildingEffectTone>>
+  const displayedLabelPositions = Object.fromEntries(
+    BUILDING_IMPACT_ITEMS.map((building) => [building.id, getDisplayedLabelPosition(building.id)]),
+  ) as Record<LocationId, { x: number; y: number }>
   const cumulativeBuildingImpacts = Object.fromEntries(
     BUILDING_IMPACT_ITEMS.map((building) => [building.id, calculateCumulativeBuildingImpact({
       currentGameCycle: room.gameCycle,
@@ -277,7 +256,7 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
   ) as Record<LocationId, number>
   const selectedBuilding = BUILDING_IMPACT_ITEMS.find((building) => building.id === selectedBuildingId) ?? null
   const selectedBuildingPosition = selectedBuildingId
-    ? getDisplayedLabelPosition(selectedBuildingId)
+    ? displayedLabelPositions[selectedBuildingId]
     : null
   const selectedHistory = selectedBuildingId
     ? roundHistory
@@ -741,9 +720,8 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
           ref={cityCanvasRef}
         >
           <CityScene
-            buildingEffects={displayedBuildingEffects}
             buildingLevels={displayedBuildingLevels}
-            buildingTransitions={buildingTransitions}
+            buildingLevelTransitions={buildingLevelDisplayTransitions}
             buildingPlacementOverrides={displayedPlacementOverrides}
             cityLevel={displayedCityLevel}
             sceneProfileId={displayedSceneProfile.id}
@@ -757,48 +735,31 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
               height: cityContentFrame.height,
             }}
           >
-            <div className="city-stage__building-effects" aria-hidden="true">
-              {BUILDING_IMPACT_ITEMS.map((building) => {
-                const summary = locationImpacts?.[building.id]
-                if (!summary || summary.participantCount === 0 || summary.scoreAverage === 0) return null
-                const effect = BUILDING_EFFECT_POSITIONS[building.id]
-                const sceneEffect = alignPointToDisplayedScene(building.id, effect)
-                const buildingId = LOCATION_BUILDING[building.id]
-                const model = resolveBuildingAsset(buildingId, displayedBuildingLevels[buildingId])
-                const modelPlacement = model
-                  ? resolveBuildingAssetPlacement(buildingId, model.level)
-                  : { x: 0, y: 0 }
-                if (model) return null
-                return (
-                  <span
-                    className={`city-stage__building-effect ${summary.scoreAverage > 0 ? 'is-integrity' : 'is-corruption'}`}
-                    data-effect-building={building.id}
-                    key={building.id}
-                    style={{
-                      '--building-effect-x': `${sceneEffect.x + modelPlacement.x / CITY_STAGE_WIDTH * 100}%`,
-                      '--building-effect-y': `${sceneEffect.y + modelPlacement.y / CITY_STAGE_HEIGHT * 100}%`,
-                      '--building-effect-size': `${effect.size}%`,
-                    } as React.CSSProperties}
-                  >
-                    <i />
-                  </span>
-                )
-              })}
-            </div>
             <div className="city-stage__building-labels">
               {BUILDING_IMPACT_ITEMS.map((building) => {
-                const labelPosition = getDisplayedLabelPosition(building.id)
+                const labelPosition = displayedLabelPositions[building.id]
                 const buildingId = LOCATION_BUILDING[building.id]
                 const displayedLevel = displayedBuildingLevels[buildingId]
-                const transitionLevels = activeLabelTransitionsRef.current[buildingId]
-                const levelLabel = transitionLevels
-                  ? `Lv.${transitionLevels.from} ไป Lv.${transitionLevels.to}`
-                  : `Lv.${displayedLevel}`
+                const levelTransition = buildingLevelDisplayTransitions?.[buildingId] ?? {
+                  previousLevel: displayedLevel,
+                  currentLevel: displayedLevel,
+                  changeDirection: 'same' as const,
+                }
+                const directionLabel = levelTransition.changeDirection === 'up'
+                  ? 'เพิ่มเป็น'
+                  : levelTransition.changeDirection === 'down'
+                    ? 'ลดเป็น'
+                    : 'คงที่'
+                const levelLabel = levelTransition.changeDirection === 'same'
+                  ? `Lv.${levelTransition.currentLevel} ${directionLabel}`
+                  : `Lv.${levelTransition.previousLevel} ${directionLabel} Lv.${levelTransition.currentLevel}`
+                const labelTone = resolveBuildingLabelTone(levelTransition.currentLevel)
                 return (
                   <button
                   aria-label={`ดูประวัติคะแนน${building.label} ${levelLabel}`}
                   aria-pressed={selectedBuildingId === building.id}
-                  className={`${selectedBuildingId === building.id ? 'is-selected' : ''}${isLayoutMode && layoutCalibrationTarget === 'label' && layoutManager.canEdit && !layoutManager.busy ? ' is-label-editing' : ''}${isLayoutMode && layoutCalibrationTarget === 'label' && layoutSelectedBuilding === buildingId ? ' is-layout-selected' : ''}`}
+                  className={`is-level-${labelTone} is-change-${levelTransition.changeDirection}${selectedBuildingId === building.id ? ' is-selected' : ''}${isLayoutMode && layoutCalibrationTarget === 'label' && layoutManager.canEdit && !layoutManager.busy ? ' is-label-editing' : ''}${isLayoutMode && layoutCalibrationTarget === 'label' && layoutSelectedBuilding === buildingId ? ' is-layout-selected' : ''}`}
+                  data-building-label-level={levelTransition.currentLevel}
                   key={building.id}
                   onClick={() => {
                     if (isLayoutMode && layoutCalibrationTarget === 'label') {
@@ -822,25 +783,30 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
                 >
                   <span className="city-stage__building-label-name">{building.label}</span>
                   <span className="city-stage__building-label-level" aria-hidden="true">
-                    {transitionLevels ? (
+                    {levelTransition.changeDirection === 'same' ? (
+                      <span className="is-current">Lv.{levelTransition.currentLevel}</span>
+                    ) : (
                       <>
-                        <span>Lv.{transitionLevels.from}</span>
-                        <b>▸</b>
-                        <span className={transitionLevels.to < 0 ? 'is-negative' : transitionLevels.to > 0 ? 'is-positive' : ''}>
-                          Lv.{transitionLevels.to}
-                        </span>
+                        <span className="is-previous">Lv.{levelTransition.previousLevel}</span>
+                        <b className={`is-${levelTransition.changeDirection}`}>
+                          {levelTransition.changeDirection === 'up' ? '▲' : '▼'}
+                        </b>
+                        <span className="is-current">Lv.{levelTransition.currentLevel}</span>
                       </>
-                    ) : <span>Lv.{displayedLevel}</span>}
+                    )}
                   </span>
                   </button>
                 )
               })}
             </div>
+            {liveAnswerImpacts.length > 0 ? (
+              <LiveAnswerImpacts impacts={liveAnswerImpacts} labelPositions={displayedLabelPositions} />
+            ) : null}
             {isLayoutMode && layoutCalibrationTarget === 'model' ? (
               <div className="city-layout-handles" aria-label="จุดลากปรับตำแหน่งอาคาร">
                 {BUILDING_IMPACT_ITEMS.map((building) => {
                   const buildingId = LOCATION_BUILDING[building.id]
-                  const handlePosition = alignPointToDisplayedScene(building.id, BUILDING_EFFECT_POSITIONS[building.id])
+                  const handlePosition = alignPointToDisplayedScene(building.id, BUILDING_MODEL_FOCUS_POSITIONS[building.id])
                   return (
                     <button
                       aria-label={`ลากปรับตำแหน่ง${building.label}`}

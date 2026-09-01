@@ -118,12 +118,12 @@ describe('Sound Pack V1 selection', () => {
     expect(styles).toMatch(/@keyframes teacher-crisis-alert-reduced \{\s*from \{ opacity: \.32; \}\s*to \{ opacity: 0; \}\s*\}/)
   })
 
-  it('reduces normal BGM output by 40%, ducks it during transition, and restores it for gameplay', () => {
+  it('keeps normal BGM output at the selected volume, ducks it during transition, and restores it for gameplay', () => {
     const teacherPage = readFileSync(new URL('../pages/TeacherPage.tsx', import.meta.url), 'utf8')
     const soundtrack = readFileSync(new URL('../components/TeacherSoundtrack.tsx', import.meta.url), 'utf8')
 
-    expect(getTeacherBgmOutputVolume(0.45, false)).toBeCloseTo(0.27)
-    expect(getTeacherBgmOutputVolume(0.45, true)).toBeCloseTo(0.0405)
+    expect(getTeacherBgmOutputVolume(0.45, false)).toBeCloseTo(0.45)
+    expect(getTeacherBgmOutputVolume(0.45, true)).toBeCloseTo(0.0675)
     expect(soundtrack).toContain('setDucked: (ducked: boolean) => void')
     expect(soundtrack).toContain('BGM_FADE_DURATION_MS = 180')
     expect(teacherPage).toContain('teacherSoundtrackRef.current?.setDucked(teacherBgmDucked)')

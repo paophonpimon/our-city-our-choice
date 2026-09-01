@@ -35,6 +35,7 @@ const earlyCorruptThrough = Number(argumentValue('--early-corrupt-through', 0))
 const lateCorruptFrom = Number(argumentValue('--late-corrupt-from', 0))
 const cycleFlip = process.argv.includes('--cycle-flip')
 const buildingSpreadWorstCity = process.argv.includes('--building-spread-worst-city')
+const buildingSpreadBestCity = process.argv.includes('--building-spread-best-city') || process.argv.includes('--building-spread-prosperous-city')
 const postOnly = process.argv.includes('--post-only')
 const envFile = String(argumentValue('--env-file', '.env.local')).trim()
 const target = String(argumentValue('--target', 'firebase')).trim().toLowerCase()
@@ -62,12 +63,12 @@ if (!Number.isInteger(earlyCorruptThrough) || earlyCorruptThrough < 0 || earlyCo
 if (!Number.isInteger(lateCorruptFrom) || lateCorruptFrom < 0 || lateCorruptFrom > 10) {
   throw new Error('--late-corrupt-from ต้องเป็นจำนวนเต็มระหว่าง 0-10')
 }
-if ([earlyCorruptThrough > 0, lateCorruptFrom > 0, cycleFlip, buildingSpreadWorstCity].filter(Boolean).length > 1) {
+if ([earlyCorruptThrough > 0, lateCorruptFrom > 0, cycleFlip, buildingSpreadWorstCity, buildingSpreadBestCity].filter(Boolean).length > 1) {
   throw new Error('เลือกใช้โปรไฟล์คำตอบได้ครั้งละหนึ่งแบบเท่านั้น')
 }
 if (!envFile) throw new Error('--env-file ต้องไม่เป็นค่าว่าง')
 
-const BUILDING_LEVEL_BY_ROLE = Object.freeze({
+const BUILDING_LEVEL_BY_ROLE_WORST = Object.freeze({
   doctor: -2,
   municipal: -2,
   police: -1,
@@ -77,6 +78,22 @@ const BUILDING_LEVEL_BY_ROLE = Object.freeze({
   student: -2,
   journalist: 2,
 })
+
+const BUILDING_LEVEL_BY_ROLE_BEST = Object.freeze({
+  doctor: -2,
+  police: -1,
+  contractor: 0,
+  merchant: 1,
+  journalist: 2,
+  municipal: 2,
+  teacher: 2,
+  student: 2,
+})
+
+const getBuildingLevelByRole = (roleId) => {
+  if (buildingSpreadBestCity) return BUILDING_LEVEL_BY_ROLE_BEST[roleId]
+  return BUILDING_LEVEL_BY_ROLE_WORST[roleId]
+}
 
 const NORMAL_INTEGRITY_COUNT_BY_LEVEL = Object.freeze({
   '-2': 0,
@@ -88,7 +105,7 @@ const NORMAL_INTEGRITY_COUNT_BY_LEVEL = Object.freeze({
 
 const shouldChooseIntegrityForSpreadQuestion = (roleId, questionNumber, clientIndex, gameCycle) => {
   if (gameCycle !== 0) return clientIndex < Math.round(botCount * integrityRate)
-  const level = BUILDING_LEVEL_BY_ROLE[roleId]
+  const level = getBuildingLevelByRole(roleId)
   const integrityCount = NORMAL_INTEGRITY_COUNT_BY_LEVEL[String(level)]
   if (!Number.isInteger(integrityCount)) throw new Error(`ไม่มีเป้าหมายระดับอาคารสำหรับอาชีพ ${roleId}`)
   // Each player gets the exact cumulative outcome count needed by the target
@@ -99,8 +116,9 @@ const shouldChooseIntegrityForSpreadQuestion = (roleId, questionNumber, clientIn
 
 const shouldChooseIntegrityForSpreadCrisis = (roleId, eventIndex, clientIndex, gameCycle) => {
   if (gameCycle !== 0) return clientIndex < Math.round(botCount * integrityRate)
-  const level = BUILDING_LEVEL_BY_ROLE[roleId]
+  const level = getBuildingLevelByRole(roleId)
   if (level === -2 || level === -1) return false
+  if (level === 2 && buildingSpreadBestCity) return true
   // Lv.0/+1/+2 each need one integrity and one corruption crisis. Alternate
   // which crisis is positive per player to keep both events visibly mixed.
   return eventIndex === (clientIndex % 2) + 1
@@ -433,7 +451,7 @@ const answerCurrentQuestion = async (room) => {
         const integrityChoiceId = integrityChoiceIds.get(question.questionId)
         if (!integrityChoiceId) throw new Error(`ไม่มีเฉลยสำหรับ ${question.questionId}`)
         const integrityBotCount = Math.round(botCount * integrityRateForQuestion(room.currentQuestionNumber, room.gameCycle))
-        const choosesIntegrity = buildingSpreadWorstCity
+        const choosesIntegrity = (buildingSpreadWorstCity || buildingSpreadBestCity)
           ? shouldChooseIntegrityForSpreadQuestion(player.roleId, room.currentQuestionNumber, client.index, room.gameCycle)
           : client.index < integrityBotCount
         const targetChoiceId = choosesIntegrity
@@ -492,7 +510,7 @@ const answerCurrentCrisis = async (room) => {
       const result = await Promise.resolve().then(async () => {
         const player = players.get(client.playerId)
         if (!player?.roleId) throw new Error(`${client.nickname} ยังไม่มีอาชีพ`)
-        const choosesIntegrity = buildingSpreadWorstCity
+        const choosesIntegrity = (buildingSpreadWorstCity || buildingSpreadBestCity)
           ? shouldChooseIntegrityForSpreadCrisis(player.roleId, room.currentCrisisEventIndex, client.index, room.gameCycle)
           : client.index < integrityBotCount
         const stance = choosesIntegrity ? 'integrity' : 'corruption'
@@ -549,7 +567,9 @@ process.on('SIGTERM', () => { void shutdown('SIGTERM') })
 
 const profileDescription = buildingSpreadWorstCity
   ? 'ชุดแรกเมือง 0; อาคาร -2,-1,0,+1,+2 แบบกระจาย'
-  : cycleFlip
+  : buildingSpreadBestCity
+    ? 'ชุดแรกเมืองเจริญ; อาคาร -2,-1,0,+1,+2 แบบกระจาย'
+    : cycleFlip
     ? 'ชุดแรกสุจริตทั้งหมด ชุดถัดไปทุจริตทั้งหมด'
     : earlyCorruptThrough > 0
       ? `ทุจริตทั้งหมดถึงข้อ ${earlyCorruptThrough} แล้วสุจริตทั้งหมด`

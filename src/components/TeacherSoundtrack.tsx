@@ -23,7 +23,7 @@ const MUTED_KEY = 'our_city_teacher_audio_muted_v1'
 const POSITION_KEY = 'our_city_teacher_audio_position_v1'
 const DEFAULT_VOLUME = 0.45
 const VOLUME_STEP = 0.1
-const BGM_OUTPUT_GAIN = 0.6
+const BGM_OUTPUT_GAIN = 1
 const BGM_DUCK_GAIN = 0.15
 const BGM_FADE_DURATION_MS = 180
 

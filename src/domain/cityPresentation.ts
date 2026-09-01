@@ -1,4 +1,4 @@
-import { BUILDING_IDS, type BuildingId, type BuildingLevels } from './cityBuildings'
+import { BUILDING_IDS, type BuildingId, type BuildingLevel, type BuildingLevels } from './cityBuildings'
 import type { ClassroomRoomStatus } from '../types/classroomGame'
 
 export type BuildingTransitionDirection = 'improved' | 'declined'
@@ -6,6 +6,31 @@ export type BuildingTransitionDirection = 'improved' | 'declined'
 export interface BuildingLevelTransition {
   buildingId: BuildingId
   direction: BuildingTransitionDirection
+}
+
+export type BuildingLevelChangeDirection = 'up' | 'down' | 'same'
+
+export interface BuildingLevelDisplayTransition {
+  previousLevel: BuildingLevel
+  currentLevel: BuildingLevel
+  changeDirection: BuildingLevelChangeDirection
+}
+
+export type BuildingVisualEffectState = 'upgrade' | 'neutral' | 'downgrade'
+export type BuildingVisualEffectIntensity = 'none' | 'light' | 'medium' | 'strong'
+export type BuildingLabelTone = 'critical' | 'degraded' | 'neutral' | 'improved' | 'thriving'
+
+export interface BuildingVisualEffect {
+  state: BuildingVisualEffectState
+  intensity: BuildingVisualEffectIntensity
+}
+
+export const resolveBuildingLabelTone = (level: BuildingLevel): BuildingLabelTone => {
+  if (level <= -2) return 'critical'
+  if (level === -1) return 'degraded'
+  if (level === 1) return 'improved'
+  if (level >= 2) return 'thriving'
+  return 'neutral'
 }
 
 export interface NormalPresentationTiming {
@@ -92,3 +117,56 @@ export const deriveBuildingLevelTransitions = (
       : null
   return direction ? [{ buildingId, direction }] : []
 })
+
+/**
+ * Resolves label-ready transitions from the already-authoritative building
+ * levels. This is presentation data only: it never reads scores or changes
+ * any gameplay state.
+ */
+export const resolveBuildingLevelDisplayTransitions = (
+  previousLevels: BuildingLevels,
+  currentLevels: BuildingLevels,
+): Record<BuildingId, BuildingLevelDisplayTransition> => Object.fromEntries(
+  BUILDING_IDS.map((buildingId) => {
+    const previousLevel = previousLevels[buildingId]
+    const currentLevel = currentLevels[buildingId]
+    const changeDirection = currentLevel > previousLevel
+      ? 'up'
+      : currentLevel < previousLevel
+        ? 'down'
+        : 'same'
+    return [buildingId, { previousLevel, currentLevel, changeDirection }]
+  }),
+) as Record<BuildingId, BuildingLevelDisplayTransition>
+
+/**
+ * Shared presentation mapping for every building model. The resolved level
+ * transition is the only input: building identity, scores, and gameplay data
+ * cannot change the visual language.
+ */
+export const resolveBuildingVisualEffect = (
+  transition: BuildingLevelDisplayTransition,
+): BuildingVisualEffect => {
+  // A damaged model remains visibly in warning state after a reload or after
+  // the transition animation has settled. This still reads only the resolved
+  // current level; no score or building identity participates.
+  if (transition.currentLevel < 0) {
+    return {
+      state: 'downgrade',
+      intensity: transition.currentLevel <= -2 ? 'strong' : 'medium',
+    }
+  }
+
+  if (transition.changeDirection === 'same') {
+    return { state: 'neutral', intensity: 'none' }
+  }
+
+  if (transition.changeDirection === 'up') {
+    return {
+      state: 'upgrade',
+      intensity: transition.currentLevel >= 2 ? 'strong' : 'light',
+    }
+  }
+
+  return { state: 'downgrade', intensity: 'medium' }
+}

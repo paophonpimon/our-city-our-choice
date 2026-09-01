@@ -1,5 +1,7 @@
 # รายงาน Load Test นักเรียนพร้อมกัน 40 คน
 
+> **เอกสารผลทดสอบย้อนหลัง:** รายงานนี้บันทึก workload และ Firebase project เดิม ณ วันที่ระบุ ไม่ใช่ผลยืนยันของ deployment ปัจจุบัน `our-city-our-choice`. สถาปัตยกรรมและ flow ล่าสุดให้อ้างอิง `README.md` และ `AGENTS.md`; ก่อนใช้งานจริงต้องทดสอบ staging/production ปัจจุบันใหม่โดยได้รับอนุญาตอย่างชัดเจน
+
 ทดสอบเมื่อ: **16 กรกฎาคม 2026 เวลา 02:04:49 น. (UTC+7)**  
 เป้าหมาย: Firebase production project `matana-must-survive`  
 เครื่องมือ: Firebase Web SDK clients จำลองจาก Node.js โดยไม่ใช้ browser automation
@@ -72,4 +74,3 @@ npm run loadtest:40
 สคริปต์: `scripts/load-test-40.mjs`
 
 คำเตือน: รออย่างน้อยหนึ่งชั่วโมงก่อนรันทดสอบซ้ำเพื่อหลีกเลี่ยง Firebase Auth account-creation throttling และตรวจ Usage ใน Firebase Console ก่อนทุกครั้ง
-

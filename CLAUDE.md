@@ -1,12 +1,10 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working in this repository.
+Read `AGENTS.md` first. It is the current repository-wide source of truth for
+the product, game rules, architecture, trust boundaries, verification matrix,
+staging layout workflow, bots, and handoff requirements.
 
-## Project
-
-"Our City, Our Choice" — a classroom civic-simulation game (React + TypeScript
-+ Vite + Firebase). Game rules live in `src/domain`, backends (Firebase +
-in-memory demo) in `src/services`.
+This file only adds Claude Code-specific safeguards.
 
 ## Safeguards
 

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CityScene } from '../components/CityScene'
 import type { LocationId, LocationSummary } from './cityScoring'
+import type { BuildingLevelDisplayTransition } from './cityPresentation'
 import {
   BUILDING_ASSETS,
   BUILDING_IDS,
@@ -68,6 +69,50 @@ describe('independent city building scene', () => {
       expect(BUILDING_ASSETS[buildingId][-1]?.src).toMatch(/level-minus-1\.png$/)
     }
     expect(markup).not.toMatch(/lv3|composer|grid|save layout|load layout/i)
+  })
+
+  it('uses one transition-driven effect system for all seven building models', () => {
+    const buildingLevels: BuildingLevels = {
+      school: 1,
+      construction: 2,
+      market: 0,
+      hospital: -1,
+      police: -2,
+      municipality: 1,
+      newsAgency: -1,
+    }
+    const buildingLevelTransitions: Record<(typeof BUILDING_IDS)[number], BuildingLevelDisplayTransition> = {
+      school: { previousLevel: 0, currentLevel: 1, changeDirection: 'up' },
+      construction: { previousLevel: 1, currentLevel: 2, changeDirection: 'up' },
+      market: { previousLevel: 0, currentLevel: 0, changeDirection: 'same' },
+      hospital: { previousLevel: 0, currentLevel: -1, changeDirection: 'down' },
+      police: { previousLevel: -1, currentLevel: -2, changeDirection: 'down' },
+      municipality: { previousLevel: 0, currentLevel: 1, changeDirection: 'up' },
+      newsAgency: { previousLevel: 0, currentLevel: -1, changeDirection: 'down' },
+    }
+
+    const markup = renderToStaticMarkup(
+      <CityScene buildingLevels={buildingLevels} buildingLevelTransitions={buildingLevelTransitions} />,
+    )
+
+    expect(markup.match(/data-building-visual-state=/g)).toHaveLength(7)
+    expect(markup.match(/data-building-effect-intensity=/g)).toHaveLength(7)
+    expect(markup.match(/data-building-visual-state="upgrade"/g)).toHaveLength(3)
+    expect(markup.match(/data-building-visual-state="downgrade"/g)).toHaveLength(3)
+    expect(markup.match(/data-building-visual-state="neutral"/g)).toHaveLength(1)
+    expect(markup).toContain('is-effect-upgrade is-intensity-strong')
+    expect(markup).toContain('is-effect-downgrade is-intensity-strong')
+    expect(markup).toContain('is-effect-neutral is-intensity-none')
+    expect(markup).not.toMatch(/integrity-effect|corruption-effect|data-effect-building/)
+  })
+
+  it.each([-1, -2] as const)('keeps every level %s model in the red shared warning family without a transition prop', (level) => {
+    const buildingLevels = Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, level])) as BuildingLevels
+    const markup = renderToStaticMarkup(<CityScene buildingLevels={buildingLevels} />)
+
+    expect(markup.match(/data-building-visual-state="downgrade"/g)).toHaveLength(7)
+    expect(markup.match(new RegExp(`data-building-effect-intensity="${level === -2 ? 'strong' : 'medium'}"`, 'g'))).toHaveLength(7)
+    expect(markup.match(/city-scene__building-warning-ring/g)).toHaveLength(7)
   })
 
   it('uses the supplied minus-one model and keeps other buildings at zero', () => {
@@ -172,7 +217,7 @@ describe('independent city building scene', () => {
     for (const buildingId of BUILDING_IDS) {
       const placement = resolveFrozenBuildingPlacement('degraded', buildingId, 2)
       expect(markup).toContain(
-        `data-building-id="${buildingId}" data-building-level="2" data-asset-level="2" data-scene-profile="degraded"`,
+        `data-building-id="${buildingId}" data-building-level="2" data-asset-level="2" data-building-visual-state="neutral" data-building-effect-intensity="none" data-scene-profile="degraded"`,
       )
       expect(markup).toContain(
         `transform="translate(${placement.x} ${placement.y}) scale(${placement.scaleX} ${placement.scaleY})"`,
