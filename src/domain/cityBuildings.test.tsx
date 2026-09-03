@@ -7,6 +7,7 @@ import {
   BUILDING_ASSETS,
   BUILDING_IDS,
   BUILDING_LOCATION,
+  BUILDING_LEVEL_STATUS_LABELS,
   BUILDING_SCORE_POLICY,
   CITY_SCENE_PROFILES,
   CITY_OVERVIEW_ASSET,
@@ -17,6 +18,7 @@ import {
   clampBuildingScore,
   deriveBuildingLevels,
   getBuildingLevelFromScore,
+  getBuildingScoreProgress,
   INITIAL_BUILDING_LEVELS,
   INITIAL_BUILDING_SCORES,
   LOCATION_BUILDING,
@@ -217,7 +219,7 @@ describe('independent city building scene', () => {
     for (const buildingId of BUILDING_IDS) {
       const placement = resolveFrozenBuildingPlacement('degraded', buildingId, 2)
       expect(markup).toContain(
-        `data-building-id="${buildingId}" data-building-level="2" data-asset-level="2" data-building-visual-state="neutral" data-building-effect-intensity="none" data-scene-profile="degraded"`,
+        `data-building-id="${buildingId}" data-building-level="2" data-asset-level="2" data-building-visual-state="upgrade" data-building-effect-intensity="strong" data-scene-profile="degraded"`,
       )
       expect(markup).toContain(
         `transform="translate(${placement.x} ${placement.y}) scale(${placement.scaleX} ${placement.scaleY})"`,
@@ -264,6 +266,22 @@ describe('independent city building scene', () => {
   })
 
   describe('building scores', () => {
+    it('provides concise Thai status labels for every authoritative building level', () => {
+      expect(BUILDING_LEVEL_STATUS_LABELS).toEqual({
+        [-2]: 'แย่มาก',
+        [-1]: 'แย่',
+        [0]: 'ปกติ',
+        [1]: 'กำลังพัฒนา',
+        [2]: 'พัฒนาแล้ว',
+      })
+    })
+
+    it.each([
+      [-100, 0], [0, 0], [500, 50], [1000, 100], [1200, 100],
+    ])('maps building score %i to %i percent health', (score, expected) => {
+      expect(getBuildingScoreProgress(score)).toBe(expected)
+    })
+
     it('starts every building at score 500 which maps to Level 0', () => {
       for (const buildingId of BUILDING_IDS) {
         expect(INITIAL_BUILDING_SCORES[buildingId]).toBe(500)

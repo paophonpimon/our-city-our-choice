@@ -5,6 +5,7 @@ import {
   getCrisisPresentationTiming,
   getNormalPresentationTiming,
   LIVE_ANSWER_IMPACT_DURATION_MS,
+  resolveBuildingChangeIndicatorTone,
   resolveBuildingLevelDisplayTransitions,
   resolveBuildingLabelTone,
   resolveBuildingVisualEffect,
@@ -59,17 +60,31 @@ describe('resolveBuildingVisualEffect', () => {
     [{ previousLevel: -2, currentLevel: -2, changeDirection: 'same' }, { state: 'downgrade', intensity: 'strong' }],
     [{ previousLevel: 0, currentLevel: 1, changeDirection: 'up' }, { state: 'upgrade', intensity: 'light' }],
     [{ previousLevel: 1, currentLevel: 2, changeDirection: 'up' }, { state: 'upgrade', intensity: 'strong' }],
+    [{ previousLevel: 1, currentLevel: 0, changeDirection: 'down' }, { state: 'neutral', intensity: 'none' }],
+    [{ previousLevel: 2, currentLevel: 1, changeDirection: 'down' }, { state: 'upgrade', intensity: 'light' }],
     [{ previousLevel: 0, currentLevel: -1, changeDirection: 'down' }, { state: 'downgrade', intensity: 'medium' }],
     [{ previousLevel: -1, currentLevel: -2, changeDirection: 'down' }, { state: 'downgrade', intensity: 'strong' }],
   ] as const)('maps the resolved transition %o to the shared effect %o', (transition, expected) => {
     expect(resolveBuildingVisualEffect(transition)).toEqual(expected)
   })
 
-  it('keeps damaged levels in warning state while still using direction for non-negative levels', () => {
+  it('keeps damaged levels red while non-negative levels use neutral or positive health effects', () => {
     expect(resolveBuildingVisualEffect({ previousLevel: -2, currentLevel: -1, changeDirection: 'up' }))
       .toEqual({ state: 'downgrade', intensity: 'medium' })
     expect(resolveBuildingVisualEffect({ previousLevel: 2, currentLevel: 1, changeDirection: 'down' }))
-      .toEqual({ state: 'downgrade', intensity: 'medium' })
+      .toEqual({ state: 'upgrade', intensity: 'light' })
+  })
+})
+
+describe('resolveBuildingChangeIndicatorTone', () => {
+  it.each([
+    [{ previousLevel: 0, currentLevel: 1, changeDirection: 'up' }, 'positive'],
+    [{ previousLevel: 1, currentLevel: 0, changeDirection: 'down' }, 'neutral'],
+    [{ previousLevel: 2, currentLevel: 1, changeDirection: 'down' }, 'neutral'],
+    [{ previousLevel: 0, currentLevel: -1, changeDirection: 'down' }, 'negative'],
+    [{ previousLevel: -2, currentLevel: -1, changeDirection: 'up' }, 'negative'],
+  ] as const)('maps %o to %s without using red above Lv.-1', (transition, expected) => {
+    expect(resolveBuildingChangeIndicatorTone(transition)).toBe(expected)
   })
 })
 

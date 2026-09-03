@@ -88,7 +88,7 @@ export const TeacherCompetitionEvidenceDashboard = ({
       </section>
 
       <header className="competition-evidence-hero">
-        <div><p>หลักฐานสำหรับกรรมการ (Competition Evidence)</p><h1>หลักฐานสำหรับนำเสนอกรรมการ</h1><span>ข้อมูลจริงจากกิจกรรมที่จบแล้ว • อ่านอย่างเดียว • ไม่แสดงข้อมูลรายบุคคล</span></div>
+        <div><p>หลักฐานการเรียนรู้และพัฒนา</p><h1>สรุปผลการเรียนรู้และพัฒนาของผู้เรียน</h1><span>ข้อมูลจริงจากกิจกรรมที่จบแล้ว • อ่านอย่างเดียว • ไม่แสดงข้อมูลรายบุคคล</span></div>
         <dl>
           <div><dt>ห้อง</dt><dd>{room.roomId}</dd></div>
           <div><dt>วันเวลากิจกรรม</dt><dd>{formatActivityDate(room.createdAt)}</dd></div>

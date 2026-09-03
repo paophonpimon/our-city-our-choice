@@ -27,6 +27,7 @@ A teacher creates a realtime classroom room. Students complete PRE, receive one 
 - A neutral label shows only `Lv.N`; changed labels show previous level, animated triangle, and current level.
 - Every building uses the same shared visual-effect family. Building identity may determine asset/placement, never effect semantics.
 - Negative current levels remain visibly degraded after refresh; transition-only effects are insufficient.
+- Red warning visuals are reserved for current Lv.-1/Lv.-2. A downward transition landing on Lv.0 or Lv.1 may keep the down arrow but must use neutral/positive styling and no red crisis aura.
 - Live answer popups use trusted answer resolution and the calibrated building-label coordinate set. They must stay in the same scene overlay so zoom/pan applies exactly once.
 - Student clients never receive `integrityChoiceId`, corruption choice identity, scores, impacts, outcomes, or answer-key data in public question documents.
 - Firestore accepts immutable create-once student answers with stable IDs. Do not add client-side answer updates without redesigning rules and tests.

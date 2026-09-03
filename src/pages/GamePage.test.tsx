@@ -49,6 +49,7 @@ describe('student question presentation transition', () => {
   })
 
   it('uses the Crisis waiting treatment and keeps x2 as presentation copy only', () => {
+    const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
     const markup = renderToStaticMarkup(
       <StudentQuestionStage waitingVariant="crisis">
         <button type="button">คำตอบวิกฤตที่ต้องไม่แสดง</button>
@@ -60,6 +61,8 @@ describe('student question presentation transition', () => {
     expect(markup).toContain('ผลของการตัดสินใจครั้งนี้ส่งผลต่อเมือง ×2')
     expect(markup).toContain('ดูผลกระทบที่หน้าจอครู')
     expect(markup).not.toContain('<button')
+    expect(styles).toMatch(/\.student-impact-waiting--crisis \{[\s\S]*?background: linear-gradient\(145deg, #fffdfd, #edf6fc\)/)
+    expect(styles).not.toContain('background: linear-gradient(145deg, #6e130c, #300907 62%, #7a2e08)')
   })
 
   it('renders the new authoritative question instead of persisting the old waiting composition', () => {

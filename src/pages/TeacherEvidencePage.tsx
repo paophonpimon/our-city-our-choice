@@ -25,7 +25,7 @@ export const TeacherEvidencePage = () => {
   const evidenceState = evidencePublisher.evidenceState
 
   if (!roomId) return <Navigate replace to="/teacher" />
-  if (roomState.loading) return <CityLoader variant="full" message="กำลังเตรียมหลักฐานสำหรับนำเสนอ…" />
+  if (roomState.loading) return <CityLoader variant="full" message="กำลังเตรียมหลักฐานการเรียนรู้และพัฒนา…" />
 
   if (!isTeacher) {
     return (
@@ -49,7 +49,7 @@ export const TeacherEvidencePage = () => {
         <div className="flex flex-1 items-center px-5 pb-8">
           <ErrorPanel
             action={<Link className="primary-button inline-flex w-full items-center justify-center" to={`/result/${roomId}`}>กลับหน้าผลกิจกรรม</Link>}
-            message="แดชบอร์ดหลักฐานสำหรับกรรมการจะแสดงเมื่อกิจกรรมจบแล้ว"
+            message="แดชบอร์ดหลักฐานการเรียนรู้และพัฒนาจะแสดงเมื่อกิจกรรมจบแล้ว"
           />
         </div>
       </ScenePage>
@@ -58,7 +58,7 @@ export const TeacherEvidencePage = () => {
 
   return (
     <main className="teacher-evidence-page">
-      <nav className="teacher-evidence-page__nav" aria-label="การนำทางแดชบอร์ดหลักฐาน">
+      <nav className="teacher-evidence-page__nav" aria-label="การนำทางหลักฐานการเรียนรู้และพัฒนา">
         <Link to={`/result/${roomId}`}>← กลับหน้าผลกิจกรรม</Link>
         <span>ห้อง {roomId}</span>
       </nav>

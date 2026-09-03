@@ -511,6 +511,14 @@ export const setBuildingLevel = (
  */
 export type BuildingScores = Record<BuildingId, number>
 
+export const BUILDING_LEVEL_STATUS_LABELS: Record<BuildingLevel, string> = {
+  [-2]: 'แย่มาก',
+  [-1]: 'แย่',
+  [0]: 'ปกติ',
+  [1]: 'กำลังพัฒนา',
+  [2]: 'พัฒนาแล้ว',
+}
+
 export const BUILDING_SCORE_POLICY = {
   initial: 500,
   min: 0,
@@ -519,6 +527,9 @@ export const BUILDING_SCORE_POLICY = {
 
 export const clampBuildingScore = (score: number): number =>
   Math.min(BUILDING_SCORE_POLICY.max, Math.max(BUILDING_SCORE_POLICY.min, score))
+
+export const getBuildingScoreProgress = (score: number): number =>
+  clampBuildingScore(score) / BUILDING_SCORE_POLICY.max * 100
 
 export const getBuildingLevelFromScore = (score: number): BuildingLevel => {
   const clamped = clampBuildingScore(score)

@@ -105,17 +105,18 @@ describe('Sound Pack V1 selection', () => {
     expect(teacherPage).not.toContain('await soundPackController.playEffectOnce')
   })
 
-  it('shows the non-blocking red alert only for teacher Crisis intro with a reduced-motion tint', () => {
+  it('keeps non-blocking red alerts active for the teacher intro and the full student Crisis question', () => {
     const gamePage = readFileSync(new URL('../pages/GamePage.tsx', import.meta.url), 'utf8')
     const teacherPage = readFileSync(new URL('../pages/TeacherPage.tsx', import.meta.url), 'utf8')
     const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
 
-    expect(gamePage).not.toContain('teacher-crisis-alert-overlay')
+    expect(gamePage).toContain('<div className="student-crisis-alert-overlay" aria-hidden="true" />')
     expect(teacherPage).toContain("room.status === 'crisis-intro' ? <div className=\"teacher-crisis-alert-overlay\" aria-hidden=\"true\" /> : null")
     expect(teacherPage).not.toMatch(/teacher-crisis-alert-overlay[^>]+on(?:Click|AnimationEnd)=/)
-    expect(styles).toMatch(/\.teacher-crisis-alert-overlay \{[\s\S]*?pointer-events: none;[\s\S]*?animation: teacher-crisis-alert-pulse 1\.35s ease-out both;/)
-    expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.teacher-crisis-alert-overlay \{ animation: teacher-crisis-alert-reduced \.6s ease-out both; \}/)
-    expect(styles).toMatch(/@keyframes teacher-crisis-alert-reduced \{\s*from \{ opacity: \.32; \}\s*to \{ opacity: 0; \}\s*\}/)
+    expect(styles).toMatch(/\.teacher-crisis-alert-overlay \{[\s\S]*?pointer-events: none;[\s\S]*?animation: teacher-crisis-alert-pulse 1\.35s ease-in-out infinite;/)
+    expect(styles).toMatch(/\.student-crisis-alert-overlay \{[\s\S]*?pointer-events: none;[\s\S]*?animation: teacher-crisis-alert-pulse 1\.35s ease-in-out infinite;/)
+    expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.teacher-crisis-alert-overlay,\s*\.student-crisis-alert-overlay \{ opacity: \.24; animation: none; \}/)
+    expect(styles).not.toContain('@keyframes teacher-crisis-alert-reduced')
   })
 
   it('keeps normal BGM output at the selected volume, ducks it during transition, and restores it for gameplay', () => {

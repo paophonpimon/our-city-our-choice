@@ -11,6 +11,7 @@ import { JoinQrCode } from '../components/JoinQrCode'
 import { LayoutEditorPage } from './LayoutEditorPage'
 import { TeacherSoundtrack, type TeacherSoundtrackHandle, type TeacherSoundtrackMode } from '../components/TeacherSoundtrack'
 import { TeacherEmergencyEndControl } from '../components/TeacherEmergencyEndControl'
+import { TypewriterText } from '../components/TypewriterText'
 import { useGame } from '../context/GameContext'
 import { countAnswersForQuestion, countCompletedPreAssessments, countCrisisAnswersForEvent, getLiveCityScore, shouldAutoCloseCrisis, shouldCloseQuestion } from '../domain/classroomGameLoop'
 import { createRoomQuestionSnapshot, type ParsedQuestionSheet, type RoomQuestionSnapshot } from '../domain/classroomQuestions'
@@ -1061,12 +1062,33 @@ export const TeacherPage = () => {
             aria-live="assertive"
           >
             <div className="teacher-year-cutscene__content">
-              <p className="teacher-year-cutscene__eyebrow">1 ปีต่อมา...</p>
-              <h2>ปีที่ {yearCutscene.cityYear}</h2>
+              <p className="teacher-year-cutscene__eyebrow">
+                <TypewriterText
+                  active={yearCutscene.phase !== 'entering'}
+                  text="1 ปีต่อมา..."
+                />
+              </p>
+              <h2>
+                <TypewriterText
+                  active={yearCutscene.phase !== 'entering'}
+                  startDelayMs={220}
+                  text={`ปีที่ ${yearCutscene.cityYear}`}
+                />
+              </h2>
               <div className="teacher-year-cutscene__line" aria-hidden="true" />
-              <p className="teacher-year-cutscene__year">เมืองก้าวเข้าสู่ช่วงเวลาใหม่</p>
+              <p className="teacher-year-cutscene__year">
+                <TypewriterText
+                  active={yearCutscene.phase !== 'entering'}
+                  startDelayMs={440}
+                  text="เมืองก้าวเข้าสู่ช่วงเวลาใหม่"
+                />
+              </p>
               <p className="teacher-year-cutscene__narrative">
-                การตัดสินใจของประชาชน<br />กำลังเปลี่ยนแปลงเมือง
+                <TypewriterText
+                  active={yearCutscene.phase !== 'entering'}
+                  startDelayMs={720}
+                  text={'การตัดสินใจของทุกคน\nกำลังเปลี่ยนแปลงเมือง'}
+                />
               </p>
             </div>
           </div>

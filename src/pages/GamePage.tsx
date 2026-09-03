@@ -155,6 +155,8 @@ export const GamePage = () => {
       && answer.eventId === crisisEvent.id
       && answer.playerId === activePlayerId)
     : undefined
+  const selectedChoiceId = existingAnswer?.choiceId ?? savingChoiceId
+  const selectedCrisisChoiceId = existingCrisisAnswer?.choiceId ?? savingChoiceId
   const role = ROLES.find((item) => item.id === playerState.data?.roleId)
   const countdownEnded = roomState.data?.status === 'playing' && remaining === 0 && !existingAnswer
   useSoundLoop('ambience', selectGameAmbience(roomState.data?.status, playerState.data?.roleId))
@@ -216,6 +218,7 @@ export const GamePage = () => {
     const waitingVariant = (existingCrisisAnswer && !savingChoiceId) || roomState.data.status === 'crisis-result' ? 'crisis' : null
     return (
       <main className="our-city-page crisis-student-page min-h-dvh px-4 py-5 md:px-7 md:py-7">
+        <div className="student-crisis-alert-overlay" aria-hidden="true" />
         <section className="crisis-student-shell mx-auto flex min-h-[calc(100dvh-2.5rem)] w-full max-w-4xl flex-col">
           <div className="game-play-brandbar"><Link className="game-brand" to="/"><span className="game-brand__mark" aria-hidden="true">🏙️</span><strong>OUR CITY<br /><b>OUR CHOICE</b></strong></Link><div className="game-play-brandbar__actions"><span>ห้อง {roomId}</span><FullscreenToggle className="game-play-fullscreen-button" /></div></div>
           <StudentQuestionStage key={`${interactionIdentity}:${roomState.data.status}`} waitingVariant={waitingVariant}>
@@ -238,14 +241,18 @@ export const GamePage = () => {
                   <p className="crisis-student-kicker">สถานการณ์เฉพาะบทบาท</p>
                   <h2>{crisisDilemma.prompt}</h2>
                   <div className="crisis-student-choices relative">
-                    {orderedCrisisChoices.map((choice, index) => (
-                      <button className={existingCrisisAnswer?.choiceId === choice.id ? 'is-selected' : ''} disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId) || remaining <= 0} key={choice.id} onClick={() => void answerCrisis(choice.id)}>
-                        <span>{index === 0 ? 'ก.' : 'ข.'}</span>{choice.text}
-                      </button>
-                    ))}
+                    {orderedCrisisChoices.map((choice, index) => {
+                      const selected = selectedCrisisChoiceId === choice.id
+                      return (
+                        <button aria-pressed={selected} className={selected ? 'is-selected' : ''} disabled={!active || Boolean(existingCrisisAnswer) || Boolean(savingChoiceId) || remaining <= 0} key={choice.id} onClick={() => void answerCrisis(choice.id)}>
+                          <span>{selected ? '✓' : index === 0 ? 'ก.' : 'ข.'}</span>{choice.text}
+                        </button>
+                      )
+                    })}
                     {active && remaining === 0 && !existingCrisisAnswer ? <TimeoutLockOverlay /> : null}
                   </div>
                   <div className="crisis-student-feedback" aria-live="polite">
+                    {savingChoiceId ? <p className="student-choice-feedback"><span aria-hidden="true">✓</span> รับคำตอบแล้ว กำลังยืนยัน…</p> : null}
                     {error ? <p className="text-red-200">{error}</p> : null}
                   </div>
                 </>
@@ -286,27 +293,28 @@ export const GamePage = () => {
               {questionSceneImageUrl ? <QuestionSceneImage key={questionSceneImageUrl} src={questionSceneImageUrl} /> : null}
 
               <div className="game-play-choices relative mt-auto grid gap-4 pt-8 md:grid-cols-2">
-                {orderedChoices.map((choice, index) => (
-                  <button
-                    className={`game-play-choice min-h-32 rounded-2xl border p-5 text-left text-lg font-bold transition ${
-                      existingAnswer?.choiceId === choice.id
-                        ? 'is-selected'
-                        : 'is-unanswered'
-                    } disabled:cursor-not-allowed disabled:opacity-55`}
-                    disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing' || remaining <= 0}
-                    key={choice.id}
-                    onClick={() => void answer(choice.id)}
-                  >
-                    <span className="mr-3 inline-grid h-10 w-10 place-items-center rounded-full border border-white/25 text-[#f4c96d]">
-                      {index === 0 ? 'ก.' : 'ข.'}
-                    </span>
-                    {choice.text}
-                  </button>
-                ))}
+                {orderedChoices.map((choice, index) => {
+                  const selected = selectedChoiceId === choice.id
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={`game-play-choice min-h-32 rounded-2xl border p-5 text-left text-lg font-bold transition ${selected ? 'is-selected' : 'is-unanswered'} disabled:cursor-not-allowed disabled:opacity-55`}
+                      disabled={Boolean(existingAnswer) || Boolean(savingChoiceId) || roomState.data?.status !== 'playing' || remaining <= 0}
+                      key={choice.id}
+                      onClick={() => void answer(choice.id)}
+                    >
+                      <span className="mr-3 inline-grid h-10 w-10 place-items-center rounded-full border border-white/25 text-[#f4c96d]">
+                        {selected ? '✓' : index === 0 ? 'ก.' : 'ข.'}
+                      </span>
+                      {choice.text}
+                    </button>
+                  )
+                })}
                 {countdownEnded ? <TimeoutLockOverlay /> : null}
               </div>
 
               <div className="game-play-feedback mt-6 min-h-14 text-center" aria-live="polite">
+                {savingChoiceId ? <p className="student-choice-feedback"><span aria-hidden="true">✓</span> รับคำตอบแล้ว กำลังยืนยัน…</p> : null}
                 {error ? <p className="mt-2 text-red-200">{error}</p> : null}
               </div>
             </div>

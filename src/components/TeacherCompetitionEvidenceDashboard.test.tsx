@@ -146,7 +146,7 @@ describe('TeacherCompetitionEvidenceDashboard', () => {
     expect(page).toContain("roomState.data.status !== 'finished'")
     expect(page).toContain('useTeacherLearningEvidencePublisher(')
     expect(page).not.toMatch(/submit|updateDoc|setDoc|continueCity|endActivity|clearClassroom/i)
-    expect(resultPage).toContain('หลักฐานสำหรับนำเสนอกรรมการ')
+    expect(resultPage).toContain('หลักฐานการเรียนรู้และพัฒนา')
     expect(resultPage).toContain('if (isPublicFinishedResult)')
     expect(resultPage).toContain('if (!isTeacher && hasStudentSession)')
     expect(resultPage).toContain("['learning', 'ผลการเรียนรู้']")

@@ -19,6 +19,7 @@ export interface BuildingLevelDisplayTransition {
 export type BuildingVisualEffectState = 'upgrade' | 'neutral' | 'downgrade'
 export type BuildingVisualEffectIntensity = 'none' | 'light' | 'medium' | 'strong'
 export type BuildingLabelTone = 'critical' | 'degraded' | 'neutral' | 'improved' | 'thriving'
+export type BuildingChangeIndicatorTone = 'positive' | 'negative' | 'neutral'
 
 export interface BuildingVisualEffect {
   state: BuildingVisualEffectState
@@ -30,6 +31,19 @@ export const resolveBuildingLabelTone = (level: BuildingLevel): BuildingLabelTon
   if (level === -1) return 'degraded'
   if (level === 1) return 'improved'
   if (level >= 2) return 'thriving'
+  return 'neutral'
+}
+
+/**
+ * Color communicates the resolved current health, not direction alone. A
+ * downward transition that lands on Lv.0/Lv.1 must not look damaged; red is
+ * reserved for buildings whose current level is actually negative.
+ */
+export const resolveBuildingChangeIndicatorTone = (
+  transition: BuildingLevelDisplayTransition,
+): BuildingChangeIndicatorTone => {
+  if (transition.currentLevel < 0) return 'negative'
+  if (transition.changeDirection === 'up' && transition.currentLevel > 0) return 'positive'
   return 'neutral'
 }
 
@@ -157,16 +171,12 @@ export const resolveBuildingVisualEffect = (
     }
   }
 
-  if (transition.changeDirection === 'same') {
-    return { state: 'neutral', intensity: 'none' }
-  }
-
-  if (transition.changeDirection === 'up') {
+  if (transition.currentLevel > 0) {
     return {
       state: 'upgrade',
       intensity: transition.currentLevel >= 2 ? 'strong' : 'light',
     }
   }
 
-  return { state: 'downgrade', intensity: 'medium' }
+  return { state: 'neutral', intensity: 'none' }
 }

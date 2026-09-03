@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ClassroomRoom, ClassroomRoundResult } from '../types/classroomGame'
-import { formatCityLevel } from '../domain/ourCity'
+import { CITY_LEVEL_LABELS, formatCityLevel } from '../domain/ourCity'
 import type { LocationId, LocationSummary } from '../domain/cityScoring'
 import { CityScene } from './CityScene'
-import { resolveBuildingLabelTone, type BuildingLevelDisplayTransition } from '../domain/cityPresentation'
+import { resolveBuildingChangeIndicatorTone, resolveBuildingLabelTone, type BuildingLevelDisplayTransition } from '../domain/cityPresentation'
 import {
   BUILDING_IDS,
+  BUILDING_LEVEL_STATUS_LABELS,
   CITY_SCENE_PROFILES,
   CITY_STAGE_HEIGHT,
   CITY_STAGE_WIDTH,
   LOCATION_BUILDING,
+  getBuildingScoreProgress,
   normalizeBuildingLevels,
+  normalizeBuildingScores,
   resolveCitySceneProfile,
   type BuildingId,
   type BuildingLevels,
@@ -217,6 +220,10 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
   const displayedBuildingLevels = isLayoutMode
     ? Object.fromEntries(BUILDING_IDS.map((buildingId) => [buildingId, layoutModelLevel])) as BuildingLevels
     : normalizeBuildingLevels(visualBuildingLevels ?? room.buildingLevels)
+  const displayedBuildingScores = normalizeBuildingScores(
+    isLayoutMode ? undefined : room.buildingScores,
+    displayedBuildingLevels,
+  )
   const alignPointToDisplayedScene = (locationId: LocationId, point: { x: number; y: number }) => {
     const buildingId = LOCATION_BUILDING[locationId]
     const placement = isLayoutMode
@@ -683,7 +690,7 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
 
       <header className="city-stage__topbar">
         <div className="city-stage__metrics">
-          <div><i aria-hidden="true">🚩</i><span>ข้อที่</span><strong>{room.currentQuestionNumber} / 10</strong></div>
+          <div><i aria-hidden="true">🗓️</i><span>ปีเมือง</span><strong>{room.currentQuestionNumber} / 10</strong></div>
           <div className="city-stage__score"><i aria-hidden="true">⭐</i><span>คะแนนเมือง</span><strong>{Math.round(displayScore).toLocaleString('th-TH')}</strong></div>
           <div><i aria-hidden="true">🏆</i><span>เป้าหมาย</span><strong>{answerCount} / {room.lockedPlayerCount}</strong></div>
           <div><i aria-hidden="true">⏱️</i><span>เวลาที่เหลือ</span><strong>{room.status === 'playing' ? remainingSeconds : 0} <small>วินาที</small></strong></div>
@@ -754,6 +761,7 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
                   ? `Lv.${levelTransition.currentLevel} ${directionLabel}`
                   : `Lv.${levelTransition.previousLevel} ${directionLabel} Lv.${levelTransition.currentLevel}`
                 const labelTone = resolveBuildingLabelTone(levelTransition.currentLevel)
+                const changeIndicatorTone = resolveBuildingChangeIndicatorTone(levelTransition)
                 return (
                   <button
                   aria-label={`ดูประวัติคะแนน${building.label} ${levelLabel}`}
@@ -788,7 +796,7 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
                     ) : (
                       <>
                         <span className="is-previous">Lv.{levelTransition.previousLevel}</span>
-                        <b className={`is-${levelTransition.changeDirection}`}>
+                        <b className={`is-${changeIndicatorTone}`}>
                           {levelTransition.changeDirection === 'up' ? '▲' : '▼'}
                         </b>
                         <span className="is-current">Lv.{levelTransition.currentLevel}</span>
@@ -1161,26 +1169,46 @@ export const CityStage = ({ room, layoutMode, onExitLayoutMode, visualCityLevel,
           <h2>สถานะเมือง</h2>
           <div className="city-stage__status-summary">
             <span className="city-stage__status-gauge" aria-hidden="true">{CITY_LEVEL_EMOJI[displayedCityLevel]}</span>
-            <div><strong>{formatCityLevel(displayedCityLevel)}</strong><small>{CITY_LEVEL_PROGRESS[displayedCityLevel]}%</small></div>
+            <div>
+              <strong>{CITY_LEVEL_LABELS[displayedCityLevel]}</strong>
+              <small>สุขภาพเมืองรวม {CITY_LEVEL_PROGRESS[displayedCityLevel]}%</small>
+            </div>
           </div>
           <div className="city-stage__status-progress"><i style={{ width: `${CITY_LEVEL_PROGRESS[displayedCityLevel]}%` }} /></div>
           <p>เส้นทางสู่เมืองโปร่งใส <span aria-hidden="true">⚑</span></p>
         </section>
-        <section className="city-stage__right-card city-stage__building-activity" aria-label="ผลกระทบสะสมของแต่ละอาคาร">
-          <h2>ผลกระทบอาคารสะสม</h2>
-          <p>รวมรอบที่ผ่านมาและรอบปัจจุบัน</p>
+        <section className="city-stage__right-card city-stage__building-activity" aria-label="สถานะและผลกระทบสะสมของแต่ละอาคาร">
+          <h2>สถานะอาคารทั้ง 7 แห่ง</h2>
+          <p>หลอดแสดงสุขภาพอาคาร • ตัวเลขคือผลสะสม</p>
           <div className="city-stage__impact-network">
             <span className="city-stage__impact-trunk" aria-hidden="true" />
             {BUILDING_IMPACT_ITEMS.map((building) => {
-              const score = cumulativeBuildingImpacts[building.id]
-              const tone = score > 0 ? 'is-positive' : score < 0 ? 'is-negative' : 'is-neutral'
+              const buildingId = LOCATION_BUILDING[building.id]
+              const impact = cumulativeBuildingImpacts[building.id]
+              const buildingScore = displayedBuildingScores[buildingId]
+              const level = displayedBuildingLevels[buildingId]
+              const levelLabel = BUILDING_LEVEL_STATUS_LABELS[level]
+              const levelTone = resolveBuildingLabelTone(level)
+              const impactTone = impact > 0 ? 'is-positive' : impact < 0 ? 'is-negative' : 'is-neutral'
               return (
-                <article className={tone} key={building.id}>
+                <article
+                  aria-label={`${building.label} สถานะ${levelLabel} ผลสะสม ${signed(impact)}`}
+                  className={`is-level-${levelTone}`}
+                  key={building.id}
+                >
                   <span className="city-stage__impact-branch" aria-hidden="true" />
                   <span className="city-stage__building-icon" aria-hidden="true">{building.icon}</span>
-                  <strong>{building.label}</strong>
-                  <output>{signed(score)}</output>
-                  <span className="city-stage__building-mood" aria-hidden="true">{score > 0 ? '😊' : score < 0 ? '😟' : '😐'}</span>
+                  <span className="city-stage__building-copy">
+                    <strong>{building.label}</strong>
+                    <small>{levelLabel}</small>
+                  </span>
+                  <output className={`city-stage__building-impact ${impactTone}`} title="ผลกระทบสะสมรอบนี้">
+                    <small>ผลสะสม</small>
+                    <strong>{signed(impact)}</strong>
+                  </output>
+                  <span className="city-stage__building-health">
+                    <span aria-hidden="true"><i style={{ width: `${getBuildingScoreProgress(buildingScore)}%` }} /></span>
+                  </span>
                 </article>
               )
             })}
