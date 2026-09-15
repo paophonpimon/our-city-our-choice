@@ -1,5 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isFullscreenSupported, requestEnterFullscreen, requestFullscreenToggle, type FullscreenCapableDocument } from './useFullscreen'
+
+afterEach(() => {
+  delete (globalThis as { window?: unknown }).window
+})
+
+const setStubWindow = () => {
+  const scrollTo = vi.fn()
+  const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+    callback(0)
+    return 1
+  })
+  ;(globalThis as { window?: unknown }).window = { scrollTo, requestAnimationFrame }
+  return { scrollTo, requestAnimationFrame }
+}
 
 const stubDocument = (overrides: Partial<FullscreenCapableDocument> = {}): FullscreenCapableDocument => ({
   fullscreenElement: null,
@@ -24,12 +38,16 @@ describe('isFullscreenSupported', () => {
 
 describe('requestFullscreenToggle', () => {
   it('requests fullscreen when nothing is currently fullscreen', async () => {
+    const { scrollTo, requestAnimationFrame } = setStubWindow()
     const requestFullscreen = vi.fn(async () => undefined)
     const doc = stubDocument({ fullscreenElement: null, documentElement: { requestFullscreen } })
 
     await requestFullscreenToggle(doc)
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(scrollTo).toHaveBeenCalledTimes(2)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'instant' })
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
   })
 
   it('exits fullscreen when already fullscreen, instead of requesting it again', async () => {
@@ -59,12 +77,14 @@ describe('requestFullscreenToggle', () => {
 
 describe('requestEnterFullscreen', () => {
   it('requests fullscreen when supported and not currently in fullscreen', async () => {
+    const { scrollTo } = setStubWindow()
     const requestFullscreen = vi.fn(async () => undefined)
     const doc = stubDocument({ fullscreenElement: null, documentElement: { requestFullscreen } })
 
     await requestEnterFullscreen(doc)
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(scrollTo).toHaveBeenCalledTimes(2)
   })
 
   it('does not request fullscreen when already in fullscreen', async () => {

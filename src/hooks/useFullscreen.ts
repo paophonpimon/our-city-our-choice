@@ -20,6 +20,20 @@ export const isFullscreenSupported = (doc: FullscreenCapableDocument): boolean =
   typeof doc.documentElement.requestFullscreen === 'function'
 
 /**
+ * Safari on iPad can preserve the page's pre-fullscreen scroll offset while
+ * promoting the document into the fullscreen top layer. A fixed-height stage
+ * then starts above the visible screen and exposes the document background at
+ * the bottom. Reset immediately and once more on the next paint because WebKit
+ * may finish its viewport resize after the fullscreen promise resolves.
+ */
+export const resetFullscreenViewportOrigin = (): void => {
+  if (typeof window === 'undefined') return
+  const reset = (): void => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  reset()
+  window.requestAnimationFrame?.(reset)
+}
+
+/**
  * Decides which native call a toggle should make (enter vs exit vs a safe
  * no-op when unsupported) and makes it. Exported separately from the hook so
  * this decision is directly testable against a stub document.
@@ -27,7 +41,10 @@ export const isFullscreenSupported = (doc: FullscreenCapableDocument): boolean =
 export const requestFullscreenToggle = async (doc: FullscreenCapableDocument): Promise<void> => {
   if (!isFullscreenSupported(doc)) return
   if (doc.fullscreenElement) await doc.exitFullscreen?.()
-  else await doc.documentElement.requestFullscreen?.()
+  else {
+    await doc.documentElement.requestFullscreen?.()
+    resetFullscreenViewportOrigin()
+  }
 }
 
 /**
@@ -38,6 +55,7 @@ export const requestEnterFullscreen = async (doc: FullscreenCapableDocument): Pr
   if (!isFullscreenSupported(doc) || doc.fullscreenElement) return
   try {
     await doc.documentElement.requestFullscreen?.()
+    resetFullscreenViewportOrigin()
   } catch {
     // Best-effort only - browser denial, gesture expiry, or platform restriction is safely ignored
   }
@@ -79,7 +97,11 @@ export const useFullscreen = (): UseFullscreenResult => {
   useEffect(() => {
     const doc = getDocument()
     if (!doc) return
-    const handleFullscreenChange = (): void => setIsFullscreen(doc.fullscreenElement !== null)
+    const handleFullscreenChange = (): void => {
+      const fullscreen = doc.fullscreenElement !== null
+      setIsFullscreen(fullscreen)
+      if (fullscreen) resetFullscreenViewportOrigin()
+    }
     doc.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => doc.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])

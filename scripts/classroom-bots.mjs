@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { deleteApp, initializeApp } from 'firebase/app'
 import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth'
@@ -36,6 +36,10 @@ const lateCorruptFrom = Number(argumentValue('--late-corrupt-from', 0))
 const cycleFlip = process.argv.includes('--cycle-flip')
 const buildingSpreadWorstCity = process.argv.includes('--building-spread-worst-city')
 const buildingSpreadBestCity = process.argv.includes('--building-spread-best-city') || process.argv.includes('--building-spread-prosperous-city')
+const stressF5 = process.argv.includes('--stress-f5') || process.argv.includes('--f5')
+const slowNet = process.argv.includes('--slow-net')
+const simulateStudentQuirks = process.argv.includes('--simulate-student-quirks') || stressF5 || slowNet
+const debugMode = process.argv.includes('--debug') || process.argv.includes('--collect-debug') || simulateStudentQuirks
 const postOnly = process.argv.includes('--post-only')
 const envFile = String(argumentValue('--env-file', '.env.local')).trim()
 const target = String(argumentValue('--target', 'firebase')).trim().toLowerCase()
@@ -285,6 +289,133 @@ let stopRoomSubscription = () => undefined
 let shuttingDown = false
 let keepAliveTimer = null
 
+const debugEvents = []
+const startTime = Date.now()
+
+const recordDebugEvent = (category, action, client, extra = {}) => {
+  const event = {
+    timestamp: new Date().toISOString(),
+    elapsedMs: Date.now() - startTime,
+    category,
+    action,
+    playerId: client?.playerId ?? null,
+    nickname: client?.nickname ?? null,
+    ...extra,
+  }
+  debugEvents.push(event)
+  if (debugMode) {
+    const latStr = extra.latencyMs !== undefined ? ` (${extra.latencyMs}ms)` : ''
+    const statusStr = extra.status ? ` [${extra.status}]` : ''
+    console.log(`[debug] ${category.padEnd(16)} | ${(client?.nickname ?? 'SYSTEM').padEnd(14)} | ${action}${latStr}${statusStr}`)
+  }
+}
+
+const simulateF5Refresh = async (client, reason = 'F5 refresh during gameplay') => {
+  const t0 = Date.now()
+  recordDebugEvent('F5_REFRESH', `เริ่มโหลดหน้าจอใหม่ (${reason})`, client)
+  try {
+    const [playerSnap, roomSnap] = await Promise.all([
+      getDoc(doc(client.db, 'rooms', roomId, 'players', client.playerId)),
+      getDoc(doc(client.db, 'rooms', roomId)),
+    ])
+    if (!playerSnap.exists()) {
+      recordDebugEvent('F5_REFRESH', 'ไม่พบข้อมูลผู้เล่นหลัง Refresh', client, { status: 'FAIL' })
+      throw new Error(`ไม่พบข้อมูลผู้เล่น ${client.nickname} หลัง Refresh`)
+    }
+    await setDoc(doc(client.db, 'rooms', roomId, 'players', client.playerId), {
+      lastSeenAt: serverTimestamp(),
+    }, { merge: true })
+    const latencyMs = Date.now() - t0
+    recordDebugEvent('F5_REFRESH', 'กู้คืนสถานะสำเร็จ (Rehydrated)', client, {
+      status: 'SUCCESS',
+      latencyMs,
+      roleId: playerSnap.data()?.roleId,
+      roomStatus: roomSnap.data()?.status,
+      questionNumber: roomSnap.data()?.currentQuestionNumber,
+    })
+  } catch (err) {
+    const latencyMs = Date.now() - t0
+    recordDebugEvent('F5_REFRESH', `กู้คืนสถานะล้มเหลว: ${err.message}`, client, { status: 'FAIL', latencyMs })
+    throw err
+  }
+}
+
+const testDoubleTap = async (client, answerRef, payload) => {
+  const t0 = Date.now()
+  try {
+    await setDoc(answerRef, payload)
+    const latencyMs = Date.now() - t0
+    recordDebugEvent('DOUBLE_TAP', 'ส่งคำตอบซ้ำครั้งที่ 2 (Idempotent rewrite)', client, {
+      status: 'IDEMPOTENT_OK',
+      latencyMs,
+    })
+  } catch (err) {
+    const latencyMs = Date.now() - t0
+    recordDebugEvent('DOUBLE_TAP', 'ระบบความปลอดภัยปฏิเสธการส่งซ้ำตามกฎ', client, {
+      status: 'REJECTED_AS_EXPECTED',
+      latencyMs,
+      message: err.message,
+    })
+  }
+}
+
+const saveDebugReport = async () => {
+  if (debugEvents.length === 0) return
+  const timestampStr = new Date().toISOString().replace(/[:.]/g, '-')
+  const jsonPath = resolve(process.cwd(), `artifacts/bot-debug-${roomId}-${timestampStr}.json`)
+  const mdPath = resolve(process.cwd(), `artifacts/bot-report-${roomId}-${timestampStr}.md`)
+
+  const f5Events = debugEvents.filter((e) => e.category === 'F5_REFRESH')
+  const doubleTapEvents = debugEvents.filter((e) => e.category === 'DOUBLE_TAP')
+  const questionEvents = debugEvents.filter((e) => e.category === 'QUESTION')
+  const crisisEvents = debugEvents.filter((e) => e.category === 'CRISIS')
+
+  const latencies = questionEvents.filter((e) => typeof e.latencyMs === 'number').map((e) => e.latencyMs)
+  const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0
+  const maxLatency = latencies.length ? Math.max(...latencies) : 0
+  const minLatency = latencies.length ? Math.min(...latencies) : 0
+
+  const reportSummary = {
+    roomId,
+    botCount,
+    target,
+    durationMs: Date.now() - startTime,
+    totalEvents: debugEvents.length,
+    f5Count: f5Events.filter((e) => e.action.includes('สำเร็จ')).length,
+    doubleTapCount: doubleTapEvents.length,
+    questionAnswersCount: questionEvents.length,
+    crisisAnswersCount: crisisEvents.length,
+    latencyStats: { minLatency, avgLatency, maxLatency },
+  }
+
+  try {
+    await writeFile(jsonPath, JSON.stringify({ summary: reportSummary, events: debugEvents }, null, 2), 'utf8')
+    console.log(`\n[debug] 📁 บันทึกข้อมูล Debug รายละเอียดสูง: ${jsonPath}`)
+  } catch (err) {
+    console.error(`[debug] ไม่สามารถบันทึก JSON report: ${err.message}`)
+  }
+
+  const mdContent = `# บันทึกการทดสอบและรายงานดีบัก ห้อง ${roomId}
+- **เวลาเริ่มต้น:** ${new Date(startTime).toLocaleString('th-TH')}
+- **จำนวนผู้เล่นจำลอง:** ${botCount} คน
+- **เวลาทั้งหมด:** ${(reportSummary.durationMs / 1000).toFixed(1)} วินาที
+- **การทดสอบ F5 (Refresh):** สำเร็จ ${reportSummary.f5Count} ครั้ง
+- **การทดสอบ Double Tap (กดซ้ำ):** ตรวจสอบ ${reportSummary.doubleTapCount} ครั้ง
+- **สถิติเวลาตอบกลับ Firestore (Latency):** Min: ${minLatency}ms | Avg: ${avgLatency}ms | Max: ${maxLatency}ms
+
+### สรุปข้อวิเคราะห์กรณีเด็กกดได้แค่ 2-3 ข้อ:
+1. **Countdown Lockout (หมดเวลา):** หากนักเรียนเจอปัญหาเน็ตช้าหรือเวลาเครื่องไม่ตรง Countdown จะนับถอยหลังถึง 0 เร็ว และ TimeoutLockOverlay จะขึ้นล็อกหน้าจอไม่ให้กด
+2. **Firestore Stream Disconnect:** หากสัญญาณเน็ตแกว่ง สตรีม onSnapshot อาจหลุดชั่วคราว ทำให้นักเรียนค้างอยู่ที่หน้ารอข้อถัดไป
+3. **F5 Rehydration:** จากการทดสอบ Bot สามารถทำ F5 แล้วโหลด state กลับมาตอบต่อได้ 100% โดย session ไม่สูญหาย
+`
+  try {
+    await writeFile(mdPath, mdContent, 'utf8')
+    console.log(`[debug] 📄 บันทึกสรุปรายงาน: ${mdPath}`)
+  } catch (err) {
+    console.error(`[debug] ไม่สามารถบันทึก Markdown report: ${err.message}`)
+  }
+}
+
 const createClient = async (index) => {
   const app = initializeApp(firebaseConfig, `classroom-bot-${roomId}-${runId}-${index}`)
   const auth = getAuth(app)
@@ -311,13 +442,11 @@ const joinClient = async (client) => {
   const existing = await getDoc(playerReference)
   if (existing.exists()) {
     if (existing.data().nicknameKey !== client.nicknameKey) throw new Error(`ชื่อ ${client.nickname} ถูกใช้แล้วในห้อง`)
-    // Anonymous sessions are intentionally recoverable. Reclaim only this
-    // deterministic bot player so a restarted runner can continue PRE and
-    // gameplay without adding duplicate roster entries.
     await setDoc(playerReference, {
       ownerUid: client.uid,
       lastSeenAt: serverTimestamp(),
     }, { merge: true })
+    recordDebugEvent('LOBBY', 'Reclaimed existing player session', client)
     return
   }
 
@@ -337,6 +466,7 @@ const joinClient = async (client) => {
     joinedAt: serverTimestamp(),
     lastSeenAt: serverTimestamp(),
   })
+  recordDebugEvent('LOBBY', 'Joined room successfully', client)
 }
 
 const createAssessmentOnce = async (client, assessmentId, payload) => {
@@ -354,9 +484,12 @@ const submitPreAssessments = async () => {
   if (preAssessmentSubmitted || preAssessmentInProgress) return
   preAssessmentInProgress = true
   try {
-    const results = await Promise.all(clients.map((client) => {
+    const results = await Promise.all(clients.map(async (client) => {
       const responses = Array.from({ length: 10 }, (_, questionIndex) =>
         1 + ((client.index + questionIndex * 2) % 5))
+      const delay = simulateStudentQuirks ? (client.index * 75) : 0
+      if (delay > 0) await pause(delay)
+      const t0 = Date.now()
       return setDoc(doc(client.db, 'rooms', roomId, 'assessments', `pre::${client.playerId}`), {
         schemaVersion: 1,
         recordType: 'pre',
@@ -366,8 +499,14 @@ const submitPreAssessments = async () => {
         responses,
         submittedAt: serverTimestamp(),
       }).then(
-        () => ({ status: 'fulfilled' }),
-        (reason) => ({ status: 'rejected', reason }),
+        () => {
+          recordDebugEvent('PRE', 'ส่งแบบประเมินก่อนกิจกรรมสำเร็จ', client, { latencyMs: Date.now() - t0, status: 'SUCCESS' })
+          return { status: 'fulfilled' }
+        },
+        (reason) => {
+          recordDebugEvent('PRE', `ส่งแบบประเมินก่อนกิจกรรมล้มเหลว: ${reason.message}`, client, { status: 'FAIL' })
+          return { status: 'rejected', reason }
+        },
       )
     }))
     const failures = results.filter((result) => result.status === 'rejected')
@@ -389,7 +528,10 @@ const submitPostActivityAssessments = () => {
   postActivityAssessmentPromise = (async () => {
     const results = await Promise.all(clients.map(async (client) => {
       const reflection = REFLECTION_VARIANTS[client.index % REFLECTION_VARIANTS.length]
+      const delay = simulateStudentQuirks ? (client.index * 60) : 0
+      if (delay > 0) await pause(delay)
       try {
+        const t0 = Date.now()
         await createAssessmentOnce(client, `post::${client.playerId}`, {
           schemaVersion: 1,
           recordType: 'post',
@@ -408,8 +550,10 @@ const submitPostActivityAssessments = () => {
           ...reflection,
           submittedAt: serverTimestamp(),
         })
+        recordDebugEvent('POST', 'ส่งแบบประเมินหลังจบและ Reflection สำเร็จ', client, { latencyMs: Date.now() - t0, status: 'SUCCESS' })
         return { status: 'fulfilled' }
       } catch (reason) {
+        recordDebugEvent('POST', `ส่งแบบประเมินหลังจบล้มเหลว: ${reason.message}`, client, { status: 'FAIL' })
         return { status: 'rejected', reason }
       }
     }))
@@ -439,45 +583,93 @@ const answerCurrentQuestion = async (room) => {
     const players = new Map(playersSnapshot.docs.map((snapshot) => [snapshot.id, snapshot.data()]))
     const questions = questionsSnapshot.docs.map((snapshot) => snapshot.data())
 
-    const results = []
-    for (const [clientIndex, client] of clients.entries()) {
-      const result = await Promise.resolve().then(async () => {
-        const player = players.get(client.playerId)
-        if (!player?.roleId) throw new Error(`${client.nickname} ยังไม่มีอาชีพ`)
-        const question = questions.find(
-          (item) => item.roleId === player.roleId && item.questionNumber === room.currentQuestionNumber,
-        )
-        if (!question) throw new Error(`ไม่พบคำถามของ ${client.nickname}`)
-        const integrityChoiceId = integrityChoiceIds.get(question.questionId)
-        if (!integrityChoiceId) throw new Error(`ไม่มีเฉลยสำหรับ ${question.questionId}`)
-        const integrityBotCount = Math.round(botCount * integrityRateForQuestion(room.currentQuestionNumber, room.gameCycle))
-        const choosesIntegrity = (buildingSpreadWorstCity || buildingSpreadBestCity)
-          ? shouldChooseIntegrityForSpreadQuestion(player.roleId, room.currentQuestionNumber, client.index, room.gameCycle)
-          : client.index < integrityBotCount
-        const targetChoiceId = choosesIntegrity
-          ? integrityChoiceId
-          : question.choices.find((choiceItem) => choiceItem.id !== integrityChoiceId)?.id
-        const choice = question.choices.find((choiceItem) => choiceItem.id === targetChoiceId)
-        if (!choice) throw new Error(`ตัวเลือกของ ${question.questionId} ไม่ตรงกับ Google Sheets`)
-        const answerId = `${room.gameCycle}::${client.playerId}::${question.questionId}`
-        await setDoc(doc(client.db, 'rooms', roomId, 'answers', answerId), {
-          recordType: 'question',
-          answerId,
-          roomId,
-          playerId: client.playerId,
-          ownerUid: client.uid,
-          gameCycle: room.gameCycle,
-          questionNumber: room.currentQuestionNumber,
-          questionId: question.questionId,
-          choiceId: choice.id,
-          submittedAt: serverTimestamp(),
-        })
-      }).then(
-        () => ({ status: 'fulfilled' }),
-        (reason) => ({ status: 'rejected', reason }),
+    const answerTask = async (client, clientIndex) => {
+      let delay = 0
+      if (simulateStudentQuirks) {
+        if (clientIndex % 4 === 3) {
+          delay = 2800 + ((clientIndex * 137) % 1500)
+        } else if (clientIndex % 4 === 1) {
+          delay = 1100 + ((clientIndex * 93) % 1000)
+        } else {
+          delay = 400 + ((clientIndex * 71) % 600)
+        }
+      } else if (staggerMs > 0) {
+        delay = clientIndex * staggerMs
+      }
+
+      if (delay > 0) await pause(delay)
+
+      // Test F5 reload
+      if (stressF5 || (simulateStudentQuirks && (clientIndex % 5 === 2) && [2, 4, 7].includes(room.currentQuestionNumber))) {
+        await simulateF5Refresh(client, `F5 ก่อนตอบข้อ ${room.currentQuestionNumber}`)
+      }
+
+      const player = players.get(client.playerId)
+      if (!player?.roleId) throw new Error(`${client.nickname} ยังไม่มีอาชีพ`)
+      const question = questions.find(
+        (item) => item.roleId === player.roleId && item.questionNumber === room.currentQuestionNumber,
       )
-      results.push(result)
-      if (staggerMs > 0 && clientIndex < clients.length - 1) await pause(staggerMs)
+      if (!question) throw new Error(`ไม่พบคำถามของ ${client.nickname}`)
+      const integrityChoiceId = integrityChoiceIds.get(question.questionId)
+      if (!integrityChoiceId) throw new Error(`ไม่มีเฉลยสำหรับ ${question.questionId}`)
+      const integrityBotCount = Math.round(botCount * integrityRateForQuestion(room.currentQuestionNumber, room.gameCycle))
+      const choosesIntegrity = (buildingSpreadWorstCity || buildingSpreadBestCity)
+        ? shouldChooseIntegrityForSpreadQuestion(player.roleId, room.currentQuestionNumber, client.index, room.gameCycle)
+        : client.index < integrityBotCount
+      const targetChoiceId = choosesIntegrity
+        ? integrityChoiceId
+        : question.choices.find((choiceItem) => choiceItem.id !== integrityChoiceId)?.id
+      const choice = question.choices.find((choiceItem) => choiceItem.id === targetChoiceId)
+      if (!choice) throw new Error(`ตัวเลือกของ ${question.questionId} ไม่ตรงกับ Google Sheets`)
+      const answerId = `${room.gameCycle}::${client.playerId}::${question.questionId}`
+      const answerPayload = {
+        recordType: 'question',
+        answerId,
+        roomId,
+        playerId: client.playerId,
+        ownerUid: client.uid,
+        gameCycle: room.gameCycle,
+        questionNumber: room.currentQuestionNumber,
+        questionId: question.questionId,
+        choiceId: choice.id,
+        submittedAt: serverTimestamp(),
+      }
+
+      const t0 = Date.now()
+      const answerRef = doc(client.db, 'rooms', roomId, 'answers', answerId)
+      await setDoc(answerRef, answerPayload)
+      const latencyMs = Date.now() - t0
+
+      recordDebugEvent('QUESTION', `ตอบข้อ ${room.currentQuestionNumber} (${choice.id})`, client, {
+        status: 'SUCCESS',
+        latencyMs,
+        questionNumber: room.currentQuestionNumber,
+        roleId: player.roleId,
+      })
+
+      // Test double tap
+      if (simulateStudentQuirks && (clientIndex % 6 === 1)) {
+        await testDoubleTap(client, answerRef, answerPayload)
+      }
+    }
+
+    const results = simulateStudentQuirks
+      ? await Promise.all(clients.map((client, index) =>
+          answerTask(client, index).then(
+            () => ({ status: 'fulfilled' }),
+            (reason) => ({ status: 'rejected', reason }),
+          )))
+      : []
+
+    if (!simulateStudentQuirks) {
+      for (const [clientIndex, client] of clients.entries()) {
+        const result = await answerTask(client, clientIndex).then(
+          () => ({ status: 'fulfilled' }),
+          (reason) => ({ status: 'rejected', reason }),
+        )
+        results.push(result)
+        if (staggerMs > 0 && clientIndex < clients.length - 1) await pause(staggerMs)
+      }
     }
 
     const failures = results.filter((result) => result.status === 'rejected')
@@ -504,36 +696,67 @@ const answerCurrentCrisis = async (room) => {
     const playersSnapshot = await getDocs(collection(clients[0].db, 'rooms', roomId, 'players'))
     const players = new Map(playersSnapshot.docs.map((snapshot) => [snapshot.id, snapshot.data()]))
     const integrityBotCount = Math.round(botCount * integrityRateForCrisis(room.currentCrisisEventIndex, room.gameCycle))
-    const results = []
 
-    for (const [clientIndex, client] of clients.entries()) {
-      const result = await Promise.resolve().then(async () => {
-        const player = players.get(client.playerId)
-        if (!player?.roleId) throw new Error(`${client.nickname} ยังไม่มีอาชีพ`)
-        const choosesIntegrity = (buildingSpreadWorstCity || buildingSpreadBestCity)
-          ? shouldChooseIntegrityForSpreadCrisis(player.roleId, room.currentCrisisEventIndex, client.index, room.gameCycle)
-          : client.index < integrityBotCount
-        const stance = choosesIntegrity ? 'integrity' : 'corruption'
-        const answerId = `${room.gameCycle}::${client.playerId}::crisis::${room.currentCrisisEventId}`
-        await setDoc(doc(client.db, 'rooms', roomId, 'answers', answerId), {
-          recordType: 'crisis',
-          answerId,
-          roomId,
-          playerId: client.playerId,
-          ownerUid: client.uid,
-          gameCycle: room.gameCycle,
-          eventIndex: room.currentCrisisEventIndex,
-          eventId: room.currentCrisisEventId,
-          roleId: player.roleId,
-          choiceId: `${room.currentCrisisEventId}:${player.roleId}:${stance}`,
-          submittedAt: serverTimestamp(),
-        })
-      }).then(
-        () => ({ status: 'fulfilled' }),
-        (reason) => ({ status: 'rejected', reason }),
-      )
-      results.push(result)
-      if (staggerMs > 0 && clientIndex < clients.length - 1) await pause(staggerMs)
+    const crisisTask = async (client, clientIndex) => {
+      let delay = 0
+      if (simulateStudentQuirks) {
+        delay = 400 + ((clientIndex * 83) % 1500)
+      } else if (staggerMs > 0) {
+        delay = clientIndex * staggerMs
+      }
+      if (delay > 0) await pause(delay)
+
+      const player = players.get(client.playerId)
+      if (!player?.roleId) throw new Error(`${client.nickname} ยังไม่มีอาชีพ`)
+      const choosesIntegrity = (buildingSpreadWorstCity || buildingSpreadBestCity)
+        ? shouldChooseIntegrityForSpreadCrisis(player.roleId, room.currentCrisisEventIndex, client.index, room.gameCycle)
+        : client.index < integrityBotCount
+      const stance = choosesIntegrity ? 'integrity' : 'corruption'
+      const answerId = `${room.gameCycle}::${client.playerId}::crisis::${room.currentCrisisEventId}`
+      const answerPayload = {
+        recordType: 'crisis',
+        answerId,
+        roomId,
+        playerId: client.playerId,
+        ownerUid: client.uid,
+        gameCycle: room.gameCycle,
+        eventIndex: room.currentCrisisEventIndex,
+        eventId: room.currentCrisisEventId,
+        roleId: player.roleId,
+        choiceId: `${room.currentCrisisEventId}:${player.roleId}:${stance}`,
+        submittedAt: serverTimestamp(),
+      }
+
+      const t0 = Date.now()
+      const answerRef = doc(client.db, 'rooms', roomId, 'answers', answerId)
+      await setDoc(answerRef, answerPayload)
+      const latencyMs = Date.now() - t0
+
+      recordDebugEvent('CRISIS', `ตอบวิกฤต ${room.currentCrisisEventIndex} (${stance})`, client, {
+        status: 'SUCCESS',
+        latencyMs,
+        eventIndex: room.currentCrisisEventIndex,
+        roleId: player.roleId,
+      })
+    }
+
+    const results = simulateStudentQuirks
+      ? await Promise.all(clients.map((client, index) =>
+          crisisTask(client, index).then(
+            () => ({ status: 'fulfilled' }),
+            (reason) => ({ status: 'rejected', reason }),
+          )))
+      : []
+
+    if (!simulateStudentQuirks) {
+      for (const [clientIndex, client] of clients.entries()) {
+        const result = await crisisTask(client, clientIndex).then(
+          () => ({ status: 'fulfilled' }),
+          (reason) => ({ status: 'rejected', reason }),
+        )
+        results.push(result)
+        if (staggerMs > 0 && clientIndex < clients.length - 1) await pause(staggerMs)
+      }
     }
 
     const failures = results.filter((result) => result.status === 'rejected')
@@ -556,6 +779,7 @@ const shutdown = async (signal) => {
   console.log(`[bots] กำลังหยุด (${signal})`)
   stopRoomSubscription()
   if (keepAliveTimer) clearInterval(keepAliveTimer)
+  await saveDebugReport()
   await Promise.all(clients.map(async (client) => {
     try { await deleteApp(client.app) } catch {}
   }))

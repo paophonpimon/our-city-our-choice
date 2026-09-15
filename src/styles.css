@@ -2184,6 +2184,22 @@ option { font-family: "Chakra Petch", sans-serif; }
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--navy); scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; min-height: 100dvh; overflow-x: hidden; }
+
+/*
+ * iPadOS Safari versions before the fullscreen viewport fixes can leave
+ * `100dvh` at its pre-fullscreen value. Percentage sizing follows the actual
+ * fullscreen top-layer box and prevents the black strip seen below CityStage.
+ */
+html:fullscreen,
+html:fullscreen body,
+html:fullscreen #root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+html:fullscreen body:has(.city-stage) { overflow: hidden; }
+html:fullscreen .city-stage { height: 100%; min-height: 0; }
+
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, input:focus-visible {

@@ -872,6 +872,15 @@ describe('POST and Reflection active submit acknowledgements', () => {
     expect(styles).toContain('.teacher-lobby-fullscreen.fullscreen-toggle-button {')
   })
 
+  it('keeps the teacher city pinned to the real fullscreen box on iPad Safari', () => {
+    const fullscreenHook = readSource('../hooks/useFullscreen.ts')
+    const styles = readSource('../styles.css')
+    expect(fullscreenHook).toContain("window.scrollTo({ top: 0, left: 0, behavior: 'instant' })")
+    expect(fullscreenHook).toContain('window.requestAnimationFrame?.(reset)')
+    expect(styles).toContain('html:fullscreen body:has(.city-stage) { overflow: hidden; }')
+    expect(styles).toContain('html:fullscreen .city-stage { height: 100%; min-height: 0; }')
+  })
+
   it('makes teacher lobby room code the visual hero and provides secondary Home exit on ResultPage', () => {
     const resultPage = readSource('../pages/ResultPage.tsx')
     const styles = readSource('../styles.css')
